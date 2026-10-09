@@ -720,6 +720,8 @@ export class Viewer {
         this[key].geometry.dispose(); this[key].material.dispose(); this[key] = null; }
     }
   }
+  // Inspect a neuron by index, as a click on it would.
+  inspect(idx){ if(this.mode === 'net' && this.net) this._select(idx); }
   // selection never touches synapse arrays on this thread: the sim worker owns them (at scale, the only copy) and answers 'query' messages
   _select(idx){
     this._clearLines();

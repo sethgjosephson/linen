@@ -483,6 +483,25 @@ export class NodeEditor {
     this.view.x = (cw - (x0+x1)*s)/2;
     this.view.y = (ch - (y0+y1)*s)/2;
   }
+  // The top of the graph at reading scale: the first notes and nodes, as a first open shows them, with the rest below to scroll to.
+  frameTop(){
+    if(!this.nodes.length) return;
+    const cw = this.canvas.clientWidth, ch = this.canvas.clientHeight;
+    if(!cw || !ch) return;
+    const xs = this.nodes.map(n=>n.x).filter(Number.isFinite), ys = this.nodes.map(n=>n.y).filter(Number.isFinite);
+    if(!xs.length) return;
+    const s = 1;
+    this.view.scale = s;
+    this.view.x = 40 - Math.min(...xs)*s;
+    this.view.y = 24 - Math.min(...ys)*s;
+  }
+  // Select one node without moving the view, as a click on it would.
+  selectNode(n){
+    this.sel = n; this.selSet = new Set([n]);
+    this.cb.onSelect(n);
+    if(this.cb.onInspect) this.cb.onInspect(n);
+    this.draw();
+  }
   // insert a fresh node into the pipe after src: src's downstream main wires move to n, and n takes src as its input
   _insertAfter(src, n){
     if(!src || src === n || src.type === 'note') return;

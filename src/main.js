@@ -424,6 +424,7 @@ function drawScope(){
 }
 
 let worker = null, workerIsGpu = false, inFlight = false, paused = false, computeTimer = null;
+let firstOpenInspect = false;   // set by the default scene on first open; the first wired network inspects one cell
 let workerRuns = { kind:'cpu', host:'' };   // which engine the worker is, for planEngine
 let startRefused = '';                      // why the last start ran nothing, kept for the status line the computation writes after it
 let engineHello = null, helloPending = false, lackSaid = new Set();   // the running engine's hello (ENGINE.md section 2)
@@ -2392,6 +2393,7 @@ async function recompute(){
       // the selection carried over by identity, but its query went to the worker that no longer exists; ask the new one
       if(viewer.selected >= 0) viewer.onSelect(viewer.selected);
       if(fitNextCompute){ fitNextCompute = false; viewer.fitToNet(); }
+      if(firstOpenInspect){ firstOpenInspect = false; firstView(net); }
     }
     doc.lastSimView = view.id;
     if(tune){ recorder.setPopulations(net.probes || []); if(recording) recording.setPopulations(net.probes || []); }   // a new engine resets the recording in startSim; a tune keeps it
@@ -2756,7 +2758,7 @@ const LAYOUTS = {
     tip:'the viewer across the top; the node graph and the properties side by side below' },
 };
 const LAYOUT_ORDER = ['right', 'classic', 'left', 'wide'];
-const panels = { train:240, layout:'right', sizes:{} };
+const panels = { train:240, layout:'classic', sizes:{} };
 try {
   const saved = JSON.parse(localStorage.getItem(UI_STORE)) || {};
   // sizes kept before there were layouts belong to the one there was
@@ -2767,7 +2769,7 @@ try {
   }
   Object.assign(panels, saved);
 } catch(e){}
-if(!LAYOUTS[panels.layout]) panels.layout = 'right';
+if(!LAYOUTS[panels.layout]) panels.layout = 'classic';
 if(!panels.sizes || typeof panels.sizes !== 'object') panels.sizes = {};
 const sizeOf = () => {
   const L = LAYOUTS[panels.layout];
@@ -3848,7 +3850,22 @@ function buildDefaultGraph(){
   assignDefaultSlots();
   editor.frameAll();
   showProps(null);
+  firstOpenInspect = true;
   recompute();
+}
+// The first open, once the default scene's network is wired and every load has settled: the top of the graph at reading scale, the connect node's settings open, one neuron inspected.
+function firstView(net){
+  editor.frameTop();
+  const first = editor.nodes.find(n => n.type === 'connect');
+  if(first) editor.selectNode(first);
+  editor.draw();
+  // the inspection queries the engine, which answers only once its hello is in; until then the request would be dropped
+  const idx = Math.floor(net.count/2);
+  const whenReady = (tries) => {
+    if(engineHello && !helloPending) viewer.inspect(idx);
+    else if(tries < 40) setTimeout(() => whenReady(tries + 1), 250);
+  };
+  whenReady(0);
 }
 function initGraph(){
   try {
