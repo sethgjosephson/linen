@@ -1,0 +1,787 @@
+* { margin:0; padding:0; box-sizing:border-box; border-radius:0 !important; }
+/* the page is hidden until main.js has drawn its icons, so the text labels the buttons start with are never seen */
+html.app:not(.ready) body > * { visibility:hidden; }
+/* Text size for the whole app, from the TEXT slider in the top bar, kept per
+   machine. It scales the surfaces made of text rather than the font size
+   alone: a size that grows while the padding around it, the height of its
+   row and the controls beside it stay put crowds everything and reads worse
+   than it did small. Every proportion inside a scaled surface is kept,
+   including the hairlines, which is what makes it look like the same app at
+   a different size. The canvases are not in it: the 3D view, the raster and
+   the node graph have their own zoom and their own idea of a pixel.
+   Zoom scales every length inside these, viewport units included, so a size
+   given in vw or vh there is divided by --ui to stay a share of the window:
+   90vh at a text size of 150% was 135% of the window and ran off the screen. */
+:root { --ui:1; }
+#topbar, .panehead, #viewerbar, #props, #trainPane, #probes, #inputs, #regions,
+#hud, #pathhud, #computebar, .dlg, #addmenu, .cb-list {
+  zoom: var(--ui, 1);
+}
+/* not the population labels: they are placed at points projected from the
+   scene, in the canvas's own pixels, so zooming the layer would move every
+   name away from the box it belongs to. Only the type grows. */
+html,body { height:100%; background:#000; color:#c8c8c8;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size:11px; overflow:hidden; }
+/* minmax(0,1fr), not 1fr: a plain 1fr track has a min-content floor, so the
+   top bar (which spans all three columns and must not wrap) pushed the first
+   column to 1191 px inside an 800 px window and shoved the right-hand column
+   off screen entirely. */
+#app { display:grid; height:100vh;
+  /* the panel column and the top bar hold text, so they grow with it: at a
+     larger text size a fixed column clips its own values */
+  grid-template-columns: minmax(0,1fr) 5px calc(300px * var(--ui, 1));
+  grid-template-rows: calc(28px * var(--ui, 1)) minmax(0,1fr) 5px 320px;
+  grid-template-areas: "top top top" "viewer vsplit props" "hsplit vsplit props" "graph vsplit props"; }
+#topbar { grid-area:top; display:flex; align-items:center; gap:16px;
+  border-bottom:1px solid #333; padding:0 10px; background:#000; position:relative;
+  flex-wrap:nowrap; overflow:hidden; white-space:nowrap; }
+#topbar button, #docsbtn, #apptitle { flex:0 0 auto; white-space:nowrap; }
+/* the status line is the only thing here that may be cut: it gives up its
+   width so the buttons keep theirs, instead of the row breaking in two */
+#status { flex:1 1 0; min-width:0; overflow:hidden; text-overflow:ellipsis; }
+#computebar { position:absolute; left:0; bottom:-1px; width:100%; height:2px; background:#fff;
+  transform-origin:0 50%; transform:scaleX(0); display:none; z-index:5; pointer-events:none; }
+#apptitle { display:flex; align-items:center; }
+#apptitle .wordmark { height:20px; width:auto; display:block; image-rendering:auto; }
+#status { color:#888; }
+/* The size of the network on screen is a fact about it, not an event, so it
+   does not belong in the status line: that line is the last thing that
+   happened and a wiring result scrolled away with the next message. It sits
+   beside the title and stays until the next wiring replaces it. */
+#netsize { flex:0 0 auto; color:#7a7a7a; white-space:nowrap; }
+#netsize:empty { display:none; }
+#status.error { color:hsl(0,75%,60%); }
+/* Action groups sit at the right, separated by a hairline so related
+   buttons read as a set rather than as one long undifferentiated row. */
+.tbgroup { display:flex; align-items:center; gap:6px; }
+.tbgroup + .tbgroup { border-left:1px solid #2a2a2a; padding-left:12px; }
+#topbar .tbgroup:first-of-type { margin-left:auto; }
+/* The viewer's own control strip: run state, network size, and what is
+   drawn. Here rather than in the top bar, which is a long way from the
+   thing they change. */
+/* The strip wraps when the pane is narrow rather than clipping: every
+   control stays reachable and the run's clock, track and time left stay
+   visible. The viewer below follows the strip's measured height through
+   --vbh, set by a ResizeObserver in main.js. */
+#viewerbar { position:absolute; top:22px; left:0; right:0; min-height:26px;
+  display:flex; align-items:center; gap:4px 8px; padding:0 10px;
+  border-bottom:1px solid #222; background:#000; z-index:4;
+  flex-wrap:wrap; white-space:nowrap; }
+#viewerbar > * { flex:0 0 auto; }
+#viewerbar input[type=range] { flex:1 1 60px; min-width:48px; }
+
+#viewerbar button { padding:1px 8px; }
+#viewerbar label { color:#888; letter-spacing:1px; cursor:ew-resize; }
+.vbsep { width:1px; height:14px; background:#2a2a2a; }
+/* both readouts change width as digits come and go, which reflowed the
+   wrapping bar and moved every button beside them; tabular figures and a
+   width reserved for the widest value hold them still */
+#rate { color:#888; margin-left:auto; flex:0 1 auto; min-width:13ch;
+  text-align:right; font-variant-numeric:tabular-nums;
+  overflow:hidden; text-overflow:ellipsis; }
+#rtf { min-width:15ch; text-align:right; font-variant-numeric:tabular-nums; }
+/* hover text for icon-only buttons, shown at once (installTips in icons.js) */
+#tip { position:fixed; z-index:100; max-width:calc(280px * var(--ui, 1));
+  padding:calc(5px * var(--ui, 1)) calc(7px * var(--ui, 1));
+  background:#0c0c0c; border:1px solid #333; color:#999; font-size:calc(11px * var(--ui, 1));
+  line-height:1.45; pointer-events:none; white-space:normal; }
+#tip[hidden] { display:none; }
+#tip .tipname { color:#e6e6e6; letter-spacing:1px; text-transform:uppercase; margin-bottom:2px; }
+#tip .tipline { white-space:nowrap; }
+.panehead .hint, #graphHint { cursor:help; }
+
+#res { max-width:90px; accent-color:#888; background:transparent; cursor:ew-resize; }
+#vmfloor { max-width:96px; accent-color:#888; background:transparent; cursor:ew-resize; }
+/* this one was left on the browser default, which paints a saturated blue or
+   red thumb depending on platform: the one piece of stock chrome in an
+   otherwise gray bar */
+#speed { max-width:96px; accent-color:#888; background:transparent; cursor:ew-resize; }
+
+/* Out of reach while a training run owns the network. Dimmed rather than
+   hidden, so the control is still findable and its tooltip can say why it
+   is out; the cursor stops promising a drag that will not happen. */
+.runlocked { opacity:0.35; }
+button.runlocked, button:disabled { cursor:not-allowed; border-color:#2a2a2a;
+  color:#666; }
+button.runlocked:hover, button:disabled:hover { border-color:#2a2a2a; color:#666; }
+input[type=range].runlocked, input[type=range]:disabled { cursor:not-allowed; }
+#viewerbar label.runlocked { cursor:not-allowed; }
+/* read-only parameters: legible, plainly inert, not invisible */
+#props.locked input, #props.locked select, #props.locked textarea {
+  opacity:0.5; cursor:not-allowed; }
+#props.locked input[type=range] { accent-color:#555; }
+#props.locked .viewctl input, #props.locked .viewctl select, #props.locked .viewctl textarea {
+  opacity:1; cursor:auto; }
+#props.locked .viewctl input[type=range] { accent-color:auto; }
+#props .lockmsg { color:#8a7a4a; margin-top:8px; }
+/* what a probe last measured, on the probe */
+.pmetrics { margin-top:10px; border-top:1px solid #222; padding:8px 10px 0; }
+.pmetrics .ptitle2 { color:#666; letter-spacing:1px; margin-bottom:6px; }
+.pmetrics .prow2 { display:flex; justify-content:space-between; gap:10px;
+  padding:3px 10px; }
+.pmetrics .prow2 span { color:#888; }
+.pmetrics .prow2 b { color:#ddd; font-weight:normal; }
+/* an off mechanism should not look like a tuned one */
+.pmetrics .prow2.offterm span, .pmetrics .prow2.offterm b { color:#555; }
+.pmetrics .prow2.on b { color:hsl(130,45%,60%); }
+button { background:#000; color:#c8c8c8; border:1px solid #444; font:inherit;
+  padding:2px 10px; cursor:pointer; letter-spacing:1px; }
+button:hover { border-color:#888; color:#fff; }
+#live.on { border-color:hsl(55,75%,55%); color:hsl(55,75%,65%); }
+#rec.on { border-color:hsl(0,75%,55%); color:hsl(0,75%,65%); }
+#docsbtn { background:#000; color:#c8c8c8; border:1px solid #444; font:inherit;
+  padding:2px 10px; letter-spacing:1px; text-decoration:none; }
+#docsbtn:hover { border-color:#888; color:#fff; }
+#viewerPane { grid-area:viewer; position:relative; min-height:0; }
+#viewer { position:absolute; inset:calc(22px + var(--vbh, 26px)) 0 80px 0; }
+/* The run's own fields live in the viewer bar and appear only while a run
+   is going. The only color among them is the state word and the progress
+   fill, because a run is a mode and the eye should find it without hunting. */
+#viewerbar .tbonly, #viewerbar button.tbonly { display:none; }
+#viewerbar.training .tbonly, #viewerbar.training button.tbonly { display:flex; align-items:center; }
+#viewerbar.training .tbonly[hidden] { display:none; }
+#tbstate { color:hsl(55,75%,60%); letter-spacing:2px; }
+#tbstate.warmup { color:hsl(30,75%,60%); }
+/* a paused run is stopped, not finished and not broken: the pulse stops
+   with it, which is the point of the dot */
+#tbstate.paused { color:#888; }
+#tbstate.paused::before { animation:none; opacity:0.4; }
+#tbpause.on { border-color:hsl(55,75%,55%); color:hsl(55,75%,65%); }
+#tbstate.done { color:hsl(130,45%,55%); }
+/* a failed or stalled run is the one state that should be hard to miss */
+#tbstate.failed { color:hsl(0,75%,60%); }
+#tbstate.failed::before { animation:none; opacity:1; }
+/* the dot marks a run that is still advancing, so a stalled run is not
+   mistaken for a slow one */
+#tbstate::before { content:''; display:inline-block; width:6px; height:6px;
+  margin-right:7px; background:currentColor; vertical-align:middle;
+  animation:tbpulse 1.6s steps(1,end) infinite; }
+@keyframes tbpulse { 0%,50% { opacity:1; } 50.01%,100% { opacity:0.15; } }
+@media (prefers-reduced-motion:reduce) {
+  #tbstate::before { animation:none; opacity:1; }
+}
+#tbclock { color:#ddd; }
+#tbtrack { flex:1 1 60px; min-width:48px; max-width:120px; height:5px; border:1px solid #333; background:#000;
+  position:relative; }
+#tbfill { position:absolute; inset:0; width:0; background:hsl(55,75%,55%);
+  transform-origin:0 50%; }
+#tbeta { color:#666; margin-left:auto; flex:0 1 auto; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; }
+#viewer canvas { display:block; }
+/* Shown over the viewport when the driver takes the WebGL context. It has
+   to be readable against whatever the dead canvas is showing, which is
+   white on this machine, so it paints its own ground. */
+#glLost { display:none; position:absolute; left:50%; top:120px;
+  transform:translateX(-50%); max-width:520px; z-index:6;
+  background:#000; border:1px solid hsl(0,75%,45%); color:#ddd;
+  padding:12px 14px; line-height:1.6; }
+#glLost b { color:#fff; }
+#glLost .dim { color:#777; }
+#glLost button { margin-top:8px; }
+#hud { position:absolute; left:10px; bottom:90px; color:#aaa; pointer-events:none; }
+/* The left column. The region list gives way first when the pane is short:
+   it scrolls, the inputs keep their size. */
+#leftpanels { position:absolute; top:150px; left:0; z-index:4; display:flex;
+  flex-direction:column; align-items:flex-start; gap:6px; max-height:calc(100% - 170px); }
+#inputs { flex:0 0 auto; width:200px; display:none;
+  background:#000; border:1px solid #333; border-left:none; padding:4px 6px; }
+/* The input and probe overlays collapse to their header and resize by the
+   corner handle; both remembered per machine (main.js overlayControls). */
+.overlay { resize:both; overflow-y:auto; overflow-x:hidden; min-width:110px; min-height:22px; max-width:calc(70vw / var(--ui, 1)); max-height:calc(75vh / var(--ui, 1));
+  box-sizing:border-box; scrollbar-width:thin; scrollbar-color:#3a3a3a #000; }
+.overlay::-webkit-scrollbar { width:6px; height:6px; }
+.overlay::-webkit-scrollbar-track { background:#000; }
+.overlay::-webkit-scrollbar-thumb { background:#3a3a3a; border-radius:0; }
+.overlay::-webkit-scrollbar-corner { background:#000; }
+.overlay .ovbody { min-width:0; }
+#probes .pimg { max-width:100%; height:auto; }
+#probes canvas, #inputs canvas { max-width:100%; }
+.overlay.min { resize:none; overflow:hidden; height:auto !important; }
+.overlay.min .ovbody { display:none; }
+.ovhead { display:flex; align-items:center; gap:6px; color:#777; letter-spacing:2px; font-size:9px;
+  text-transform:uppercase; margin-bottom:2px; }
+.ovhead span { flex:1; }
+.ovhead .ovmin { padding:0 4px; font-size:10px; line-height:14px; }
+.overlay.min .ovhead { margin-bottom:0; }
+#inputs .inrow { border-top:1px solid #222; padding-top:3px; margin-top:3px; }
+#inputs .inhead { display:flex; align-items:center; gap:5px; color:#aaa; }
+#inputs .inhead span:first-child { flex:1; overflow:hidden; white-space:nowrap; }
+#inputs .initem { color:#fff; }
+#inputs .inhead button.muted { color:#c66; }
+#inputs .incanvas { display:block; width:100%; height:52px; image-rendering:pixelated;
+  background:#000; margin-top:2px; }
+#probes { position:absolute; top:150px; right:0; width:230px; z-index:4; display:none;
+  background:#000; border:1px solid #333; border-right:none; padding:4px 6px; }
+#probes .probe { display:flex; align-items:center; gap:6px; margin:2px 0; }
+#probes .probe span:first-child { flex:1; color:#aaa; overflow:hidden;
+  text-overflow:ellipsis; white-space:nowrap; }
+#probes .pval { color:#ddd; min-width:52px; text-align:right; }
+/* under a probe's rate: the mean and spread of the readings behind it */
+#probes .pspread { color:#666; text-align:right; margin:0 0 4px; }
+/* the region list: the names the viewer has no room for, and the way into
+   a population in a scene of two dozen of them */
+/* under the probes and clear of the raster: the list runs as long as the
+   scene has populations, so it is capped against the pane rather than the
+   window, which the node graph leaves only a third of */
+#regions { flex:0 1 auto; min-height:22px; width:190px; max-height:260px;
+  display:none; background:#000; border:1px solid #333; border-left:none; padding:4px 6px; }
+#regions .rrow { display:flex; align-items:center; gap:6px; padding:1px 0; cursor:pointer; }
+#regions .rrow:hover, #regions .rrow.on { background:#161616; }
+#regions .rsw { width:8px; height:8px; flex:none; }
+#regions .rtag { flex:1; color:#aaa; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+#regions .rrow:hover .rtag, #regions .rrow.on .rtag { color:#fff; }
+#regions .rct { color:#ddd; font-variant-numeric:tabular-nums; }
+#probes .pimg { display:block; margin:2px 0 6px auto; border:1px solid #333;
+  image-rendering:auto; }
+#probes button { margin-bottom:4px; }
+#vmfloorval { color:#aaa; min-width:46px; }
+/* the training dialog's read-only summary of what the checkpoint will run */
+.dlgsum { border:1px solid #2a2a2a; padding:8px 10px; margin:4px 0 10px;
+  color:#bbb; line-height:1.7; }
+.dlgsum b { color:#fff; }
+.dlgsum .dim { color:#666; }
+#raster { position:absolute; left:0; right:0; bottom:0; width:100%; height:80px;
+  border-top:1px solid #333; background:#000; }
+/* The right column holds properties above and, while a run is going, the
+   training pane below, with its own drag handle between them. Properties
+   takes the slack so the training pane keeps whatever height it is given. */
+#rightCol { grid-area:props; display:flex; flex-direction:column; min-height:0; }
+#propsPane { flex:1 1 auto; min-height:0; overflow-y:auto; }
+#tsplit { flex:0 0 5px; position:relative; z-index:3; background:#000; cursor:row-resize; }
+#tsplit::after { content:''; position:absolute; left:0; right:0; top:2px; height:1px; background:#333; }
+#tsplit:hover::after { background:#888; }
+#graphPane { grid-area:graph; position:relative; min-height:0; }
+#vsplit, #hsplit { position:relative; z-index:3; background:#000; }
+#vsplit { grid-area:vsplit; cursor:col-resize; }
+#vsplit::after { content:''; position:absolute; top:0; bottom:0; left:2px; width:1px; background:#333; }
+#hsplit { grid-area:hsplit; cursor:row-resize; }
+#hsplit::after { content:''; position:absolute; left:0; right:0; top:2px; height:1px; background:#333; }
+#vsplit:hover::after, #hsplit:hover::after { background:#888; }
+#graph { position:absolute; inset:46px 0 0 0; width:100%; height:calc(100% - 46px); display:block; }
+/* Scene tabs, attached to the node graph because they change what it edits
+   and nothing else. The tab in the editor is lit; the eye marks the scene
+   the viewer holds, which is another tab between a switch and a viewer key. */
+#scenetabs { height:24px; box-sizing:border-box; display:flex; align-items:stretch; gap:0;
+  border-bottom:1px solid #333; background:#000; overflow:hidden; position:relative; z-index:2; }
+.stab { display:flex; align-items:center; gap:6px; padding:0 8px 0 10px; min-width:0; max-width:200px;
+  color:#666; border-right:1px solid #333; cursor:pointer; white-space:nowrap; user-select:none; }
+.stab:hover { color:#aaa; }
+.stab.cur { color:#eee; box-shadow:inset 0 -1px 0 hsl(0,75%,55%); }
+.stab .sname { overflow:hidden; text-overflow:ellipsis; }
+.stab .seye, .stab .sclose { display:flex; align-items:center; flex:0 0 auto; }
+.stab .seye svg, .stab .sclose svg { width:11px; height:11px; }
+.stab .seye { visibility:hidden; color:hsl(175,75%,50%); }
+.stab.shown .seye { visibility:visible; }
+.stab .sclose { color:#444; }
+.stab .sclose:hover { color:#fff; }
+#stabadd { border:none; border-right:1px solid #333; background:#000; color:#666; padding:0 8px; cursor:pointer; height:auto; }
+#stabadd:hover { color:#fff; }
+/* A pane header is a fixed 22 px row, and it has now painted over its
+   neighbor twice for two different reasons. First the hint: it is a
+   sentence, so a narrow pane wrapped it to a second line the row would not
+   grow for, and it landed on the status line under it. The row clips and
+   the hint truncates, which fixed that.
+   Then the row itself: in a flex column it defaults to shrinkable, so a
+   short training pane compressed the header below its own line-height and
+   the text bled again. flex:0 0 auto here and on the status and files rows
+   pins them; only the log absorbs the slack. */
+.panehead { height:22px; line-height:21px; padding:0 10px; color:#666; letter-spacing:2px;
+  border-bottom:1px solid #333; position:relative; z-index:2; background:#000;
+  display:flex; align-items:center; gap:12px; overflow:hidden; white-space:nowrap;
+  flex:0 0 auto; box-sizing:border-box; }
+.panehead .hint { margin-left:auto; letter-spacing:0; color:#444;
+  min-width:0; overflow:hidden; text-overflow:ellipsis; }
+.ptabs { display:flex; flex-wrap:wrap; gap:0; border-bottom:1px solid #222; margin-bottom:4px; }
+.ptab { background:#000; color:#666; border:none; border-bottom:1px solid transparent;
+  padding:5px 8px; font:inherit; letter-spacing:0.5px; cursor:pointer;
+  margin-bottom:-1px; white-space:nowrap; }
+.ptab:hover { color:#aaa; }
+.ptab.on { color:#ddd; border-bottom-color:hsl(0,75%,55%); }
+#props .ptitle { padding:10px; color:#fff; letter-spacing:1px; border-bottom:1px solid #222; }
+#props .ptitle .swatch { display:inline-block; width:8px; height:8px; margin-right:8px; }
+#props .prow { display:flex; align-items:center; padding:5px 10px; gap:6px; }
+#props .prow label { flex:0 0 90px; color:#888; }
+/* a parameter whose prose is one hover away. The underline is faint on
+   purpose: it should read as available rather than as a link competing
+   with the value beside it. */
+#props .prow label.hasdoc { cursor:help;
+  text-decoration:underline dotted rgba(255,255,255,0.22);
+  text-underline-offset:3px; }
+#props .prow label.hasdoc:hover { color:#bbb;
+  text-decoration-color:rgba(255,255,255,0.5); }
+#props textarea { background:#000; color:#ddd; border:1px solid #333; font:inherit;
+  width:100%; resize:vertical; padding:4px 6px; }
+#props textarea:focus { outline:none; border-color:#777; }
+#props input[type=range] { flex:1; accent-color:#888; border:none; padding:0; min-width:60px; }
+#props input.narrow { flex:0 0 64px; }
+#props input, #props select { background:#000; color:#ddd; border:1px solid #333;
+  font:inherit; padding:3px 5px; width:100%; min-width:0; }
+#props input:focus, #props select:focus { outline:none; border-color:#777; }
+#props .empty { padding:14px 10px; color:#555; }
+#props button { background:#000; color:#ddd; border:1px solid #333; font:inherit;
+  padding:3px 10px; cursor:pointer; }
+#props button:hover { border-color:#777; color:#fff; }
+/* group hue presets: the six colors the scenarios label their clusters with */
+/* four padding fields and a button do not fit one line of a narrow panel,
+   so this row alone wraps rather than squeezing them to a spinner arrow
+   each. Only this row: wrapping every row puts each text field on a line
+   of its own and doubles the height of the node panel. */
+#props .prow.wrap { flex-wrap:wrap; }
+/* a setting the running engine does not implement (its hello reply) */
+#props .prow.lacking { opacity:0.4; }
+#props input.padin { flex:0 0 48px; -moz-appearance:textfield; }
+#props input.padin::-webkit-outer-spin-button,
+#props input.padin::-webkit-inner-spin-button { -webkit-appearance:none; margin:0; }
+#props .gswatches { display:flex; gap:4px; flex:1; }
+#props .gswatches button { width:22px; height:16px; padding:0; border:1px solid #333; }
+#props .gswatches button.on { border-color:#fff; }
+#addmenu { position:fixed; background:#000; border:1px solid #555; z-index:10; min-width:150px; }
+#addsearch { background:#000; border:none; border-bottom:1px solid #333; color:#ddd;
+  font:inherit; padding:6px 12px; width:100%; outline:none; }
+#addsearch::placeholder { color:#444; }
+#addmenu .msection { position:relative; }
+#addmenu .mhead { padding:6px 12px; color:#888; letter-spacing:2px; font-size:9px;
+  cursor:default; }
+#addmenu .mhead::after { content:'\25B8'; float:right; color:#444; }
+#addmenu .msection.open > .mhead { background:#181818; color:#fff; }
+#addmenu .mfly { display:none; position:absolute; left:100%; top:-1px; background:#000;
+  border:1px solid #555; min-width:150px; z-index:11; }
+#addmenu .msection.open > .mfly { display:block; }
+#addmenu .mfly { max-height:calc(100vh / var(--ui, 1) - 8px); overflow-y:auto; }
+#addmenu .mfly.leftward { left:auto; right:100%; }
+#addmenu .mitem { padding:5px 12px; cursor:pointer; color:#bbb; white-space:nowrap; }
+#addmenu .mitem:hover { background:#181818; color:#fff; }
+#addmenu .mitem span { display:inline-block; width:7px; height:7px; margin-right:9px; }
+/* right click on the graph: a flat list, same black and 1px as the add menu,
+   with each row's key binding set to the right so the menu teaches it */
+#ctxmenu, #barmenu { position:fixed; background:#000; border:1px solid #555; z-index:10;
+  min-width:180px; }
+#ctxmenu .mitem, #barmenu .mitem { padding:5px 12px; cursor:pointer; color:#bbb; white-space:nowrap;
+  display:flex; gap:24px; justify-content:space-between; }
+#ctxmenu .mitem:hover, #barmenu .mitem:hover { background:#181818; color:#fff; }
+#ctxmenu .mitem.off, #barmenu .mitem.off { color:#444; cursor:default; }
+#ctxmenu .mitem.off:hover, #barmenu .mitem.off:hover { background:none; color:#444; }
+#ctxmenu .mitem .k, #barmenu .mitem .k { color:#555; }
+#ctxmenu .msep, #barmenu .msep { height:1px; background:#333; }
+/* A menu row that is a heading, not a choice: the folder's own path, the
+   word "scenes" over the list of them. */
+#barmenu .mhead { padding:5px 12px; color:#555; white-space:nowrap;
+  max-width:420px; overflow:hidden; text-overflow:ellipsis; }
+/* the row for the thing already open */
+#barmenu .mitem.on { color:#8af; }
+/* The path: project / scene. The two names are the buttons, so what is open
+   is also what you click to change it. */
+.tbpath { gap:4px; }
+.tbslash { color:#444; }
+button.tbmenu { border-color:#2a2a2a; color:#ddd; letter-spacing:0.06em;
+  max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+button.tbmenu:hover, button.tbmenu.open { border-color:#888; color:#fff; }
+button.tbmenu::after { content:' \25be'; color:#666; }
+#scope { position:absolute; top:calc(22px + var(--vbh, 26px)); right:0; width:300px; height:96px;
+  border-left:1px solid #333; border-bottom:1px solid #333; background:#000;
+  display:none; z-index:2; }
+
+/* modal for the training launcher: same flat black, 1px, square-corner
+   language as the rest of the app */
+.dlg { position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:50;
+  display:flex; align-items:center; justify-content:center; }
+.dlgbox { background:#000; border:1px solid #444; padding:16px 18px;
+  min-width:380px; max-width:520px; }
+.dlgbox b { display:block; margin-bottom:8px; letter-spacing:0.08em; }
+.dlgbox label { display:flex; align-items:center; justify-content:space-between;
+  gap:12px; margin:6px 0; color:#aaa; }
+.dlgbox select, .dlgbox input { background:#000; color:#ddd; border:1px solid #444;
+  padding:3px 6px; min-width:190px; font:inherit; }
+.dlghint { color:#777; margin:4px 0 10px 0; }
+#newProjDlg .dlgbox { width:520px; }
+#newProjDlg input { flex:1; }
+#newProjPath { word-break:break-all; }
+/* The scene the project has open, named in the bar rather than left to be
+   inferred from the graph. Dim, because it is context and not an action. */
+.scenelist { max-height:calc(40vh / var(--ui, 1)); overflow-y:auto; border:1px solid #2a2a2a;
+  margin:0 0 10px; }
+.scenelist li { padding:5px 9px; cursor:pointer; display:flex;
+  justify-content:space-between; gap:12px; }
+.scenelist li:hover { background:#141414; }
+.scenelist li.sel { background:#1c1c1c; color:#fff; }
+.scenelist li.cur { color:#8af; }
+.scenelist .dim { color:#666; }
+.scenelist .empty { color:#666; cursor:default; }
+.scenelist .empty:hover { background:none; }
+/* Refusals sit above the buttons rather than replacing the dialog, so the
+   name that was rejected is still on screen to be corrected. */
+.dlgerr { color:#c66; margin:0 0 8px; min-height:1em; }
+/* The dialog's own labels are flex rows, which beats the [hidden] attribute
+   because an author rule outranks the user agent one. A field hidden by
+   script stayed on screen without this. */
+.dlgbox label[hidden] { display:none; }
+#projPath { width:100%; }
+#projDlg .dlgbox { width:min(760px, calc(94vw / var(--ui, 1))); max-width:none; }
+.scenelist li.up { color:#8af; }
+.dlgrow { display:flex; gap:8px; margin-top:12px; }
+
+/* keyboard shortcut list */
+#keysList { max-height:calc(52vh / var(--ui, 1)); overflow-y:auto; }
+#keysList .kgroup { color:#666; letter-spacing:0.08em; margin:10px 0 4px 0; }
+#keysList .krow { display:flex; align-items:center; justify-content:space-between;
+  gap:12px; padding:2px 0; color:#aaa; }
+#keysList .kbind { background:#000; border:1px solid #444; color:#ddd;
+  padding:2px 8px; min-width:110px; text-align:center; cursor:pointer; }
+#keysList .kbind.fixed { border-color:#222; color:#666; cursor:default; }
+#keysList .kbind.armed { border-color:#fff; color:#fff; }
+#keysList .kbind.custom { border-color:#8a8; }
+
+/* Training pane: the run's own output, docked in the building UI rather
+   than in a separate page. Shares the properties column, so the graph and
+   viewer keep their space while a run is going. */
+#trainPane {
+  display: none;
+  flex: 0 0 auto;
+  min-height: 60px;                 /* never draggable down into overlap */
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+#trainPane #stat {
+  flex: 0 0 auto;
+  padding: 4px 8px;
+  font-size:11px;
+  border-bottom: 1px solid var(--line, #333);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#trainPane #log {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 8px;
+  font-size:10px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+  opacity: 0.85;
+}
+/* Tabs in the app's language: a hairline row, the active one marked by a
+   lit underline rather than a filled box, since the panel is already dense
+   and a block of color there would outweigh the run's own status above it. */
+#ttabs { flex: 0 0 auto; display: flex; gap: 0; border-bottom: 1px solid #222; }
+.ttab { background: #000; color: #666; border: none; border-bottom: 1px solid transparent;
+  padding: 4px 10px; font: inherit; letter-spacing: 1px; cursor: pointer;
+  margin-bottom: -1px; }
+.ttab:hover { color: #aaa; border-color: #333; }
+.ttab.on { color: #ddd; border-bottom-color: hsl(55,75%,55%); }
+/* something arrived in a pane that is not open */
+.ttab.unread::after { content:''; display:inline-block; width:4px; height:4px;
+  margin-left:6px; vertical-align:middle; background:hsl(55,75%,55%); }
+.ttab.on.unread::after { display:none; }
+/* every pane scrolls on its own, so switching tabs does not carry one
+   pane's scroll position into another */
+.tpane { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+#trainPane #setup {
+  padding: 4px 8px;
+  font-size:10px;
+  line-height: 1.35;
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: #9a9a9a;
+}
+#trainPane #files {
+  max-height: none;
+  overflow-y: auto;
+  padding: 0 8px 6px;
+  font-size:10px;
+  opacity: 0.75;
+}
+/* The run's output files are download links and were rendering as default
+   browser blue-on-black with an underline, which is the only saturated blue
+   in the app and reads as a rendering fault rather than as a link. */
+#trainPane #files a { color: #7fb0d0; text-decoration: none; }
+#trainPane #files a:hover { color: #fff; text-decoration: underline; }
+#trainPane #files div { margin-top: 3px; }
+/* Files are grouped by run: the header sits at the pane's left edge and the
+   files it owns are indented under it. Nothing here uses a negative margin,
+   because the global reset leaves the list with no indent to come out of and
+   anything outdented is simply clipped by the pane. */
+#trainPane #files ul { list-style: none; }
+/* Where the files went, above the list of them. Browser storage is the
+   case worth seeing, so it is the one that is colored. */
+#trainPane #files .fwhere { color: #666; padding-bottom: 4px;
+  border-bottom: 1px solid #222; word-break: break-all; }
+#trainPane #files .fwhere.browser { color: #ca6; }
+/* runs left behind in browser storage, and the link that copies them in */
+#trainPane #files .flegacy { color: #ca6; padding: 3px 0; }
+#trainPane #files .frun { color: #888; margin-top: 7px; }
+#trainPane #files .frun.cur { color: #8af; }
+#trainPane #files .ffile { padding-left: 12px; }
+/* a long file name wraps under its own indent rather than widening the pane
+   and pushing every line sideways */
+#trainPane #files li { overflow-wrap: anywhere; }
+
+/* ---- documentation, shared by docs.html and the in-app overlay ----
+   Every rule is scoped under .docsview: as bare element
+   selectors, unscoped, they would restyle the whole
+   playground the moment the overlay imported them. */
+.docsview { display:grid; grid-template-columns:230px 1fr; height:100%;
+  font-size:12px; color:#c8c8c8; background:#000; min-height:0; }
+.docsview .dnav { border-right:1px solid #333; overflow-y:auto; padding:14px 0; }
+.docsview .dnav .head { padding:4px 16px; color:#555; letter-spacing:2px;
+  font-size:9px; margin-top:10px; }
+.docsview .dnav .sub { padding:6px 16px 2px; color:#666; letter-spacing:2px; font-size:9px; }
+.docsview .dnav a { display:block; padding:4px 16px; color:#bbb; text-decoration:none; }
+.docsview .dnav a:hover { background:#181818; color:#fff; }
+.docsview .dnav a.on { color:#fff; border-left:2px solid #fff; padding-left:14px; }
+.docsview .dnav a span { display:inline-block; width:7px; height:7px; margin-right:8px; }
+.docsview .dcontent { overflow-y:auto; overflow-x:hidden;
+  padding:28px 40px 80px; min-width:0; }
+.docsview .dcontent > div { max-width:900px; }
+/* a table wider than the column scrolls inside itself rather than pushing
+   the whole page sideways */
+.docsview table { display:block; overflow-x:auto; }
+.docsview h1 { color:#fff; letter-spacing:2px; font-size:16px; margin:0 0 14px; font-weight:normal; }
+.docsview h2 { color:#fff; letter-spacing:1px; font-size:12px; margin:22px 0 8px;
+  font-weight:normal; border-bottom:1px solid #222; padding-bottom:4px; }
+/* the node reference: a band per category, then each node's name large with its menu color */
+.docsview h2.cat { color:#888; letter-spacing:3px; font-size:11px; margin:40px 0 4px;
+  border-bottom:1px solid #333; padding-bottom:6px; }
+.docsview h2.cat:first-of-type { margin-top:18px; }
+.docsview h3.node { color:#fff; font-size:15px; letter-spacing:1px; font-weight:normal;
+  margin:28px 0 6px; display:flex; align-items:center; gap:9px; }
+.docsview h3.node .sw { width:9px; height:9px; display:inline-block; flex:none; }
+.docsview p { margin:0 0 10px; line-height:1.55; color:#b5b5b5; }
+.docsview a { color:#7ab8d9; }
+.docsview code { background:#141414; padding:1px 5px; color:#ddd; }
+/* a command to type, on its own lines; it wraps rather than scrolling the page */
+.docsview pre { background:#141414; color:#ddd; padding:8px 10px; margin:0 0 12px;
+  white-space:pre-wrap; line-height:1.5; font:inherit; }
+.docsview b { color:#ddd; font-weight:normal; }
+.docsview i { color:#ddd; }
+.docsview table { border-collapse:collapse; width:100%; margin:8px 0 18px; }
+.docsview th { text-align:left; color:#666; font-weight:normal; letter-spacing:1px;
+  font-size:10px; border-bottom:1px solid #333; padding:4px 10px 4px 0; }
+.docsview td { border-bottom:1px solid #1a1a1a; padding:6px 10px 6px 0;
+  vertical-align:top; line-height:1.5; }
+.docsview td.k { color:#fff; white-space:nowrap; }
+.docsview td.v { color:#777; white-space:nowrap; font-variant-numeric:tabular-nums; }
+.docsview td.d { color:#aaa; width:100%; }
+.docsview .io { color:#777; margin-bottom:10px; }
+.docsview .blurb { color:#c5c5c5; }
+.docsview .backlink { display:block; padding:4px 16px 12px; color:#888;
+  border-bottom:1px solid #222; margin-bottom:8px; }
+.docsview .backlink:hover { color:#fff; background:#181818; }
+/* the overlay: nearly the whole window, since documentation is read rather
+   than glanced at, but still over the app rather than instead of it */
+/* max-width on the base .dlgbox is 520px, which is right for a settings
+   dialog and far too narrow for prose with tables in it: overriding width
+   alone left the text wrapping at about fifteen characters. */
+#docsDlg .dlgbox { width:min(1500px, calc(96vw / var(--ui, 1))); max-width:none; height:calc(90vh / var(--ui, 1));
+  padding:0; display:flex; flex-direction:column; }
+#docsDlg .docshead { display:flex; align-items:center; gap:12px; padding:8px 12px;
+  border-bottom:1px solid #333; color:#fff; letter-spacing:2px; }
+#docsDlg .docshead .sp { margin-left:auto; }
+#docsDlg .docsview { flex:1 1 auto; min-height:0; }
+
+/* Pair table editor. The previous interface was 197 rows in a textarea with
+   no headers, a positional fifth column, and a typo in a population tag
+   failing silently because the resolver simply never matched it.
+   Percentage columns and no minimum width: an earlier attempt gave the table
+   a 340px minimum inside a 300px panel, so it scrolled sideways and showed a
+   row's numbers while its two population names were off screen. */
+/* The parameter row is a flex pair of label and control, and the label keeps
+   its 90px whatever is beside it. A table does not want a gutter it cannot
+   use, so this row stops being that pair and the empty label goes away. */
+#props .prow.wide { display:block; }
+#props .prow.wide > label { display:none; }
+.pairtable { margin-top:4px; }
+/* Populations plugged into the connect node, offered as chips so an empty
+   table shows what it can wire instead of a blank grid. */
+.pairtable .pt-chips { display:flex; flex-wrap:wrap; align-items:center;
+  gap:4px; margin-top:6px; }
+.pairtable .pt-chips-lab { color:#666; margin-right:2px; }
+.pairtable .pt-chip { background:#111; border:1px solid #333; color:#bbb;
+  padding:1px 7px; cursor:pointer; }
+.pairtable .pt-chip:hover { border-color:#888; color:#fff; }
+.pairtable .pt-chip-all { border-style:dashed; color:#8a8; }
+.pairtable .pt-chip-all:hover { border-color:#8a8; color:#adb; }
+.pairtable table.pt { width:100%; border-collapse:collapse; table-layout:fixed;
+  font-size:10px; }
+/* Frozen headers. The scroll container is .ppbody in the popout and
+   #propsPane in the panel, and sticky resolves against whichever one it is
+   inside, so the same rule serves both. The background is not decoration:
+   without it the rows scroll through the text. */
+.pairtable table.pt th { color:#555; font-weight:normal; text-align:left;
+  padding:2px 2px 3px 0; letter-spacing:0.5px;
+  position:sticky; top:0; z-index:2; background:#000;
+  box-shadow:0 1px 0 #222; }
+.pairtable table.pt th.sortable { cursor:pointer; user-select:none; }
+.pairtable table.pt th.sortable:hover { color:#aaa; }
+.pairtable table.pt th.on { color:#ddd; }
+.pairtable table.pt .pt-arrowdir { color:#777; }
+.pairtable table.pt td { padding:1px 2px 1px 0; }
+.pairtable table.pt input, .pairtable table.pt select {
+  width:100%; background:#000; color:#ddd; border:1px solid #2a2a2a; font:inherit;
+  font-size:10px; padding:2px 2px; box-sizing:border-box; min-width:0; }
+.pairtable table.pt input:focus, .pairtable table.pt select:focus { outline:none; border-color:#777; }
+.pairtable table.pt input.pt-num { text-align:right; }
+/* a tag nothing upstream carries, or a rule nothing declares: both are rows
+   that quietly never apply, which is the failure worth coloring */
+.pairtable table.pt .pt-unknown { border-color:#8a4a4a; color:#c88; }
+.pairtable table.pt select.pt-named { color:#b98ad4; border-color:#4a3a5a; }
+.pairtable table.pt td.pt-del { color:#444; cursor:pointer; text-align:center; font-size:11px; }
+.pairtable table.pt td.pt-del:hover { color:#c88; }
+/* contributed by another node: readable here, edited at its source */
+.pairtable table.pt tr.pt-ext { cursor:pointer; }
+.pairtable table.pt tr.pt-ext td { color:#9a9; padding:2px 2px 3px 0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pairtable table.pt tr.pt-ext:hover td { color:#cfc; }
+.pairtable table.pt tr.pt-ext td.pt-note { color:#444; font-style:italic; }
+.pairtable table.pt tr.pt-ext td.pt-rule { color:#b98ad4; }
+.pairtable table.pt tr.pt-ext td.pt-src { color:#555; text-align:right; }
+.pairtable table.pt tr.pt-off td { color:#3a3a3a; text-decoration:line-through; }
+.pairtable table.pt tr.pt-off td.pt-rule, .pairtable table.pt tr.pt-off td.pt-note {
+  color:#555; text-decoration:none; font-style:italic; }
+.pairtable .pt-foot { display:flex; align-items:center; gap:6px; margin-top:7px; }
+.pairtable .pt-foot button { background:#000; color:#999; border:1px solid #2a2a2a;
+  font:inherit; font-size:10px; padding:2px 7px; cursor:pointer; }
+.pairtable .pt-foot button:hover { color:#ddd; border-color:#777; }
+.pairtable .pt-count { color:#555; font-size:10px; margin-left:auto; }
+
+/* Combobox: a text field that is also a dropdown. A native select cannot be
+   typed into and a datalist shows no arrow, so neither is the control the
+   from/to cells want. The list is fixed-positioned so the scrolling
+   properties pane cannot clip it. */
+.cb { display:flex; align-items:stretch; gap:0; width:100%; }
+.cb .cb-in { flex:1 1 0; min-width:0; background:#000; color:#ddd;
+  border:1px solid #2a2a2a; border-right:none; font:inherit; font-size:10px;
+  padding:2px 3px; box-sizing:border-box; }
+.cb .cb-in:focus { outline:none; border-color:#777; }
+.cb .cb-arrow { flex:0 0 14px; background:#000; color:#666; border:1px solid #2a2a2a;
+  font:inherit; font-size:9px; line-height:1; padding:0; cursor:pointer; letter-spacing:0; }
+.cb .cb-arrow:hover { color:#ddd; border-color:#777; }
+.cb .cb-in:focus + .cb-arrow { border-color:#777; }
+.cb .cb-in.pt-unknown { border-color:#8a4a4a; color:#c88; }
+.cb .cb-in.pt-named { color:#b98ad4; border-color:#4a3a5a; }
+.cb-list { position:fixed; z-index:60; background:#000; border:1px solid #555;
+  max-height:220px; overflow-y:auto; font-size:10px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; }
+.cb-list .cb-head { color:#555; padding:3px 6px 2px; letter-spacing:1px;
+  border-bottom:1px solid #1c1c1c; }
+.cb-list .cb-item { padding:3px 8px; color:#bbb; cursor:pointer; white-space:nowrap; }
+.cb-list .cb-item:hover, .cb-list .cb-item.on { background:#181818; color:#fff; }
+.cb-list .cb-none { padding:4px 8px; color:#555; font-style:italic; }
+
+/* The pair table, opened over the app the way the documentation is. */
+#app .pairpop .dlgbox, .pairpop .dlgbox { width:min(900px, calc(94vw / var(--ui, 1))); max-width:none;
+  height:min(calc(80vh / var(--ui, 1)), 900px); display:flex; flex-direction:column; padding:0; }
+.pairpop .pphead { display:flex; align-items:center; gap:12px; padding:10px 14px;
+  border-bottom:1px solid #333; }
+.pairpop .pphead b { margin:0; letter-spacing:0.08em; }
+.pairpop .pphead .ppsub { color:#666; }
+.pairpop .pphead button { margin-left:auto; }
+/* No top padding: the scrollport starts at the padding edge, so a strip
+   of padding above a sticky header is a strip of rows sliding past over
+   it. The gap moves inside the scrolled content instead. */
+.pairpop .ppbody { flex:1 1 auto; min-height:0; overflow-y:auto; padding:0 14px 16px; }
+.pairpop .pairtable { margin-top:0; }
+/* roomier than the side panel, which is the entire point of being here */
+.pairpop .pairtable table.pt { font-size:11px; }
+.pairpop .pairtable table.pt td { padding:2px 4px 2px 0; }
+.pairpop .cb .cb-in, .pairpop table.pt input, .pairpop table.pt select { font-size:11px; }
+.pairpop .cb .cb-arrow { flex-basis:18px; font-size:10px; }
+/* draws this row's pathway in the viewer. Its own cell, because every other
+   cell of the row is filled edge to edge by a control. */
+.pairtable table.pt td.pt-eye { color:#333; cursor:pointer; text-align:center; }
+.pairtable table.pt tr:hover td.pt-eye { color:#666; }
+.pairtable table.pt td.pt-eye:hover { color:#aaa; }
+/* on: the icon wears the pathway's own two colors, set inline, so the row is
+   its own legend and nothing here should override them */
+.pairtable table.pt td.pt-eye.on svg { opacity:1; }
+.pairtable table.pt td.pt-eye svg { opacity:0.85; vertical-align:middle; }
+.pairtable .pt-foot button.pt-clear { color:#c88; border-color:#4a2a2a; }
+.pairtable .pt-foot button.pt-clear:hover { color:#fdd; border-color:#8a4a4a; }
+
+/* the pathway readout: a set of bundles outlives whatever neuron was last
+   clicked, so it gets its own line rather than sharing the neuron HUD */
+#pathhud { position:absolute; left:10px; bottom:74px; color:#8a8;
+  pointer-events:none; z-index:5; background:#000; padding:1px 4px; }
+#pathhud:empty { display:none; }
+
+/* The chart node's plot. Canvas rather than SVG: a response matrix is
+   thousands of cells and an element each is not a reasonable ask. */
+#props .chartbox { margin-top:10px; border-top:1px solid #222; padding-top:8px; }
+#props .chart-controls { display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+#props .chart-lab { color:#666; font-size:10px; flex:0 0 auto; }
+#props .chart-controls .cb { flex:1 1 0; min-width:0; }
+#props .chart-canvas { display:block; width:100%; background:#000;
+  border:1px solid #1c1c1c; }
+#props .chart-note { color:#555; font-size:10px; margin-top:5px; line-height:1.5; }
+
+
+/* the replicate sweep's table in the training pane: one row per run */
+table.sweep { border-collapse:collapse; margin-top:6px; font-size:11px; }
+table.sweep th, table.sweep td { border:1px solid #222; padding:2px 6px; text-align:left; white-space:nowrap; }
+table.sweep th { color:#888; font-weight:normal; letter-spacing:1px; }
+table.sweep tr.sum td { color:#ccc; border-top:1px solid #444; }
+
+/* the FILES tab's second link on a metrics file: draw that run in the chart */
+.ffile a.fchart { color:hsl(190,60%,52%); margin-left:6px; }
+
+/* what a probe reads, by population, on the probe's own panel */
+.pprobe { margin-top:10px; border-top:1px solid #222; padding:8px 10px 0; }
+.pprobe .ptitle2 { color:#666; letter-spacing:1px; margin-bottom:6px; }
+.pprobe .prow2 { display:flex; justify-content:space-between; gap:10px; color:#aaa; }
+.pprobe .pdot { display:inline-block; width:7px; height:7px; margin-right:6px; }
+
+/* the viewer bar's population coloring toggle, lit when it is on */
+#popcolor.on { border-color:hsl(190,60%,45%); color:hsl(190,60%,65%); }
+
+/* population boxes: the names ride over the canvas, one per box */
+/* clipped to the pane: a label projected past its edge, or pushed past it by
+   the stack, otherwise lay over the node pane and took its clicks and wheel */
+#poplabels { position:absolute; inset:0; pointer-events:none; z-index:3; overflow:hidden; }
+#poplabels .poplabel { position:absolute; transform:translate(-50%,-140%);
+  font-size:calc(10px * var(--ui, 1)); letter-spacing:1px; white-space:nowrap;
+  color:#000; font-weight:600; padding:1px 6px; border:1px solid #000;
+  pointer-events:auto; cursor:pointer; }
+#poplabels .poplabel:hover, #poplabels .poplabel.on { border-color:#fff; }
+#popboxes.on { border-color:hsl(190,60%,45%); color:hsl(190,60%,65%); }
+#slicebtn.on { border-color:hsl(190,60%,45%); color:hsl(190,60%,65%); }
+
+/* the text size choice, in the group with KEYS and DOCS. It was a slider,
+   and resizing the text while dragging moved the slider out from under the
+   pointer, so it is a list of fixed sizes */
+#uilabel, #synlabel { color:#666; letter-spacing:2px; }
+#synbudget { width:52px; background:#111; color:#bbb; border:1px solid #333; font:inherit;
+  padding:1px 3px; }
+#uiscale { background:#111; color:#bbb; border:1px solid #333; font:inherit; padding:0 2px; }
+
+/* the sweep node's panel */
+.sweepbox { width:100%; }
+.sweepbox .sw-pick { display:flex; gap:4px; margin:6px 0 4px 0; align-items:center; }
+.sweepbox .sw-pick .sw-which { flex:1; min-width:0; }
+.sweepbox .sw-name { display:flex; gap:6px; align-items:center; margin:0 0 8px 0; }
+.sweepbox .sw-name input { flex:1; min-width:60px; }
+.sweepbox .sw-lab { color:#777; font-size:10px; letter-spacing:1px; text-transform:uppercase; }
+.sweepbox .sw-row { display:grid; grid-template-columns:1.3fr 1fr 0.9fr 22px 22px; gap:4px 6px; align-items:center; margin:3px 0; }
+.sweepbox .sw-cols { margin-top:6px; }
+.sweepbox .sw-row select, .sweepbox .sw-row input, .sweepbox .sw-row textarea { min-width:0; width:100%; box-sizing:border-box; }
+.sweepbox .sw-row textarea { grid-column:3 / 4; }
+.sweepbox .sw-row .sw-del, .sweepbox .sw-row .sw-dup { width:auto; justify-self:end; }
+.sweepbox button[disabled] { opacity:0.35; }
+.sweepbox .pt-add { min-width:24px; }
+
+/* icons on buttons: the glyph sits on the text baseline, and an icon-only
+   button is square enough to read as one */
+button .ic { vertical-align:-2px; }
+button.icb { display:inline-flex; align-items:center; gap:5px; }
+button.icon-only { padding:2px 5px; }
+#viewerbar button.icon-only { padding:1px 5px; }
+.pt-foot button.icon-only, .sweepbox button.icon-only { padding:1px 4px; }
+
+/* pair table: a project node's many pathways under one row */
+.ptab-wrap tr.pt-group td, tr.pt-group td { cursor:pointer; }
+tr.pt-group .pt-src { color:#888; }
+tr.pt-copy .pt-tag { padding-left:14px; color:#9a9a9a; }
+
+/* the color swatch beside a hue setting (props.js) */
+#props .prow .swatch { display:inline-block; flex:none; width:14px; height:14px; margin-left:6px; border:1px solid #666; vertical-align:middle; }

@@ -1,0 +1,98 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>linen · validation</title>
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+html,body { background:#000; color:#c8c8c8;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size:12px; }
+#wrap { max-width:980px; margin:0 auto; padding:28px 24px 80px; }
+h1 { color:#fff; letter-spacing:2px; font-size:16px; font-weight:normal; margin-bottom:6px; }
+.sub { color:#666; margin-bottom:24px; }
+.test { border:1px solid #222; margin-bottom:14px; }
+.thead { display:flex; justify-content:space-between; padding:8px 12px; border-bottom:1px solid #1a1a1a; }
+.tname { color:#fff; letter-spacing:1px; }
+.tsrc { color:#666; padding:6px 12px 2px; }
+.chip { padding:1px 10px; border:1px solid; }
+.pass { color:#5dbb63; border-color:#2c5930; }
+.fail { color:#e05555; border-color:#5c2626; }
+.run  { color:#888; border-color:#333; }
+table { width:100%; border-collapse:collapse; }
+td { padding:5px 12px; border-top:1px solid #141414; vertical-align:top; }
+td.l { color:#aaa; width:32%; }
+td.m { color:#ddd; width:34%; }
+td.e { color:#777; }
+td.p { width:52px; text-align:right; }
+#summary { margin:18px 0; padding:10px 14px; border:1px solid #333; color:#fff; }
+a { color:#7ab8d9; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <h1>validation battery</h1>
+  <p class="sub">Statistics measured against published references. Bands are
+  stated per check; qualitative where reduced density and current-based
+  synapses cannot match absolute values. <a href="index.html">back to the
+  playground</a></p>
+  <div id="tests"></div>
+  <div id="summary">running…</div>
+</div>
+<script type="module">
+import { TESTS, TOPICS, selectTests, runAll } from './src/validate.js';
+
+// Scenario and measure specific groups are opt in: ?topics=column,curriculum runs those alongside the core invariants, ?topics=all runs everything.
+// What is left out is named on the page rather than quietly dropped, since a battery that reports 25 of 25 while skipping seven groups is worse than one that takes longer.
+const Q = new URLSearchParams(location.search);
+const want = (Q.get('topics') || '').split(',').map(x => x.trim()).filter(Boolean);
+// ?only=<substring> runs the matching groups and nothing else, so one group can be iterated on without paying for the whole battery.
+const only = (Q.get('only') || '').trim().toLowerCase();
+const tests = (only ? TESTS.filter(t => t.name.toLowerCase().includes(only))
+                    : selectTests(want));
+const skipped = TESTS.filter(t => !tests.includes(t));
+
+const testsEl = document.getElementById('tests');
+const cards = new Map();
+if(skipped.length){
+  const d = document.createElement('div'); d.className = 'test';
+  const links = TOPICS.map(t => `<a href="?topics=${t}">${t}</a>`).join(' · ');
+  d.innerHTML = `<div class="thead"><span class="tname">not run</span>
+    <span class="chip run">${skipped.length} groups</span></div>
+    <div class="tsrc">${skipped.map(t => t.name).join(', ')}.
+    These are scenario and measure specific and run on request:
+    ${links} · <a href="?topics=all">all</a></div>`;
+  testsEl.appendChild(d);
+}
+for(const t of tests){
+  const d = document.createElement('div'); d.className = 'test';
+  d.innerHTML = `<div class="thead"><span class="tname">${t.name}</span>
+    <span class="chip run">running</span></div>
+    <div class="tsrc">${t.source}</div><table></table>`;
+  testsEl.appendChild(d); cards.set(t.name, d);
+}
+const results = await runAll(res => {
+  const d = cards.get(res.name);
+  const chip = d.querySelector('.chip');
+  chip.textContent = (res.skipped ? 'NOT RUN' : res.pass ? 'PASS' : 'FAIL') + ' · ' + (res.ms/1000).toFixed(1) + 's';
+  chip.className = 'chip ' + (res.skipped ? 'run' : res.pass ? 'pass' : 'fail');
+  d.querySelector('table').innerHTML = res.checks.map(c => {
+    const cls = c.pass ? 'pass' : (c.advisory || c.skipped) ? 'run' : 'fail';
+    const txt = c.pass ? 'ok' : c.skipped ? 'skipped' : c.advisory ? 'info' : 'X';
+    return `<tr><td class="l">${c.label}</td><td class="m">${c.measured}</td>
+     <td class="e">${c.expected}</td>
+     <td class="p"><span class="chip ${cls}">${txt}</span></td></tr>`;
+  }).join('');
+}, tests);
+// groups and checks whose work could not run in this browser (no WebGPU) are named apart from the passed count, the way unselected groups are
+const passed = results.filter(r => r.pass).length;
+const ran = results.filter(r => !r.skipped);
+const skippedChecks = results.reduce((a,r)=>a+r.checks.filter(c => c.skipped).length,0);
+document.getElementById('summary').textContent =
+  `${passed} / ${ran.length} test groups passed · ` +
+  `${results.reduce((a,r)=>a+r.checks.filter(c => !c.skipped).length,0)} checks · ` +
+  `${(results.reduce((a,r)=>a+r.ms,0)/1000).toFixed(0)}s total` +
+  (skippedChecks ? ` · ${skippedChecks} checks skipped (no WebGPU here)` : '') +
+  (skipped.length + results.length - ran.length ? ` · ${skipped.length + results.length - ran.length} not run` : '');
+</script>
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!doctype html>
+<html class="app">
+<head>
+<meta charset="utf-8">
+<title>linen</title>
+  <link rel="icon" type="image/svg+xml" href="brand/favicon.svg?v=li">
+<link rel="stylesheet" href="src/style.css">
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three.module.js",
+  "three/addons/controls/OrbitControls.js": "./vendor/OrbitControls.js",
+  "three/addons/controls/TransformControls.js": "./vendor/TransformControls.js"
+} }
+</script>
+</head>
+<body>
+<div id="app">
+  <!-- The top bar carries what acts on the document; anything that controls the running simulation or what the 3D view shows lives in the viewer's own bar, next to the thing it changes. -->
+  <div id="topbar">
+    <a id="apptitle" href="./" title="linen"><img class="wordmark" src="brand/linen-plain-dark.svg" alt="linen"></a>
+    <span id="netsize" title="neurons and synapses in the wired network"></span>
+    <span id="status"></span>
+    <!-- Brains are not in this path: they belong to the checkpoint node, which owns the weights. -->
+    <span class="tbgroup tbpath">
+      <button id="projbtn" class="tbmenu" title="the project folder. Scenes, brain files and run output are written here."></button>
+      <span class="tbslash">/</span>
+      <button id="scenebtn" class="tbmenu" title="the scene this project has open. Edits save into it continuously."></button>
+    </span>
+    <input id="brainfile" type="file" accept=".npb" style="display:none">
+    <span class="tbgroup">
+      <label id="synlabel" for="synbudget" title="synapse budget for wiring on this machine, in millions. Wiring past it is refused with a message. Kept for this machine.">SYN</label>
+      <input id="synbudget" type="number" min="1" max="4000" step="10"
+        title="synapse budget for wiring on this machine, in millions. Wiring past it is refused with a message. Blank returns to the size this machine reports it can hold.">
+      <button id="layoutbtn"></button>
+      <label id="uilabel" for="uiscale" title="text size for the app, kept for this machine. The 3D view, the raster and the node graph keep their own scale.">TEXT</label>
+      <select id="uiscale" title="text size for the app, kept for this machine"></select>
+      <button id="keysbtn" title="keyboard shortcuts">KEYS</button>
+      <button id="docsbtn" title="node reference, scenario notes and sources. Opens over the app.">DOCS</button>
+    </span>
+    <div id="computebar"></div>
+  </div>
+  <div id="projDlg" class="dlg" style="display:none">
+    <div class="dlgbox">
+      <b>open a project</b>
+      <p class="dlghint">Pick a folder that has a project.json in it, or an
+        empty one to start a project there. Everything the app writes goes
+        into it: scenes, saved brains, and the checkpoints and metrics of
+        every run.</p>
+      <label>path <input id="projPath" type="text" spellcheck="false"
+        placeholder="D:\Projects\my-project"></label>
+      <ul id="projList" class="scenelist"></ul>
+      <p class="dlgerr" id="projErr"></p>
+      <div class="dlgrow">
+        <button id="projOk">OPEN THIS FOLDER</button>
+        <button id="projUp">UP</button>
+        <button id="projCancel">CANCEL</button>
+      </div>
+    </div>
+  </div>
+  <div id="newProjDlg" class="dlg" style="display:none">
+    <div class="dlgbox">
+      <b>new project</b>
+      <p class="dlghint">A folder of its own, made inside the location, with the
+        guided tour as its first scene.</p>
+      <label>name <input id="newProjName" type="text" spellcheck="false"
+        maxlength="60" placeholder="my-project"></label>
+      <label>location <input id="newProjLoc" type="text" spellcheck="false"
+        placeholder="D:\Projects"><button id="newProjBrowse" type="button"
+        title="choose the location with the folder picker">BROWSE…</button></label>
+      <p class="dlghint" id="newProjPath"></p>
+      <p class="dlgerr" id="newProjErr"></p>
+      <div class="dlgrow">
+        <button id="newProjOk">CREATE</button>
+        <button id="newProjCancel">CANCEL</button>
+      </div>
+    </div>
+  </div>
+  <div id="sceneDlg" class="dlg" style="display:none">
+    <div class="dlgbox">
+      <b id="sceneDlgTitle">open a scene</b>
+      <p class="dlghint" id="sceneDlgHint"></p>
+      <ul id="sceneList" class="scenelist"></ul>
+      <label id="sceneNameRow">name <input id="sceneNameIn" type="text"
+        spellcheck="false" maxlength="60" placeholder="a name for this scene"></label>
+      <p class="dlgerr" id="sceneDlgErr"></p>
+      <div class="dlgrow">
+        <button id="sceneOk">OK</button>
+        <button id="sceneCancel">CANCEL</button>
+      </div>
+    </div>
+  </div>
+  <div id="nodeModDlg" class="dlg" style="display:none">
+    <div class="dlgbox">
+      <b>add a node module</b>
+      <p class="dlghint">A node module is a JavaScript file that adds nodes to the
+        Tab menu. It runs in this page with the same access as the app: add
+        code you wrote or trust. The file is copied into the project's nodes
+        folder and loads with the project from then on.</p>
+      <label>URL <input id="nodeModUrl" type="text" spellcheck="false"
+        placeholder="examples/nodes/jitter.js"></label>
+      <p class="dlgerr" id="nodeModErr"></p>
+      <div class="dlgrow">
+        <button id="nodeModOk">ADD</button>
+        <button id="nodeModCancel">CANCEL</button>
+      </div>
+    </div>
+  </div>
+  <div id="trainDlg" class="dlg" style="display:none">
+    <div class="dlgbox">
+      <b>start a training run</b>
+      <p class="dlghint">This runs the graph on screen for the hours set on the checkpoint,
+        writing metrics and brain files on its own cadence. It drives this
+        page, so the graph, the properties panel and neuron inspection stay
+        live and describe the network that is training. The settings are on
+        the checkpoint node. Where the files land is named below.</p>
+      <div id="trSummary" class="dlgsum"></div>
+      <label>resume from <select id="trBrain"></select></label>
+      <p class="dlghint" id="trNote"></p>
+      <div class="dlgrow">
+        <button id="trGo">START</button><button id="trCancel">CANCEL</button>
+      </div>
+    </div>
+  </div>
+  <!-- Documentation over the app rather than instead of it: following a link away discards the running simulation and the wired synapses, which on a full-density scene is minutes to rewire.
+       The renderer is imported the first time this is opened. -->
+  <div id="docsDlg" class="dlg" style="display:none">
+    <div class="dlgbox">
+      <div class="docshead">DOCUMENTATION
+        <span class="sp"></span>
+        <!-- Some embedded browsers refuse a second tab and follow the link in place, which loses the wired network, so this is a courtesy and the overlay is the route that always works. -->
+        <a href="docs.html" target="_blank" rel="noopener" title="open the documentation in a second tab">OPEN IN TAB</a>
+        <button id="docsClose">CLOSE</button>
+      </div>
+      <div class="docsview">
+        <div class="dnav" id="docsNav"></div>
+        <div class="dcontent" id="docsContent"><div id="docsPage"></div></div>
+      </div>
+    </div>
+  </div>
+  <div id="keysDlg" class="dlg" style="display:none">
+    <div class="dlgbox">
+      <b>keyboard shortcuts</b>
+      <p class="dlghint">Click a binding, then press the key. Escape cancels.</p>
+      <div id="keysList"></div>
+      <div class="dlgrow">
+        <button id="keysReset">RESET ALL</button><button id="keysClose">CLOSE</button>
+      </div>
+    </div>
+  </div>
+  <div id="viewerPane">
+    <div class="panehead">VIEWER <span class="hint">click: inspect &nbsp; dblclick neuron: source scatter &nbsp; w/e/r: gizmo mode &nbsp; esc: close gizmo</span></div>
+    <div id="viewerbar">
+      <button id="pause" title="pause or resume the simulation. The network is kept.">PAUSE</button>
+      <button id="live" title="lock the learned weights. While locked, structural edits and the resolution slider are refused.">LOCK WEIGHTS</button>
+      <button id="rec" title="record: every probe rate and every edit at its simulated time, until pressed again; saved to the project folder under recordings">REC</button>
+      <span class="vbsep"></span>
+      <label id="reslabel" for="res" title="fraction of the authored network that is computed. Counts scale down; weights and drive are compensated (van Albada 2015).">RES 100%</label>
+      <input id="res" type="range" min="1" max="100" value="100">
+      <span class="vbsep"></span>
+      <label id="speedlabel" for="speed" title="simulated time the engine is asked to run per frame">PER FRAME 2 ms</label>
+      <input id="speed" type="range" min="1" max="20" value="2" step="1">
+      <span id="rtf" title="simulated time per second of real time, over the last second. 1.00x is biological speed."></span>
+      <span class="vbsep"></span>
+      <label id="vmlabel" for="vmfloor" title="membrane potential floor: neurons below this potential are hidden. -100 mV shows everything, +40 mV shows only neurons firing.">SHOW</label>
+      <input id="vmfloor" type="range" min="-100" max="40" value="-100" step="1">
+      <span id="vmfloorval">all</span>
+      <span class="vbsep"></span>
+      <button id="popboxes" title="draw a box around each population, with its name and count above it, in that population's color. Names are drawn where they fit; point at a box to read its name, and the REGIONS panel lists every population in a scene that has more than a few.">REGIONS</button>
+      <button id="popcolor" title="color every neuron by its population. Off, the cloud is colored by cell type.">POPULATIONS</button>
+      <button id="spikestyle"></button>
+      <button id="spikesign"></button>
+      <button id="slicebtn" title="slicer box: cells outside a box are hidden, nothing about the network changes. Drag the box to move it, press the scale key (r) and drag to resize, escape hides the handles and keeps the cut, SLICE again turns it off. Saved with the scene.">SLICE</button>
+      <!-- Shown only while a run is going, in the same strip as everything else that describes the running simulation. -->
+      <span class="vbsep tbonly"></span>
+      <button id="tbpause" class="tbonly" title="pause the training run. The network, the learned weights and the run's clock are kept.">PAUSE RUN</button>
+      <button id="tbsave" class="tbonly" title="write a brain file now, without waiting for the checkpoint node's cadence. It lands in the project folder under runs/.">SAVE NOW</button>
+      <span id="tbstate" class="tbonly">TRAINING</span>
+      <span id="tbclock" class="tbonly" title="simulated time completed out of the run's target"></span>
+      <div id="tbtrack" class="tbonly" title="progress through the run's simulated hours"><div id="tbfill"></div></div>
+      <span id="tbeta" class="tbonly" title="wall-clock time left at the current rate"></span>
+      <span id="rate"></span>
+    </div>
+    <div id="viewer"></div>
+    <div id="hud"></div>
+    <div id="pathhud"></div>
+    <canvas id="scope" width="300" height="96"></canvas>
+    <!-- Stacked rather than each pinned to the pane, so a regions list as long as the scene has populations cannot land on top of the inputs. -->
+    <div id="leftpanels">
+      <div id="inputs" class="overlay"><div class="ovhead"><span>inputs</span><button class="ovmin" title="collapse this panel">&#9662;</button></div><div class="ovbody"></div></div>
+      <div id="regions" class="overlay"><div class="ovhead"><span>regions</span><button class="ovmin" title="collapse this panel">&#9662;</button></div><div class="ovbody"></div></div>
+    </div>
+    <div id="probes" class="overlay"><div class="ovhead"><span>probes</span><button class="ovmin" title="collapse this panel">&#9662;</button></div><div class="ovbody"></div></div>
+    <canvas id="raster" height="80"></canvas>
+  </div>
+  <div id="rightCol">
+    <div id="propsPane">
+      <div class="panehead">PROPERTIES</div>
+      <div id="props"></div>
+    </div>
+    <div id="tsplit" style="display:none"></div>
+    <div id="trainPane" style="display:none">
+      <div class="panehead">TRAINING <span class="hint" id="trainHint"></span></div>
+      <div id="stat">idle</div>
+      <!-- EVENTS is first because it is the tab that changes. -->
+      <div id="ttabs" role="tablist">
+        <button class="ttab on" data-pane="log" role="tab" title="what the run has done: warm-up, pauses, checkpoints and saves">EVENTS</button>
+        <button class="ttab" data-pane="setup" role="tab" title="how this run was configured: network, overrides, plasticity gate, curriculum and readout">SETUP</button>
+        <button class="ttab" data-pane="files" role="tab" title="brain files and metrics this run has written, and those left by earlier runs">FILES</button>
+        <button class="ttab" data-pane="sweep" role="tab" title="one row per run of a replicate sweep: condition, replicate, run folder, and the pooled cross-modal test in both directions at the run's end">SWEEP</button>
+      </div>
+      <div id="log" class="tpane"></div>
+      <div id="setup" class="tpane" hidden></div>
+      <div id="files" class="tpane" hidden></div>
+      <div id="sweep" class="tpane" hidden></div>
+    </div>
+  </div>
+  <div id="graphPane">
+    <div id="scenetabs"></div>
+    <div class="panehead">NODES <span class="hint" id="graphHint"></span></div>
+    <canvas id="graph"></canvas>
+  </div>
+  <div id="vsplit"></div>
+  <div id="hsplit"></div>
+</div>
+<script type="module" src="src/main.js"></script>
+<script>
+// The page stays hidden until main.js has drawn its icons, and shows itself after three seconds whatever happened, so a failed load still shows its error.
+setTimeout(() => document.documentElement.classList.add('ready'), 3000);
+</script>
+</body>
+</html>

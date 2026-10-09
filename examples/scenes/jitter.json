@@ -1,0 +1,532 @@
+{
+ "v": 1,
+ "format": 12,
+ "nextId": 16,
+ "view": {
+  "x": 0,
+  "y": 0,
+  "scale": 0.6
+ },
+ "viewSlots": {
+  "1": 12
+ },
+ "activeView": 12,
+ "scenarioName": "",
+ "plugins": [
+  {
+   "module": "jitter.js",
+   "nodes": [
+    "jitter"
+   ]
+  }
+ ],
+ "groups": [
+  {
+   "label": "volume",
+   "members": [
+    3
+   ],
+   "hue": 280,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "excitatory  8000 RS",
+   "members": [
+    4
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "inhibitory  2000 FS",
+   "members": [
+    5
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "sparse random wiring and noise drive",
+   "members": [
+    6,
+    7,
+    9
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "readout  a rate per population",
+   "members": [
+    10,
+    11,
+    13
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "checkpoint  the simulation",
+   "members": [
+    12
+   ],
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "jitter  a node from a node module",
+   "members": [
+    14
+   ],
+   "hue": 300,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": 1,
+   "type": "note",
+   "x": -370,
+   "y": 60,
+   "on": true,
+   "name": "note",
+   "params": {
+    "text": "Balanced random network\n\nSparse random connections, inhibition stronger than excitation, and a noise drive. This is the network from Brunel (2000), and it is the usual reference for what healthy cortical background activity looks like.",
+    "width": 340,
+    "near": ""
+   },
+   "inputs": []
+  },
+  {
+   "id": 2,
+   "type": "note",
+   "x": 353,
+   "y": 380,
+   "on": true,
+   "name": "note2",
+   "params": {
+    "text": "Try raising the inhibitory weight. The network settles into asynchronous irregular firing at a few Hz, which looks like a uniform speckle in the raster. Lower it and the population synchronizes into vertical stripes. The battery measures both regimes, along with the population Fano factor that tells them apart.",
+    "width": 340,
+    "near": "sparse random wiring"
+   },
+   "inputs": []
+  },
+  {
+   "id": 3,
+   "type": "sphere",
+   "x": 163,
+   "y": 60,
+   "on": true,
+   "name": "exc + inh sphere",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400
+   },
+   "inputs": []
+  },
+  {
+   "id": 4,
+   "type": "scatter",
+   "x": 60,
+   "y": 204,
+   "on": true,
+   "name": "exc",
+   "params": {
+    "fill": 1,
+    "density": 72000,
+    "count": 2000,
+    "type": 10,
+    "tag": "exc",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 3
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "type": "scatter",
+   "x": 266,
+   "y": 204,
+   "on": true,
+   "name": "inh",
+   "params": {
+    "fill": 1,
+    "density": 18000,
+    "count": 2000,
+    "type": 13,
+    "tag": "inh",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 3
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "type": "gather",
+   "x": 60,
+   "y": 416,
+   "on": true,
+   "name": "exc + inh",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 4
+    },
+    {
+     "id": 5
+    },
+    null,
+    null
+   ]
+  },
+  {
+   "id": 7,
+   "type": "connect",
+   "x": 60,
+   "y": 704,
+   "on": true,
+   "name": "exc + inh wiring",
+   "params": {
+    "radius": 300,
+    "sigma": 3000,
+    "prob": 0.1,
+    "wExc": 50,
+    "wInh": -250,
+    "wdist": 1,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "",
+    "velocity": 100,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 14
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "type": "stimulus",
+   "x": 60,
+   "y": 848,
+   "on": true,
+   "name": "noise on exc",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 1800,
+    "tag": "exc",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 7
+    },
+    null
+   ]
+  },
+  {
+   "id": 9,
+   "type": "stimulus",
+   "x": 60,
+   "y": 992,
+   "on": true,
+   "name": "noise on inh",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 200,
+    "tag": "inh",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 8
+    },
+    null
+   ]
+  },
+  {
+   "id": 10,
+   "type": "probe",
+   "x": 60,
+   "y": 1136,
+   "on": true,
+   "name": "exc probe",
+   "params": {
+    "label": "exc",
+    "tag": "exc",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 9
+    },
+    null
+   ]
+  },
+  {
+   "id": 11,
+   "type": "probe",
+   "x": 60,
+   "y": 1280,
+   "on": true,
+   "name": "inh probe",
+   "params": {
+    "label": "inh",
+    "tag": "inh",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 10
+    },
+    null
+   ]
+  },
+  {
+   "id": 12,
+   "type": "checkpoint",
+   "x": 60,
+   "y": 1424,
+   "on": true,
+   "name": "simulation",
+   "params": {
+    "steps": 2,
+    "engine": 0,
+    "liveHost": "ws://localhost:8801",
+    "syn": 0,
+    "tauE": 3,
+    "tauI": 8,
+    "eRevE": 0,
+    "eRevI": -70,
+    "psc": 0,
+    "refrac": 2,
+    "vmin": -90,
+    "plast": 0,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 16.8,
+    "tauM": 33.7,
+    "trip": 0,
+    "tauY": 114,
+    "tin": 0,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "het": 0,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "tauCons": 20,
+    "consStep": 1.2,
+    "commit": 0,
+    "stpPreset": 0,
+    "stp": 0,
+    "stpU": 0.5,
+    "stpNorm": 0,
+    "stpOrder": 0,
+    "stpTauD": 800,
+    "stpTauF": 1,
+    "variants": [],
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trEngine": 0,
+    "trHost": "ws://localhost:8801",
+    "exportSecs": 2
+   },
+   "inputs": [
+    {
+     "id": 11
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "type": "chart",
+   "x": 60,
+   "y": 1568,
+   "on": true,
+   "name": "rate of exc",
+   "params": {
+    "plot": 7,
+    "pop": "exc",
+    "window": 5,
+    "smooth": 0,
+    "which": 0,
+    "field": "decode",
+    "bins": 40,
+    "height": 130,
+    "source": "",
+    "title": "",
+    "xText": "",
+    "yText": "",
+    "yMin": "",
+    "yMax": "",
+    "grid": 1,
+    "legend": 1,
+    "cmap": 0,
+    "preview": 0,
+    "format": 0,
+    "sizePreset": 0,
+    "figW": 180,
+    "figH": 100,
+    "dpi": 300,
+    "theme": 0,
+    "figFont": 0,
+    "fontPt": 8,
+    "linePt": 1,
+    "caption": 0
+   },
+   "inputs": [
+    {
+     "id": 12
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "type": "jitter",
+   "x": 60,
+   "y": 560,
+   "on": true,
+   "name": "jitter 20 um",
+   "params": {
+    "sigma": 20,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 6
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "type": "note",
+   "x": 331,
+   "y": 524,
+   "on": true,
+   "name": "note3",
+   "params": {
+    "text": "Jitter\n\nThe jitter node between the gather and the connect node comes from a node module, examples/nodes/jitter.js in the repository. It moves every cell by a Gaussian offset drawn from the cell's identity, so the same cells move the same way at every computation. The scene lists the module it needs; to open it in a project, copy jitter.js into the project's nodes folder first.",
+    "width": 340,
+    "near": "jitter"
+   },
+   "inputs": []
+  }
+ ],
+ "resolution": 100,
+ "slice": null,
+ "hues": {}
+}

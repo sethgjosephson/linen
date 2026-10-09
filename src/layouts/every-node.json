@@ -1,0 +1,804 @@
+{
+ "format": 3,
+ "scenario": "every node",
+ "saved": "2026-09-24",
+ "build": [
+  "note",
+  "note",
+  "note",
+  "note",
+  "note",
+  "note",
+  "note",
+  "note",
+  "sphere",
+  "scatter",
+  "scatter",
+  "celltype",
+  "box",
+  "sphere",
+  "scatter",
+  "cull",
+  "gradient",
+  "twist",
+  "noisewarp",
+  "gaussblur",
+  "ops",
+  "noisefield",
+  "scatter",
+  "repeat",
+  "move",
+  "gather",
+  "move",
+  "celltype",
+  "celltype",
+  "repeat",
+  "repeat",
+  "population",
+  "population",
+  "population",
+  "move",
+  "gather",
+  "receptor",
+  "plasticity",
+  "pool",
+  "project",
+  "connect",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "sphere",
+  "stimulus",
+  "box",
+  "testsignal",
+  "input",
+  "curriculum",
+  "input",
+  "probe",
+  "probe",
+  "probe",
+  "probe",
+  "analysis",
+  "checkpoint",
+  "chart"
+ ],
+ "nodes": [
+  {
+   "type": "note",
+   "x": -370,
+   "y": 60,
+   "built": 0,
+   "inputs": []
+  },
+  {
+   "type": "note",
+   "x": 411,
+   "y": 24,
+   "built": 1,
+   "inputs": []
+  },
+  {
+   "type": "note",
+   "x": 1446,
+   "y": 24,
+   "built": 2,
+   "inputs": []
+  },
+  {
+   "type": "note",
+   "x": 1882,
+   "y": 600,
+   "built": 3,
+   "inputs": []
+  },
+  {
+   "type": "note",
+   "x": 1636,
+   "y": 1176,
+   "built": 4,
+   "inputs": []
+  },
+  {
+   "type": "note",
+   "x": 1716,
+   "y": 1752,
+   "built": 5,
+   "inputs": []
+  },
+  {
+   "type": "note",
+   "x": 433,
+   "y": 2396,
+   "built": 6,
+   "inputs": []
+  },
+  {
+   "type": "note",
+   "x": 734,
+   "y": 3260,
+   "built": 7,
+   "inputs": []
+  },
+  {
+   "type": "sphere",
+   "x": 120,
+   "y": 60,
+   "built": 8,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 160,
+   "y": 204,
+   "built": 9,
+   "inputs": [
+    8
+   ]
+  },
+  {
+   "type": "scatter",
+   "x": 60,
+   "y": 348,
+   "built": 10,
+   "inputs": [
+    8
+   ]
+  },
+  {
+   "type": "celltype",
+   "x": 220,
+   "y": 348,
+   "built": 11,
+   "inputs": [
+    9
+   ]
+  },
+  {
+   "type": "box",
+   "x": 1130,
+   "y": 60,
+   "built": 12,
+   "inputs": []
+  },
+  {
+   "type": "sphere",
+   "x": 1255,
+   "y": 204,
+   "built": 13,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 1095,
+   "y": 204,
+   "built": 14,
+   "inputs": [
+    12
+   ]
+  },
+  {
+   "type": "cull",
+   "x": 1170,
+   "y": 348,
+   "built": 15,
+   "inputs": [
+    14,
+    13
+   ]
+  },
+  {
+   "type": "gradient",
+   "x": 1192,
+   "y": 492,
+   "built": 16,
+   "inputs": [
+    15
+   ]
+  },
+  {
+   "type": "twist",
+   "x": 1201,
+   "y": 636,
+   "built": 17,
+   "inputs": [
+    16
+   ]
+  },
+  {
+   "type": "noisewarp",
+   "x": 1206,
+   "y": 780,
+   "built": 18,
+   "inputs": [
+    17
+   ]
+  },
+  {
+   "type": "gaussblur",
+   "x": 1213,
+   "y": 924,
+   "built": 19,
+   "inputs": [
+    18
+   ]
+  },
+  {
+   "type": "ops",
+   "x": 1231,
+   "y": 1068,
+   "built": 20,
+   "inputs": [
+    19
+   ]
+  },
+  {
+   "type": "noisefield",
+   "x": 1453,
+   "y": 636,
+   "built": 21,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 1454,
+   "y": 780,
+   "built": 22,
+   "inputs": [
+    21
+   ]
+  },
+  {
+   "type": "repeat",
+   "x": 1449,
+   "y": 924,
+   "built": 23,
+   "inputs": [
+    22
+   ]
+  },
+  {
+   "type": "move",
+   "x": 1437,
+   "y": 1068,
+   "built": 24,
+   "inputs": [
+    23
+   ]
+  },
+  {
+   "type": "gather",
+   "x": 1343,
+   "y": 1212,
+   "built": 25,
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    20,
+    24,
+    null,
+    null
+   ]
+  },
+  {
+   "type": "move",
+   "x": 1347,
+   "y": 1356,
+   "built": 26,
+   "inputs": [
+    25
+   ]
+  },
+  {
+   "type": "celltype",
+   "x": 1349,
+   "y": 1500,
+   "built": 27,
+   "inputs": [
+    26
+   ]
+  },
+  {
+   "type": "celltype",
+   "x": 1354,
+   "y": 1644,
+   "built": 28,
+   "inputs": [
+    27
+   ]
+  },
+  {
+   "type": "repeat",
+   "x": 1366,
+   "y": 1788,
+   "built": 29,
+   "inputs": [
+    28
+   ]
+  },
+  {
+   "type": "repeat",
+   "x": 1360,
+   "y": 1932,
+   "built": 30,
+   "inputs": [
+    29
+   ]
+  },
+  {
+   "type": "population",
+   "x": 1222,
+   "y": 2220,
+   "built": 31,
+   "inputs": [
+    30
+   ]
+  },
+  {
+   "type": "population",
+   "x": 1382,
+   "y": 2220,
+   "built": 32,
+   "inputs": [
+    30
+   ]
+  },
+  {
+   "type": "population",
+   "x": 1426,
+   "y": 2076,
+   "built": 33,
+   "inputs": [
+    30
+   ]
+  },
+  {
+   "type": "move",
+   "x": 1542,
+   "y": 2220,
+   "built": 34,
+   "inputs": [
+    33
+   ]
+  },
+  {
+   "type": "gather",
+   "x": 220,
+   "y": 2432,
+   "built": 35,
+   "params": {
+    "ports": 7
+   },
+   "inputs": [
+    11,
+    10,
+    null,
+    null,
+    null,
+    61,
+    null
+   ]
+  },
+  {
+   "type": "receptor",
+   "x": 220,
+   "y": 2576,
+   "built": 36,
+   "inputs": [
+    35
+   ]
+  },
+  {
+   "type": "plasticity",
+   "x": 220,
+   "y": 2720,
+   "built": 37,
+   "inputs": [
+    36
+   ]
+  },
+  {
+   "type": "pool",
+   "x": 220,
+   "y": 2864,
+   "built": 38,
+   "inputs": [
+    37
+   ]
+  },
+  {
+   "type": "project",
+   "x": 220,
+   "y": 3008,
+   "built": 39,
+   "inputs": [
+    38,
+    null
+   ]
+  },
+  {
+   "type": "connect",
+   "x": 220,
+   "y": 3152,
+   "built": 40,
+   "inputs": [
+    39
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 220,
+   "y": 3296,
+   "built": 41,
+   "inputs": [
+    40,
+    null
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 430,
+   "y": 3296,
+   "built": 42,
+   "inputs": [
+    41,
+    null
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 430,
+   "y": 3440,
+   "built": 43,
+   "inputs": [
+    42,
+    null
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 220,
+   "y": 3440,
+   "built": 44,
+   "inputs": [
+    43,
+    null
+   ]
+  },
+  {
+   "type": "sphere",
+   "x": 400,
+   "y": 3534,
+   "built": 45,
+   "inputs": []
+  },
+  {
+   "type": "stimulus",
+   "x": 220,
+   "y": 3584,
+   "built": 46,
+   "inputs": [
+    44,
+    45
+   ]
+  },
+  {
+   "type": "box",
+   "x": 400,
+   "y": 3678,
+   "built": 47,
+   "inputs": []
+  },
+  {
+   "type": "testsignal",
+   "x": 560,
+   "y": 3678,
+   "built": 48,
+   "inputs": []
+  },
+  {
+   "type": "input",
+   "x": 220,
+   "y": 3728,
+   "built": 49,
+   "inputs": [
+    46,
+    47,
+    48
+   ]
+  },
+  {
+   "type": "curriculum",
+   "x": 400,
+   "y": 3822,
+   "built": 50,
+   "inputs": [
+    null
+   ]
+  },
+  {
+   "type": "input",
+   "x": 220,
+   "y": 3872,
+   "built": 51,
+   "inputs": [
+    49,
+    60,
+    50
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 220,
+   "y": 4016,
+   "built": 52,
+   "inputs": [
+    51,
+    null
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 220,
+   "y": 4160,
+   "built": 53,
+   "inputs": [
+    52,
+    null
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 220,
+   "y": 4304,
+   "built": 54,
+   "inputs": [
+    53,
+    null
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 220,
+   "y": 4448,
+   "built": 55,
+   "inputs": [
+    54,
+    null
+   ]
+  },
+  {
+   "type": "analysis",
+   "x": 220,
+   "y": 4592,
+   "built": 56,
+   "inputs": [
+    55
+   ]
+  },
+  {
+   "type": "checkpoint",
+   "x": 220,
+   "y": 4736,
+   "built": 57,
+   "inputs": [
+    56
+   ]
+  },
+  {
+   "type": "chart",
+   "x": 220,
+   "y": 4880,
+   "built": 58,
+   "inputs": [
+    57
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 958,
+   "y": 106,
+   "params": {},
+   "name": "pin",
+   "inputs": [
+    8
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 958,
+   "y": 3867,
+   "params": {},
+   "name": "pin2",
+   "inputs": [
+    59
+   ]
+  },
+  {
+   "type": "gather",
+   "x": 1417,
+   "y": 2365,
+   "params": {
+    "ports": 4
+   },
+   "name": "gather3",
+   "inputs": [
+    31,
+    32,
+    34,
+    null
+   ]
+  }
+ ],
+ "groups": [
+  {
+   "label": "the core  sphere, neuron scatters, cell type",
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    8,
+    9,
+    10,
+    11
+   ]
+  },
+  {
+   "label": "one arm  a ribbon through every arrange node",
+   "hue": 270,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20
+   ]
+  },
+  {
+   "label": "the buds  noise field, neuron scatter, forked by a repeat",
+   "hue": 190,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    21,
+    22,
+    23,
+    24
+   ]
+  },
+  {
+   "label": "one ray  arm and buds, tilted, typed",
+   "hue": 300,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    25,
+    26,
+    27,
+    28
+   ]
+  },
+  {
+   "label": "the crown  six rays, three tiers, picked apart",
+   "hue": 270,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    29,
+    30,
+    31,
+    32,
+    33,
+    34
+   ]
+  },
+  {
+   "label": "wiring  gather to connect",
+   "hue": 140,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    35,
+    36,
+    37,
+    38,
+    39,
+    40
+   ]
+  },
+  {
+   "label": "drive  currents, a bar sweep, a lesson",
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51
+   ]
+  },
+  {
+   "label": "readout  a probe per tissue, analysis, chart",
+   "hue": 175,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    52,
+    53,
+    54,
+    55,
+    56,
+    58
+   ]
+  },
+  {
+   "label": "run  the checkpoint, plasticity on",
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    57
+   ]
+  }
+ ]
+}

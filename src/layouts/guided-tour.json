@@ -1,0 +1,490 @@
+{
+ "format": 3,
+ "scenario": "guided tour",
+ "saved": "2026-09-24",
+ "build": [
+  "note",
+  "note",
+  "note",
+  "note",
+  "box",
+  "scatter",
+  "scatter",
+  "sphere",
+  "scatter",
+  "sphere",
+  "celltype",
+  "gather",
+  "connect",
+  "note",
+  "stimulus",
+  "stimulus",
+  "note",
+  "stimulus",
+  "probe",
+  "probe",
+  "checkpoint",
+  "chart",
+  "spline",
+  "scatter",
+  "torus",
+  "scatter",
+  "cylinder",
+  "scatter",
+  "gather",
+  "connect",
+  "stimulus",
+  "checkpoint",
+  "note",
+  "sphere",
+  "scatter",
+  "connect",
+  "stimulus",
+  "stimulus",
+  "checkpoint",
+  "note"
+ ],
+ "nodes": [
+  {
+   "type": "note",
+   "x": -330,
+   "y": 60,
+   "built": 0,
+   "inputs": []
+  },
+  {
+   "type": "note",
+   "x": -330,
+   "y": 320,
+   "built": 1,
+   "inputs": []
+  },
+  {
+   "type": "note",
+   "x": -330,
+   "y": 424,
+   "built": 2,
+   "inputs": []
+  },
+  {
+   "type": "note",
+   "x": -330,
+   "y": 650,
+   "built": 3,
+   "inputs": []
+  },
+  {
+   "type": "box",
+   "x": 166,
+   "y": 60,
+   "built": 4,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 60,
+   "y": 204,
+   "built": 5,
+   "inputs": [
+    4
+   ]
+  },
+  {
+   "type": "scatter",
+   "x": 220,
+   "y": 204,
+   "built": 6,
+   "inputs": [
+    4
+   ]
+  },
+  {
+   "type": "sphere",
+   "x": 330,
+   "y": 62,
+   "built": 7,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 380,
+   "y": 204,
+   "built": 8,
+   "inputs": [
+    7
+   ]
+  },
+  {
+   "type": "sphere",
+   "x": 443,
+   "y": 732,
+   "built": 9,
+   "inputs": []
+  },
+  {
+   "type": "celltype",
+   "x": 30,
+   "y": 348,
+   "built": 10,
+   "inputs": [
+    5
+   ]
+  },
+  {
+   "type": "gather",
+   "x": 225,
+   "y": 348,
+   "built": 11,
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    10,
+    6,
+    8,
+    null
+   ]
+  },
+  {
+   "type": "connect",
+   "x": 272,
+   "y": 490,
+   "built": 12,
+   "inputs": [
+    11
+   ]
+  },
+  {
+   "type": "note",
+   "x": 56,
+   "y": 471,
+   "built": 13,
+   "inputs": []
+  },
+  {
+   "type": "stimulus",
+   "x": 324,
+   "y": 636,
+   "built": 14,
+   "inputs": [
+    12,
+    41
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 253,
+   "y": 780,
+   "built": 15,
+   "inputs": [
+    14,
+    9
+   ]
+  },
+  {
+   "type": "note",
+   "x": 58,
+   "y": 603,
+   "built": 16,
+   "inputs": []
+  },
+  {
+   "type": "stimulus",
+   "x": 232,
+   "y": 924,
+   "built": 17,
+   "inputs": [
+    15,
+    null
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 224,
+   "y": 1068,
+   "built": 18,
+   "inputs": [
+    17,
+    null
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 221,
+   "y": 1212,
+   "built": 19,
+   "inputs": [
+    18,
+    null
+   ]
+  },
+  {
+   "type": "checkpoint",
+   "x": 220,
+   "y": 1356,
+   "built": 20,
+   "inputs": [
+    19
+   ]
+  },
+  {
+   "type": "chart",
+   "x": 218,
+   "y": 1500,
+   "built": 21,
+   "inputs": [
+    20
+   ]
+  },
+  {
+   "type": "spline",
+   "x": 910,
+   "y": 60,
+   "built": 22,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 910,
+   "y": 204,
+   "built": 23,
+   "inputs": [
+    22
+   ]
+  },
+  {
+   "type": "torus",
+   "x": 1070,
+   "y": 60,
+   "built": 24,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 1070,
+   "y": 204,
+   "built": 25,
+   "inputs": [
+    24
+   ]
+  },
+  {
+   "type": "cylinder",
+   "x": 1230,
+   "y": 60,
+   "built": 26,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 1230,
+   "y": 204,
+   "built": 27,
+   "inputs": [
+    26
+   ]
+  },
+  {
+   "type": "gather",
+   "x": 1070,
+   "y": 348,
+   "built": 28,
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    23,
+    25,
+    27,
+    null
+   ]
+  },
+  {
+   "type": "connect",
+   "x": 1070,
+   "y": 492,
+   "built": 29,
+   "inputs": [
+    28
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 1070,
+   "y": 636,
+   "built": 30,
+   "inputs": [
+    29,
+    null
+   ]
+  },
+  {
+   "type": "checkpoint",
+   "x": 1070,
+   "y": 780,
+   "built": 31,
+   "inputs": [
+    30
+   ]
+  },
+  {
+   "type": "note",
+   "x": 1407,
+   "y": 44,
+   "built": 32,
+   "inputs": []
+  },
+  {
+   "type": "sphere",
+   "x": 1760,
+   "y": 60,
+   "built": 33,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 1760,
+   "y": 204,
+   "built": 34,
+   "inputs": [
+    33
+   ]
+  },
+  {
+   "type": "connect",
+   "x": 1760,
+   "y": 348,
+   "built": 35,
+   "inputs": [
+    34
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 1760,
+   "y": 492,
+   "built": 36,
+   "inputs": [
+    35,
+    null
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 1760,
+   "y": 636,
+   "built": 37,
+   "inputs": [
+    36,
+    null
+   ]
+  },
+  {
+   "type": "checkpoint",
+   "x": 1760,
+   "y": 780,
+   "built": 38,
+   "inputs": [
+    37
+   ]
+  },
+  {
+   "type": "note",
+   "x": 2062,
+   "y": 43,
+   "built": 39,
+   "inputs": []
+  },
+  {
+   "type": "pin",
+   "x": 543,
+   "y": 107,
+   "params": {},
+   "inputs": [
+    7
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 543,
+   "y": 587,
+   "params": {},
+   "inputs": [
+    40
+   ]
+  }
+ ],
+ "groups": [
+  {
+   "label": "checkpoint 1  the wave sheet",
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 274,
+    "b": 0
+   },
+   "members": [
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    14,
+    15,
+    17,
+    18,
+    19,
+    20,
+    21
+   ]
+  },
+  {
+   "label": "checkpoint 2  a sculpture of shapes",
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 340,
+    "b": 0
+   },
+   "members": [
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31
+   ]
+  },
+  {
+   "label": "checkpoint 3  thalamic rebound bursts",
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 464,
+    "b": 0
+   },
+   "members": [
+    33,
+    34,
+    35,
+    36,
+    37,
+    38
+   ]
+  }
+ ]
+}

@@ -1,0 +1,188 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>driven audit</title>
+<style>
+body { background:#000; color:#ccc; font:12px/1.5 monospace; padding:16px; }
+b { color:#fff; } .warn { color:#e8b84a; } .bad { color:#e06a6a; } .ok { color:#7ac47a; }
+</style>
+</head>
+<body>
+<div id="out">loading</div>
+<script type="module">
+// Measures what the sensory-driven network actually does, which audit.html cannot: that harness drives no inputs, so it audits the background alone.
+// This one computes a scenario, spins the reference engine, and feeds it the same curriculum frames the app would, through the app's own IORuntime and encoder, on simulated time.
+// Every number is integrated over whole presentation windows, because sampling a one-second readout against a three-second stimulus cycle aliases.
+//
+//   audit-driven.html?footprint=0.15&pres=9&scenario=alphabet
+//
+// Reports, per probe population and per presentation: mean rate and active fraction inside the on-window, the same for the gaps, and the overlap between the active sets of different items.
+// The question it answers is the one worth asking before any training run: does a stimulus wake a sparse, item-specific subset, or does it light the layer?
+import { NODE_DEFS, NEURON_TYPES, computeNode, setResolution, engineConfig } from './src/nodes.js';
+import { initState } from './src/rand.js';
+import { ALL_SCENARIOS as SCENARIOS, setFootprint, setBlockDrive, setBlockUrelay,
+  setBlockAmp } from './src/experiments.js';
+import { scheduleAt } from './src/curriculum.js';
+import { IORuntime } from './src/io.js';
+
+const out = document.getElementById('out');
+const lines = [];
+const say = (s, cls) => { lines.push(cls ? `<span class="${cls}">${s}</span>` : s);
+  out.innerHTML = lines.join('\n').replace(/\n/g, '<br>'); };
+
+const Q = new URLSearchParams(location.search);
+const F = +(Q.get('footprint') || 0.15);
+const PRES = Math.max(3, +(Q.get('pres') || 9));
+const MATCH = (Q.get('scenario') || 'alphabet').toLowerCase();
+// working-point knobs, so a sweep does not mean editing the scenario file: drive scales the per-layer background currents, urelayw the L4 to L2/3 relay weight, amp the sensory encoder amplitude
+if(Q.get('drive')) setBlockDrive(+Q.get('drive'));
+if(Q.get('urelayw')) setBlockUrelay({ w:+Q.get('urelayw') });
+if(Q.get('amp')) setBlockAmp(+Q.get('amp'));
+const WARM = 3000;                       // settle before the first window scores
+
+function mkEd(){
+  const nodes = [];
+  return { nodes, nextId:1, groups:[], suggestResolution:0,
+    addNode(type, x, y){
+      const def = NODE_DEFS[type], params = {};
+      def.params.forEach(p => params[p.k] = structuredClone(p.def));
+      const n = { id:this.nextId++, type, x, y, params, inputs:new Array(def.inputs).fill(null) };
+      nodes.push(n); return n;
+    } };
+}
+
+async function run(){
+  const sc = SCENARIOS.find(s => s.name.toLowerCase().includes(MATCH));
+  if(!sc){ say('no scenario matches ' + MATCH, 'bad'); return; }
+  setFootprint(F); setResolution(1);
+  say(`computing ${sc.name} at footprint ${F}`);
+  const ed = mkEd(); sc.build(ed);
+  const net = await computeNode(ed.nodes.find(n => n.type === 'output'),
+    id => ed.nodes.find(n => n.id === id));
+  say(`${net.count} neurons, ${net.synCount} synapses, ${(net.probes||[]).length} probes`);
+  if(!net.inputMaps || !net.inputMaps.length){ say('scenario has no input maps', 'bad'); return; }
+
+  const sig = net.inputMaps[0].signal;
+  if(!sig){ say('input maps carry no curriculum signal', 'bad'); return; }
+  const period = Math.max(20, sig.onMs) + Math.max(0, sig.offMs);
+
+  const w = new Worker(new URL('./src/simworker.js', import.meta.url), { type:'module' });
+  w.postMessage({ cmd:'init', count:net.count, ntype:net.ntype, bias:net.bias,
+    // every engine-facing field comes from engineConfig (project rule)
+    ...engineConfig(net), pmask:net.pmask, seed:1, ...initState(1, net.ntype, NEURON_TYPES),
+    inputs:(net.inputMaps || []).map(m => ({ chStart:m.chStart, chIdx:m.chIdx, chW:m.chW, amp:m.amp })),
+    preStart:net.preStart, post:net.post, w:net.w, delay:net.delay,
+    types:NEURON_TYPES.map(t => ({ a:t.a, b:t.b, c:t.c, d:t.d })) });
+
+  // The app's own runtime and encoder, driven on simulated milliseconds instead of the wall clock, so the stimulus the engine sees here is the stimulus it would see in the app running at exactly 1x realtime.
+  const io = new IORuntime(msg => say('io: ' + msg, 'warn'));
+  io.attach(w, net.inputMaps);
+
+  const total = WARM + PRES*period;
+  const CHUNK = 33;                      // the app posts frames at ~30 Hz
+  const windows = [];                    // on-windows: {item, cond, counts}
+  // The gaps matter as much as the letters: layer 4 runs a spontaneous rate, so 'fired during the letter' includes every cell that would have fired anyway, and what a stimulus recruits is the excess over the same cell's own gap rate.
+  const gap = { counts:new Float32Array(net.count), ms:0 };
+  let t = 0, winStart = -1, winRec = null;
+
+  const tick = () => new Promise(res => {
+    const h = e => { if(e.data.cmd === 'state'){ w.removeEventListener('message', h);
+      res(e.data); } };
+    w.addEventListener('message', h);
+    w.postMessage({ cmd:'tick', steps:CHUNK });
+  });
+
+  say(`driving ${PRES} presentations of ${period} ms after ${WARM} ms warm-up`);
+  const t0 = performance.now();
+  while(t < total){
+    io.frame(t);
+    const d = await tick();
+    const st = scheduleAt(sig, t);
+    if(t >= WARM && st.on){
+      if(winStart !== st.k){
+        winStart = st.k;
+        winRec = { item:st.item, cond:st.cond, k:st.k, counts:new Float32Array(net.count), ms:0 };
+        windows.push(winRec);
+      }
+      if(winRec){ winRec.ms += CHUNK;
+        for(let i=0;i<net.count;i++) winRec.counts[i] += d.fired[i]; }
+    } else if(t >= WARM){
+      // skip the first 300 ms of each gap so offset transients and the synaptic tail of the letter do not count as spontaneous
+      const ph = (t % period) - Math.max(20, sig.onMs);
+      if(ph > 300){ gap.ms += CHUNK;
+        for(let i=0;i<net.count;i++) gap.counts[i] += d.fired[i]; }
+    }
+    t += CHUNK;
+    if((t/CHUNK|0) % 90 === 0)
+      say(`  ${t} / ${total} sim-ms (${((performance.now()-t0)/1000).toFixed(0)} s wall)`);
+  }
+  w.terminate();
+
+  // fired is a per-tick flag over a 33 ms chunk, so counts are a floor on spikes.
+  // Driven = the cell's rate inside the letter exceeds its own spontaneous rate, measured across every gap, by at least DRIVE_HZ.
+  const DRIVE_HZ = 3;
+  const gapRate = new Float32Array(net.count);   // chunks/s = floor on Hz
+  if(gap.ms > 0)
+    for(let i=0;i<net.count;i++) gapRate[i] = gap.counts[i] / (gap.ms/1000);
+  const probes = net.probes || [];
+  say('');
+  say(`spontaneous, from ${(gap.ms/1000).toFixed(1)} s of gap: ` + probes.map(p => {
+    let sp = 0; for(const i of p.idx) sp += gapRate[i];
+    return `${p.label} ${(sp/p.idx.length).toFixed(1)}`; }).join('  '));
+  say('');
+  say('<b>per presentation, per population: mean Hz | driven %</b>');
+  say('driven = at least ' + DRIVE_HZ + ' Hz above that cell’s own gap rate');
+  const header = ['item'.padEnd(10)].concat(probes.map(p => p.label.padStart(13))).join('');
+  say(header);
+  const actSets = new Map();             // label -> {item -> Set(active idx)}
+  for(const win of windows.filter(x => x.ms >= 900)){
+    const cells = [String(win.item).padEnd(8) + (win.cond ? ('p' + win.cond) : '  ')];
+    const sec = win.ms/1000;
+    for(const p of probes){
+      let spikes = 0, act = 0;
+      for(const i of p.idx){ spikes += win.counts[i];
+        if(win.counts[i]/sec - gapRate[i] >= DRIVE_HZ) act++; }
+      const hz = spikes / p.idx.length / sec;
+      const fr = act / p.idx.length;
+      cells.push((hz.toFixed(1) + '|' + (100*fr).toFixed(0) + '%').padStart(13));
+      if(!win.cond){
+        if(!actSets.has(p.label)) actSets.set(p.label, new Map());
+        const m = actSets.get(p.label);
+        if(!m.has(win.item)) m.set(win.item, new Set());
+        const s = m.get(win.item);
+        for(const i of p.idx) if(win.counts[i]/sec - gapRate[i] >= DRIVE_HZ) s.add(i);
+      }
+    }
+    say(cells.join(''));
+  }
+
+  say('');
+  say('<b>item separability: Jaccard overlap of driven sets (bimodal presentations)</b>');
+  say('1.00 means two items wake the same cells and nothing is item-specific');
+  for(const [label, m] of actSets){
+    const items = [...m.keys()];
+    if(items.length < 2) continue;
+    const pairs = [];
+    for(let a=0;a<items.length;a++)
+      for(let b=a+1;b<items.length;b++){
+        const A = m.get(items[a]), B = m.get(items[b]);
+        let inter = 0; for(const i of A) if(B.has(i)) inter++;
+        const uni = A.size + B.size - inter;
+        if(uni) pairs.push({ a:items[a], b:items[b], j:inter/uni });
+      }
+    if(!pairs.length) continue;
+    const mean = pairs.reduce((x,y)=>x+y.j,0)/pairs.length;
+    const cls = mean > 0.8 ? 'bad' : mean > 0.5 ? 'warn' : 'ok';
+    say(`  ${label.padEnd(10)} mean ${mean.toFixed(2)} over ${pairs.length} pairs  ` +
+      pairs.slice(0,4).map(p => `${p.a}-${p.b}:${p.j.toFixed(2)}`).join(' '), cls);
+  }
+  say('');
+  say('DRIVENDONE');
+  window.__driven = { windows: windows.map(w => ({ item:w.item, cond:w.cond, ms:w.ms })),
+    probes: probes.map(p => p.label) };
+}
+run().catch(e => say('failed: ' + e.message, 'bad'));
+</script>
+</body>
+</html>

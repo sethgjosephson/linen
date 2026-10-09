@@ -1,0 +1,32 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>linen · docs</title>
+  <link rel="icon" type="image/svg+xml" href="brand/favicon.svg?v=li">
+<link rel="stylesheet" href="src/style.css">
+<style>
+/* The documentation styles live in style.css, scoped under .docsview, so
+   the standalone page and the in-app overlay cannot drift apart. This page
+   only has to fill the window. */
+html,body { height:100%; background:#000; overflow:hidden; }
+.docsview { height:100vh; }
+</style>
+</head>
+<body>
+<div class="docsview">
+  <!-- One way back, at the top of the menu, rather than repeated above every section of the content column. -->
+  <div class="dnav" id="nav"><a class="backlink" href="index.html">← back to linen</a></div>
+  <div class="dcontent" id="content"><div id="page"></div></div>
+</div>
+<script type="module">
+import { mountDocs } from './src/docsview.js';
+mountDocs({
+  nav: document.getElementById('nav'),
+  content: document.getElementById('content'),
+  page: document.getElementById('page'),
+  useHash: true,
+});
+</script>
+</body>
+</html>

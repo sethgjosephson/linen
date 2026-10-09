@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><title>scenario audit</title>
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three.module.js",
+  "three/addons/controls/OrbitControls.js": "./vendor/OrbitControls.js",
+  "three/addons/controls/TransformControls.js": "./vendor/TransformControls.js"
+} }
+</script>
+<style>body{background:#000;color:#ddd;font:12px/1.45 ui-monospace,Menlo,monospace;margin:12px}
+pre{white-space:pre}</style>
+</head>
+<body><pre id="out">ready</pre>
+<script type="module">
+// Runs every scenario with plasticity off and reports the numbers that say whether it is behaving like the tissue it claims to model: firing rates per population, how irregular and how synchronous that firing is, the synapse counts and weight distribution behind it, and how much of the population is silent or pinned above threshold.
+//
+// This is a measurement tool, not a gate. validate.html is the gate; this exists because a scenario can pass every statistical check on its wiring and still run at ten times a physiological rate.
+//
+//   window.audit()            every scenario
+//   window.audit('ca3')       one, by substring
+//   window.audit(null, 6)     longer window
+import { NODE_DEFS, NEURON_TYPES, computeNode, setResolution, engineConfig } from './src/nodes.js';
+import { initState } from './src/rand.js';
+import { ALL_SCENARIOS as SCENARIOS, setFootprint } from './src/experiments.js';
+
+// net.ntype is an index into NEURON_TYPES, not a sign: FS is 3, TC is 5.
+// Reading it as a boolean puts every interneuron in the excitatory column.
+const isInh = t => NEURON_TYPES[t].sign < 0;
+
+const out = document.getElementById('out');
+const say = s => { out.textContent += String.fromCharCode(10) + String(s); };
+
+function fakeEditor(){
+  const nodes = [];
+  return { nodes, nextId:1, groups:[], suggestResolution:0,
+    addNode(type, x, y){
+      const def = NODE_DEFS[type], params = {};
+      def.params.forEach(p => params[p.k] = structuredClone(p.def));
+      const n = { id:this.nextId++, type, x, y, params, inputs:new Array(def.inputs).fill(null) };
+      nodes.push(n); return n;
+    } };
+}
+
+// Reference bands.
+// Every one of these is a spontaneous or baseline in-vivo figure for the structure the scenario names, not a target the model was tuned to, so a miss is information rather than a failure.
+//   cortical excitatory  de Kock and Sakmann 2009, per layer
+//   cortical inhibitory  fast spiking cells run several times their
+//                        excitatory neighbors (Gentet et al. 2010)
+//   CA3 pyramidal        Mizuseki and Buzsaki 2013: median under 1 Hz awake,
+//                        the fastest few percent in the tens
+//   thalamic relay       tonic mode a few Hz; a rebound burst is 200 to 300
+//                        Hz for three or four spikes, not a sustained rate
+//   retinal ganglion     maintained discharge order 10 Hz
+const BANDS = {
+  'L2/3e':[0.2, 1.0], 'L4e':[0.5, 3.0], 'L5e':[2.0, 4.0], 'L6e':[0.3, 2.0],
+  'L2/3i':[1, 12], 'L4i':[1, 12], 'L5i':[1, 12], 'L6i':[1, 12],
+  pyr:[0.2, 3.0], rgc:[2, 20], coch:[2, 30],
+  lgn:[1, 15], mgb:[1, 15], trn:[1, 20], trna:[1, 20],
+};
+// how a whole scenario should read, when no per-population band applies
+const GLOBAL = { exc:[0.1, 8], inh:[0.5, 20] };
+
+// One millisecond per state message: anything larger turns the per-neuron spike flag into a rate ceiling of 1000/STEP Hz.
+const STEP = 1;
+let WORKER = null;
+function run(net, seconds, skipS, sampleV){
+  return new Promise(done => {
+    if(WORKER) WORKER.terminate();
+    WORKER = new Worker(new URL('./src/simworker.js', import.meta.url), { type:'module' });
+    WORKER.postMessage({ cmd:'init', count:net.count, ntype:net.ntype, bias:net.bias,
+      // every engine-facing field comes from engineConfig (project rule); the audit runs with plasticity and homeostasis off
+      ...engineConfig(net), plast:0, iEta:0, rhoMode:0, scale:0,
+      inputs:[], pmask:net.pmask, seed:1, ...initState(1, net.ntype, NEURON_TYPES),
+      preStart:net.preStart, post:net.post, w:net.w, delay:net.delay,
+      types:NEURON_TYPES.map(t => ({ a:t.a, b:t.b, c:t.c, d:t.d })) });
+    const N = net.count;
+    const spikes = new Float64Array(N);
+    // interspike intervals for a sample, to get the irregularity: a cortical neuron in the balanced regime has CV near 1 (Poisson-like), a driven or bursting one much lower
+    const K = Math.min(400, N), step = Math.max(1, Math.floor(N/K));
+    const idx = []; for(let i=0;i<N;i+=step) idx.push(i);
+    const last = new Int32Array(idx.length).fill(-1);
+    const isiN = new Float64Array(idx.length), isiS = new Float64Array(idx.length),
+      isiS2 = new Float64Array(idx.length);
+    // the busiest 20 ms window, as a population rate.
+    // A scenario that cycles between quiet and a burst has a mean that describes neither, and the burst is the part that has to be physiological.
+    let ms = 0, sum = 0, sum2 = 0, nWin = 0, peak = 0, trueSpikes = 0;
+    // depolarization block: a neuron sitting above threshold that is not firing is not a fast neuron, it is a stuck one
+    let vHigh = 0, vSamples = 0, vHighQuiet = 0;
+    WORKER.onmessage = e => {
+      const m = e.data;
+      if(m.cmd === 'error'){ say('  ENGINE ERROR: ' + m.message); WORKER.terminate(); done(null); return; }
+      if(m.cmd !== 'state') return;
+      ms += m.steps;
+      if(ms > skipS*1000){
+        let c = 0;
+        for(let i=0;i<N;i++) if(m.fired[i]){ spikes[i]++; c++; }
+        // fired is a flag set anywhere inside the tick, so a batch of k steps cannot report more than one spike per neuron and every rate read from it saturates at 1000/k Hz.
+        // The engine also sends the true count in m.spikes; ticking one step at a time makes the two agree, and the check below says so if they ever do not.
+        trueSpikes += m.spikes;
+        sum += c; sum2 += c*c; nWin++;
+        if(c > peak) peak = c;
+        for(let k=0;k<idx.length;k++){
+          if(!m.fired[idx[k]]) continue;
+          if(last[k] >= 0){
+            const d = ms - last[k];
+            isiN[k]++; isiS[k] += d; isiS2[k] += d*d;
+          }
+          last[k] = ms;
+        }
+        if(sampleV && m.v){
+          for(let i=0;i<N;i++){
+            vSamples++;
+            if(m.v[i] > -35){ vHigh++; if(!m.fired[i]) vHighQuiet++; }
+          }
+        }
+      }
+      if(ms >= seconds*1000){ WORKER.terminate(); WORKER = null;
+        done({ spikes, sum, sum2, nWin, peak, trueSpikes, isiN, isiS, isiS2, idx,
+          vHigh, vSamples, vHighQuiet }); return; }
+      WORKER.postMessage({ cmd:'tick', steps:STEP });
+    };
+    WORKER.postMessage({ cmd:'tick', steps:20 });
+  });
+}
+
+function wiring(net){
+  const { preStart, post, w, delay, ntype, count } = net;
+  const e = [], i = [], d = [];
+  // A wired weight above wmax is rewritten by the plasticity clamp the first time that synapse sees an event, so a long lognormal tail over the bound is a silent edit of the network rather than a strong synapse.
+  // Frozen synapses are exempt, which is why the two are counted apart.
+  let over = 0, overPlastic = 0, tot = 0;
+  const stride = Math.max(1, Math.floor(w.length/200000));   // sample big nets
+  for(let pre=0; pre<count; pre++){
+    for(let s=preStart[pre]; s<preStart[pre+1]; s+=stride){
+      (isInh(ntype[pre]) ? i : e).push(Math.abs(w[s]));
+      d.push(delay[s]);
+      tot++;
+      if(Math.abs(w[s]) > net.wmax){
+        over++;
+        if(!net.pmask || net.pmask[s]) overPlastic++;
+      }
+    }
+  }
+  let atFloor = 0;
+  const stat = a => {
+    if(!a.length) return null;
+    a.sort((x, y) => x - y);
+    const q = p => a[Math.min(a.length-1, Math.floor(p*a.length))];
+    const mean = a.reduce((s, v) => s + v, 0)/a.length;
+    return { n:a.length, mean, med:q(0.5), p99:q(0.99), max:a[a.length-1] };
+  };
+  // in-degree, the number that decides whether one spike matters
+  const inDeg = new Float64Array(count);
+  for(let s=0;s<post.length;s++) inDeg[post[s]]++;
+  let dsum = 0; for(let k=0;k<count;k++) dsum += inDeg[k];
+  // the delay spectrum spike timing needs does not exist if every tract clamps to the 1 ms floor, which is what a compressed geometry does
+  for(const v of d) if(v <= 1) atFloor++;
+  return { exc:stat(e), inh:stat(i), delay:stat(d), inDeg:dsum/count,
+    floorPct:100*atFloor/Math.max(1, d.length),
+    overPct:100*over/Math.max(1, tot), overPlasticPct:100*overPlastic/Math.max(1, tot) };
+}
+
+async function one(sc, seconds, res, footprint){
+  say('');
+  say('=== ' + sc.name + ' ===');
+  setFootprint(footprint === undefined ? 1 : footprint);
+  setResolution(res/100);
+  const ed = fakeEditor();
+  sc.build(ed);
+  const byId = id => ed.nodes.find(n => n.id === id);
+  const outNode = ed.nodes.find(n => n.type === 'output');
+  if(!outNode){ say('  no checkpoint node'); return null; }
+  const t0 = performance.now();
+  const net = await computeNode(outNode, byId);
+  const compute = ((performance.now()-t0)/1000).toFixed(1);
+
+  const wir = wiring(net);
+  say(`  ${net.count.toLocaleString()} neurons, ${net.synCount.toLocaleString()} synapses, ` +
+    `in-degree ${wir.inDeg.toFixed(0)}, computed in ${compute}s`);
+  const ws = s => s ? `mean ${s.mean.toFixed(2)} med ${s.med.toFixed(2)} p99 ${s.p99.toFixed(2)} max ${s.max.toFixed(2)}` : 'none';
+  say(`  weights exc  ${ws(wir.exc)}`);
+  say(`  weights inh  ${ws(wir.inh)}`);
+  say(`  delays ms    ${ws(wir.delay)}   ${wir.floorPct.toFixed(0)}% at the 1 ms floor` +
+    (wir.floorPct > 80 ? '  NO DELAY SPECTRUM' : ''));
+  say(`  synapse model ${net.syn ? 'exponential tauE ' + net.tauE + ' tauI ' + net.tauI : 'instantaneous kick'}` +
+    `, wmax ${net.wmax}` +
+    `, refractory ${net.refrac ? net.refrac + ' ms' : 'none'}` +
+    `, depression ${net.stp ? 'U ' + net.stpU + ' tauD ' + net.stpTauD : 'off'}`);
+  say(`  over wmax    ${wir.overPct.toFixed(2)}% of synapses` +
+    `, of which plastic ${wir.overPlasticPct.toFixed(2)}%` +
+    (wir.overPlasticPct > 0.05 ? '  CLAMP WILL REWRITE THESE' : ''));
+
+  const r = await run(net, seconds, Math.min(1.5, seconds/3), true);
+  if(!r) return null;
+  const dur = seconds - Math.min(1.5, seconds/3);
+
+  const tags = net.tags || {};
+  const groups = new Map();
+  for(let k=0;k<net.count;k++){
+    const t = tags[net.src[k]] || ('src' + net.src[k]);
+    if(!groups.has(t)) groups.set(t, []);
+    groups.get(t).push(k);
+  }
+  let eS = 0, eN = 0, iS = 0, iN = 0;
+  const rows = [];
+  for(const [t, list] of groups){
+    let s = 0, silent = 0, hot = 0;
+    for(const k of list){
+      s += r.spikes[k];
+      if(r.spikes[k] === 0) silent++;
+      if(r.spikes[k]/dur > 100) hot++;
+    }
+    const hz = s/list.length/dur;
+    // a population can be mixed (an ntype node retypes a fraction), so each neuron is counted by its own class rather than the group's first
+    for(const k of list){
+      if(isInh(net.ntype[k])){ iS += r.spikes[k]; iN++; } else { eS += r.spikes[k]; eN++; }
+    }
+    const band = BANDS[t];
+    const verdict = !band ? '' : (hz < band[0] ? ' LOW (' + band.join(' to ') + ')'
+      : hz > band[1] ? ' HIGH (' + band.join(' to ') + ')' : ' ok');
+    rows.push(`    ${t.padEnd(9)} ${String(list.length).padStart(7)}  ${hz.toFixed(2).padStart(8)} Hz` +
+      `  silent ${(100*silent/list.length).toFixed(0).padStart(3)}%` +
+      `  over100Hz ${(100*hot/list.length).toFixed(0).padStart(3)}%${verdict}`);
+  }
+  say('  population rates');
+  rows.forEach(say);
+
+  const eHz = eN ? eS/eN/dur : 0, iHz = iN ? iS/iN/dur : 0;
+  const mu = r.sum/Math.max(1, r.nWin);
+  const fano = mu > 0 ? (r.sum2/Math.max(1, r.nWin) - mu*mu)/mu : 0;
+  const fanoK = fano/(net.count/1000);
+  // irregularity over the sampled cells that fired enough to have a CV
+  let cvs = [];
+  for(let k=0;k<r.idx.length;k++){
+    if(r.isiN[k] < 4) continue;
+    const m = r.isiS[k]/r.isiN[k];
+    const v = r.isiS2[k]/r.isiN[k] - m*m;
+    if(v > 0 && m > 0) cvs.push(Math.sqrt(v)/m);
+  }
+  cvs.sort((a, b) => a - b);
+  const cv = cvs.length ? cvs[Math.floor(cvs.length/2)] : NaN;
+  const blocked = r.vSamples ? 100*r.vHighQuiet/r.vSamples : 0;
+
+  const flag = (v, [lo, hi]) => v < lo ? ' LOW' : v > hi ? ' HIGH' : ' ok';
+  say(`  excitatory mean ${eHz.toFixed(2)} Hz${flag(eHz, GLOBAL.exc)}` +
+      `   inhibitory mean ${iHz.toFixed(2)} Hz${flag(iHz, GLOBAL.inh)}`);
+  const peakHz = r.peak/net.count/(STEP/1000);
+  const check = Math.abs(r.trueSpikes - r.sum)/Math.max(1, r.trueSpikes);
+  say(`  busiest ${STEP} ms window ${peakHz.toFixed(0)} Hz per neuron` +
+    (peakHz > 60 ? '  BURSTS ABOVE PHYSIOLOGICAL' : '') +
+    (check > 0.001 ? `   (flag count is ${(100*check).toFixed(1)}% under the engine's own total)` : ''));
+  // busiest single cell, which is what a membrane trace shows
+  let top = 0; for(let k=0;k<net.count;k++) if(r.spikes[k] > top) top = r.spikes[k];
+  say(`  busiest single neuron ${(top/dur).toFixed(0)} Hz sustained over ${dur.toFixed(1)} s`);
+  say(`  ISI CV (median of ${cvs.length} cells) ${isNaN(cv) ? 'n/a' : cv.toFixed(2)}` +
+      `   population Fano per 1000 ${fanoK.toFixed(1)}` +
+      (fanoK > 5 ? '  SYNCHRONIZED' : '  asynchronous'));
+  say(`  above threshold and not firing: ${blocked.toFixed(1)}% of neuron-samples` +
+      (blocked > 2 ? '  DEPOLARIZATION BLOCK' : ''));
+  return { name:sc.name, count:net.count, syn:net.synCount, eHz, iHz, cv, fanoK,
+    blocked, peakHz, floorPct:wir.floorPct, syn0:net.syn };
+}
+window.auditOne = one;
+
+window.audit = async (match, seconds = 4, res = 100) => {
+  out.textContent = 'auditing';
+  const list = SCENARIOS.filter(s => !match || s.name.toLowerCase().includes(String(match).toLowerCase()));
+  const all = [];
+  for(const sc of list){
+    // the two alphabet schools are authored at real cortical density and compute for minutes at full size; they are audited at a small footprint, which keeps density, distances and delays and only shrinks the sheet
+    const heavy = /alphabet/.test(sc.name);
+    try {
+      const r = await one(sc, seconds, heavy ? 25 : res, heavy ? 0.05 : 1);
+      if(r) all.push(r);
+    } catch(err){ say('  BUILD FAILED: ' + err.message); }
+  }
+  say('');
+  say('summary');
+  say('  scenario                   neurons     exc Hz   inh Hz   ISI CV   fano/k  blocked%');
+  for(const r of all)
+    say(`  ${r.name.padEnd(24)} ${String(r.count).padStart(9)} ${r.eHz.toFixed(2).padStart(9)} ` +
+      `${r.iHz.toFixed(2).padStart(8)} ${(isNaN(r.cv)?0:r.cv).toFixed(2).padStart(8)} ` +
+      `${r.fanoK.toFixed(1).padStart(8)} ${r.blocked.toFixed(1).padStart(9)}`);
+  say('AUDITDONE');
+  window.LAST = all;
+  return all;
+};
+say('ready: window.audit()  or  window.audit("ca3")');
+</script>
+</body></html>

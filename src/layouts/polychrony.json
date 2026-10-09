@@ -1,0 +1,547 @@
+{
+ "format": 3,
+ "scenario": "polychrony",
+ "saved": "2026-09-17",
+ "build": [
+  "note",
+  "note",
+  "sphere",
+  "sphere",
+  "sphere",
+  "sphere",
+  "sphere",
+  "scatter",
+  "scatter",
+  "scatter",
+  "scatter",
+  "scatter",
+  "gather",
+  "connect",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "probe",
+  "probe",
+  "probe",
+  "checkpoint",
+  "chart"
+ ],
+ "nodes": [
+  {
+   "type": "note",
+   "x": -370,
+   "y": 60,
+   "built": 0,
+   "inputs": []
+  },
+  {
+   "type": "note",
+   "x": 235,
+   "y": 552,
+   "built": 1,
+   "inputs": []
+  },
+  {
+   "type": "sphere",
+   "x": 60,
+   "y": 60,
+   "built": 2,
+   "inputs": []
+  },
+  {
+   "type": "sphere",
+   "x": 378,
+   "y": 60,
+   "built": 3,
+   "inputs": []
+  },
+  {
+   "type": "sphere",
+   "x": 726,
+   "y": 60,
+   "built": 4,
+   "inputs": []
+  },
+  {
+   "type": "sphere",
+   "x": 1074,
+   "y": 60,
+   "built": 5,
+   "inputs": []
+  },
+  {
+   "type": "sphere",
+   "x": 1392,
+   "y": 60,
+   "built": 6,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 60,
+   "y": 204,
+   "built": 7,
+   "inputs": [
+    2
+   ]
+  },
+  {
+   "type": "scatter",
+   "x": 378,
+   "y": 204,
+   "built": 8,
+   "inputs": [
+    3
+   ]
+  },
+  {
+   "type": "scatter",
+   "x": 726,
+   "y": 204,
+   "built": 9,
+   "inputs": [
+    4
+   ]
+  },
+  {
+   "type": "scatter",
+   "x": 1074,
+   "y": 204,
+   "built": 10,
+   "inputs": [
+    5
+   ]
+  },
+  {
+   "type": "scatter",
+   "x": 1392,
+   "y": 204,
+   "built": 11,
+   "inputs": [
+    6
+   ]
+  },
+  {
+   "type": "gather",
+   "x": 60,
+   "y": 416,
+   "built": 12,
+   "params": {
+    "ports": 6
+   },
+   "inputs": [
+    7,
+    28,
+    32,
+    36,
+    37,
+    null
+   ]
+  },
+  {
+   "type": "connect",
+   "x": 60,
+   "y": 560,
+   "built": 13,
+   "inputs": [
+    12
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 704,
+   "built": 14,
+   "inputs": [
+    13,
+    34
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 848,
+   "built": 15,
+   "inputs": [
+    14,
+    30
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 992,
+   "built": 16,
+   "inputs": [
+    15,
+    26
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 1136,
+   "built": 17,
+   "inputs": [
+    16,
+    27
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 1280,
+   "built": 18,
+   "inputs": [
+    17,
+    31
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 1424,
+   "built": 19,
+   "inputs": [
+    18,
+    35
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 1568,
+   "built": 20,
+   "inputs": [
+    19,
+    null
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 1712,
+   "built": 21,
+   "inputs": [
+    20,
+    null
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 1856,
+   "built": 22,
+   "inputs": [
+    21,
+    null
+   ]
+  },
+  {
+   "type": "checkpoint",
+   "x": 60,
+   "y": 2000,
+   "built": 23,
+   "inputs": [
+    22
+   ]
+  },
+  {
+   "type": "chart",
+   "x": 60,
+   "y": 2144,
+   "built": 24,
+   "inputs": [
+    23
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 241,
+   "y": 106,
+   "params": {},
+   "name": "pin",
+   "inputs": [
+    2
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 241,
+   "y": 987,
+   "params": {},
+   "name": "pin2",
+   "inputs": [
+    25
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 241,
+   "y": 1131,
+   "params": {},
+   "name": "pin3",
+   "inputs": [
+    26
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 436,
+   "y": 350,
+   "params": {},
+   "name": "pin5",
+   "inputs": [
+    8
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 589,
+   "y": 106,
+   "params": {},
+   "name": "pin6",
+   "inputs": [
+    3
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 589,
+   "y": 843,
+   "params": {},
+   "name": "pin7",
+   "inputs": [
+    29
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 589,
+   "y": 1275,
+   "params": {},
+   "name": "pin8",
+   "inputs": [
+    30
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 781,
+   "y": 357,
+   "params": {},
+   "name": "pin10",
+   "inputs": [
+    9
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 937,
+   "y": 106,
+   "params": {},
+   "name": "pin11",
+   "inputs": [
+    4
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 937,
+   "y": 699,
+   "params": {},
+   "name": "pin12",
+   "inputs": [
+    33
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 937,
+   "y": 1419,
+   "params": {},
+   "name": "pin13",
+   "inputs": [
+    34
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 1130,
+   "y": 355,
+   "params": {},
+   "name": "pin15",
+   "inputs": [
+    10
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 1451,
+   "y": 357,
+   "params": {},
+   "name": "pin17",
+   "inputs": [
+    11
+   ]
+  }
+ ],
+ "groups": [
+  {
+   "label": "source a",
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    2,
+    7
+   ]
+  },
+  {
+   "label": "source b",
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    3,
+    8
+   ]
+  },
+  {
+   "label": "source c",
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    4,
+    9
+   ]
+  },
+  {
+   "label": "reader beside a",
+   "hue": 190,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    5,
+    10
+   ]
+  },
+  {
+   "label": "reader beside c",
+   "hue": 190,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    6,
+    11
+   ]
+  },
+  {
+   "label": "delay lines  every source to both readers",
+   "hue": 140,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    12,
+    13
+   ]
+  },
+  {
+   "label": "order one  c, b, a",
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    14,
+    15,
+    16
+   ]
+  },
+  {
+   "label": "order two  a, b, c",
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    17,
+    18,
+    19
+   ]
+  },
+  {
+   "label": "readout",
+   "hue": 175,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    20,
+    21,
+    22,
+    24
+   ]
+  },
+  {
+   "label": "checkpoint",
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    23
+   ]
+  }
+ ]
+}

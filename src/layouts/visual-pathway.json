@@ -1,0 +1,1158 @@
+{
+ "format": 3,
+ "scenario": "visual pathway",
+ "saved": "2026-09-16",
+ "build": [
+  "note",
+  "note",
+  "note",
+  "box",
+  "scatter",
+  "sphere",
+  "scatter",
+  "torus",
+  "scatter",
+  "box",
+  "scatter",
+  "celltype",
+  "scatter",
+  "celltype",
+  "box",
+  "scatter",
+  "scatter",
+  "celltype",
+  "box",
+  "scatter",
+  "scatter",
+  "celltype",
+  "box",
+  "scatter",
+  "scatter",
+  "celltype",
+  "gather",
+  "gather",
+  "gather",
+  "gather",
+  "project",
+  "project",
+  "project",
+  "project",
+  "connect",
+  "input",
+  "testsignal",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "stimulus",
+  "probe",
+  "probe",
+  "probe",
+  "probe",
+  "checkpoint",
+  "chart"
+ ],
+ "nodes": [
+  {
+   "type": "note",
+   "x": -370,
+   "y": 60,
+   "built": 0,
+   "inputs": []
+  },
+  {
+   "type": "note",
+   "x": 411,
+   "y": 957,
+   "built": 1,
+   "inputs": []
+  },
+  {
+   "type": "note",
+   "x": 414,
+   "y": 1626,
+   "built": 2,
+   "inputs": []
+  },
+  {
+   "type": "box",
+   "x": 60,
+   "y": 60,
+   "built": 3,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 60,
+   "y": 204,
+   "built": 4,
+   "inputs": [
+    3
+   ]
+  },
+  {
+   "type": "sphere",
+   "x": 942,
+   "y": 60,
+   "built": 5,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 942,
+   "y": 204,
+   "built": 6,
+   "inputs": [
+    5
+   ]
+  },
+  {
+   "type": "torus",
+   "x": 1290,
+   "y": 60,
+   "built": 7,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 1290,
+   "y": 204,
+   "built": 8,
+   "inputs": [
+    7
+   ]
+  },
+  {
+   "type": "box",
+   "x": 1718,
+   "y": 60,
+   "built": 9,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 1638,
+   "y": 204,
+   "built": 10,
+   "inputs": [
+    9
+   ]
+  },
+  {
+   "type": "celltype",
+   "x": 1638,
+   "y": 348,
+   "built": 11,
+   "inputs": [
+    10
+   ]
+  },
+  {
+   "type": "scatter",
+   "x": 1798,
+   "y": 204,
+   "built": 12,
+   "inputs": [
+    9
+   ]
+  },
+  {
+   "type": "celltype",
+   "x": 1798,
+   "y": 348,
+   "built": 13,
+   "inputs": [
+    12
+   ]
+  },
+  {
+   "type": "box",
+   "x": 2236,
+   "y": 60,
+   "built": 14,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 2176,
+   "y": 348,
+   "built": 15,
+   "inputs": [
+    14
+   ]
+  },
+  {
+   "type": "scatter",
+   "x": 2276,
+   "y": 204,
+   "built": 16,
+   "inputs": [
+    14
+   ]
+  },
+  {
+   "type": "celltype",
+   "x": 2336,
+   "y": 348,
+   "built": 17,
+   "inputs": [
+    16
+   ]
+  },
+  {
+   "type": "box",
+   "x": 2774,
+   "y": 60,
+   "built": 18,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 2714,
+   "y": 348,
+   "built": 19,
+   "inputs": [
+    18
+   ]
+  },
+  {
+   "type": "scatter",
+   "x": 2814,
+   "y": 204,
+   "built": 20,
+   "inputs": [
+    18
+   ]
+  },
+  {
+   "type": "celltype",
+   "x": 2874,
+   "y": 348,
+   "built": 21,
+   "inputs": [
+    20
+   ]
+  },
+  {
+   "type": "box",
+   "x": 3312,
+   "y": 60,
+   "built": 22,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 3252,
+   "y": 348,
+   "built": 23,
+   "inputs": [
+    22
+   ]
+  },
+  {
+   "type": "scatter",
+   "x": 3352,
+   "y": 204,
+   "built": 24,
+   "inputs": [
+    22
+   ]
+  },
+  {
+   "type": "celltype",
+   "x": 3412,
+   "y": 348,
+   "built": 25,
+   "inputs": [
+    24
+   ]
+  },
+  {
+   "type": "gather",
+   "x": 60,
+   "y": 477,
+   "built": 26,
+   "params": {
+    "ports": 5
+   },
+   "inputs": [
+    4,
+    61,
+    66,
+    69,
+    null
+   ]
+  },
+  {
+   "type": "gather",
+   "x": 59,
+   "y": 559,
+   "built": 27,
+   "params": {
+    "ports": 5
+   },
+   "inputs": [
+    26,
+    70,
+    76,
+    77,
+    null
+   ]
+  },
+  {
+   "type": "gather",
+   "x": 57,
+   "y": 671,
+   "built": 28,
+   "params": {
+    "ports": 5
+   },
+   "inputs": [
+    27,
+    83,
+    84,
+    89,
+    null
+   ]
+  },
+  {
+   "type": "gather",
+   "x": 60,
+   "y": 848,
+   "built": 29,
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    28,
+    90,
+    null,
+    null
+   ]
+  },
+  {
+   "type": "project",
+   "x": 60,
+   "y": 992,
+   "built": 30,
+   "inputs": [
+    29,
+    null
+   ]
+  },
+  {
+   "type": "project",
+   "x": 60,
+   "y": 1136,
+   "built": 31,
+   "inputs": [
+    30,
+    null
+   ]
+  },
+  {
+   "type": "project",
+   "x": 60,
+   "y": 1280,
+   "built": 32,
+   "inputs": [
+    31,
+    null
+   ]
+  },
+  {
+   "type": "project",
+   "x": 60,
+   "y": 1424,
+   "built": 33,
+   "inputs": [
+    32,
+    null
+   ]
+  },
+  {
+   "type": "connect",
+   "x": 60,
+   "y": 1568,
+   "built": 34,
+   "inputs": [
+    33
+   ]
+  },
+  {
+   "type": "input",
+   "x": 60,
+   "y": 1712,
+   "built": 35,
+   "inputs": [
+    34,
+    59,
+    36
+   ]
+  },
+  {
+   "type": "testsignal",
+   "x": 240,
+   "y": 1662,
+   "built": 36,
+   "inputs": []
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 1856,
+   "built": 37,
+   "inputs": [
+    35,
+    72
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 2000,
+   "built": 38,
+   "inputs": [
+    37,
+    73
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 2144,
+   "built": 39,
+   "inputs": [
+    38,
+    74
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 2288,
+   "built": 40,
+   "inputs": [
+    39,
+    79
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 2432,
+   "built": 41,
+   "inputs": [
+    40,
+    80
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 2576,
+   "built": 42,
+   "inputs": [
+    41,
+    81
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 2720,
+   "built": 43,
+   "inputs": [
+    42,
+    86
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 2864,
+   "built": 44,
+   "inputs": [
+    43,
+    87
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 3008,
+   "built": 45,
+   "inputs": [
+    44,
+    88
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 3152,
+   "built": 46,
+   "inputs": [
+    45,
+    92
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 3296,
+   "built": 47,
+   "inputs": [
+    46,
+    93
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 3440,
+   "built": 48,
+   "inputs": [
+    47,
+    94
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 3584,
+   "built": 49,
+   "inputs": [
+    48,
+    63
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 3728,
+   "built": 50,
+   "inputs": [
+    49,
+    68
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 3872,
+   "built": 51,
+   "inputs": [
+    50,
+    64
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 4016,
+   "built": 52,
+   "inputs": [
+    51,
+    60
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 4160,
+   "built": 53,
+   "inputs": [
+    52,
+    65
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 4304,
+   "built": 54,
+   "inputs": [
+    53,
+    82
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 4448,
+   "built": 55,
+   "inputs": [
+    54,
+    75
+   ]
+  },
+  {
+   "type": "checkpoint",
+   "x": 60,
+   "y": 4592,
+   "built": 56,
+   "inputs": [
+    55
+   ]
+  },
+  {
+   "type": "chart",
+   "x": 60,
+   "y": 4736,
+   "built": 57,
+   "inputs": [
+    56
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 805,
+   "y": 106,
+   "params": {},
+   "name": "dot",
+   "inputs": [
+    3
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 805,
+   "y": 1707,
+   "params": {},
+   "name": "dot2",
+   "inputs": [
+    58
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 805,
+   "y": 4011,
+   "params": {},
+   "name": "dot3",
+   "inputs": [
+    59
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 998,
+   "y": 261,
+   "params": {},
+   "name": "dot5",
+   "inputs": [
+    6
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 1153,
+   "y": 106,
+   "params": {},
+   "name": "dot6",
+   "inputs": [
+    5
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 1153,
+   "y": 3579,
+   "params": {},
+   "name": "dot7",
+   "inputs": [
+    62
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 1153,
+   "y": 3867,
+   "params": {},
+   "name": "dot8",
+   "inputs": [
+    63
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 1153,
+   "y": 4155,
+   "params": {},
+   "name": "dot9",
+   "inputs": [
+    64
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 1344,
+   "y": 310,
+   "params": {},
+   "name": "dot11",
+   "inputs": [
+    8
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 1501,
+   "y": 106,
+   "params": {},
+   "name": "dot12",
+   "inputs": [
+    7
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 1501,
+   "y": 3723,
+   "params": {},
+   "name": "dot13",
+   "inputs": [
+    67
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 1695,
+   "y": 427,
+   "params": {},
+   "name": "dot15",
+   "inputs": [
+    11
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 1853,
+   "y": 452,
+   "params": {},
+   "name": "dot17",
+   "inputs": [
+    13
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 2039,
+   "y": 106,
+   "params": {},
+   "name": "dot18",
+   "inputs": [
+    9
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 2039,
+   "y": 1851,
+   "params": {},
+   "name": "dot19",
+   "inputs": [
+    71
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 2039,
+   "y": 1995,
+   "params": {},
+   "name": "dot20",
+   "inputs": [
+    72
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 2039,
+   "y": 2139,
+   "params": {},
+   "name": "dot21",
+   "inputs": [
+    73
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 2039,
+   "y": 4443,
+   "params": {},
+   "name": "dot22",
+   "inputs": [
+    74
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 2234,
+   "y": 461,
+   "params": {},
+   "name": "dot24",
+   "inputs": [
+    15
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 2395,
+   "y": 496,
+   "params": {},
+   "name": "dot26",
+   "inputs": [
+    17
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 2577,
+   "y": 106,
+   "params": {},
+   "name": "dot27",
+   "inputs": [
+    14
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 2577,
+   "y": 2283,
+   "params": {},
+   "name": "dot28",
+   "inputs": [
+    78
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 2577,
+   "y": 2427,
+   "params": {},
+   "name": "dot29",
+   "inputs": [
+    79
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 2577,
+   "y": 2571,
+   "params": {},
+   "name": "dot30",
+   "inputs": [
+    80
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 2577,
+   "y": 4299,
+   "params": {},
+   "name": "dot31",
+   "inputs": [
+    81
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 2769,
+   "y": 531,
+   "params": {},
+   "name": "dot33",
+   "inputs": [
+    19
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 2926,
+   "y": 558,
+   "params": {},
+   "name": "dot35",
+   "inputs": [
+    21
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 3115,
+   "y": 106,
+   "params": {},
+   "name": "dot36",
+   "inputs": [
+    18
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 3115,
+   "y": 2715,
+   "params": {},
+   "name": "dot37",
+   "inputs": [
+    85
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 3115,
+   "y": 2859,
+   "params": {},
+   "name": "dot38",
+   "inputs": [
+    86
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 3115,
+   "y": 3003,
+   "params": {},
+   "name": "dot39",
+   "inputs": [
+    87
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 3302,
+   "y": 585,
+   "params": {},
+   "name": "dot41",
+   "inputs": [
+    23
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 3462,
+   "y": 759,
+   "params": {},
+   "name": "dot43",
+   "inputs": [
+    25
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 3653,
+   "y": 106,
+   "params": {},
+   "name": "dot44",
+   "inputs": [
+    22
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 3653,
+   "y": 3147,
+   "params": {},
+   "name": "dot45",
+   "inputs": [
+    91
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 3653,
+   "y": 3291,
+   "params": {},
+   "name": "dot46",
+   "inputs": [
+    92
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 3653,
+   "y": 3435,
+   "params": {},
+   "name": "dot47",
+   "inputs": [
+    93
+   ]
+  }
+ ],
+ "groups": [
+  {
+   "label": "L2/3",
+   "hue": 130,
+   "z": 0,
+   "pad": null,
+   "members": [
+    9,
+    10,
+    11,
+    12,
+    13
+   ]
+  },
+  {
+   "label": "L4",
+   "hue": 130,
+   "z": 0,
+   "pad": null,
+   "members": [
+    14,
+    15,
+    16,
+    17
+   ]
+  },
+  {
+   "label": "L5",
+   "hue": 130,
+   "z": 0,
+   "pad": null,
+   "members": [
+    18,
+    19,
+    20,
+    21
+   ]
+  },
+  {
+   "label": "L6",
+   "hue": 130,
+   "z": 0,
+   "pad": null,
+   "members": [
+    22,
+    23,
+    24,
+    25
+   ]
+  },
+  {
+   "label": "retina",
+   "hue": 205,
+   "z": 0,
+   "pad": null,
+   "members": [
+    3,
+    4
+   ]
+  },
+  {
+   "label": "LGN  thalamic relay",
+   "hue": 205,
+   "z": 0,
+   "pad": null,
+   "members": [
+    5,
+    6
+   ]
+  },
+  {
+   "label": "TRN  reticular shell",
+   "hue": 205,
+   "z": 0,
+   "pad": null,
+   "members": [
+    7,
+    8
+   ]
+  },
+  {
+   "label": "merge: every population into one stream",
+   "hue": 280,
+   "z": 0,
+   "pad": null,
+   "members": [
+    26,
+    27,
+    28,
+    29
+   ]
+  },
+  {
+   "label": "tracts  optic, radiation, collateral, feedback",
+   "hue": 205,
+   "z": 0,
+   "pad": null,
+   "members": [
+    30,
+    31,
+    32,
+    33
+   ]
+  },
+  {
+   "label": "local wiring  Potjans-Diesmann pair table",
+   "hue": 130,
+   "z": 0,
+   "pad": null,
+   "members": [
+    34
+   ]
+  },
+  {
+   "label": "stimulus  contrast onto the retinal sheet",
+   "hue": 55,
+   "z": 0,
+   "pad": null,
+   "members": [
+    36,
+    35
+   ]
+  },
+  {
+   "label": "background drive  scaled by K_bg",
+   "hue": 55,
+   "z": 0,
+   "pad": null,
+   "members": [
+    37,
+    38,
+    39,
+    40,
+    41,
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51
+   ]
+  },
+  {
+   "label": "readout  what the observer measures",
+   "hue": 280,
+   "z": 0,
+   "pad": null,
+   "members": [
+    52,
+    53,
+    54,
+    55,
+    57
+   ]
+  },
+  {
+   "label": "checkpoint  the simulation and its plasticity",
+   "hue": 0,
+   "z": 0,
+   "pad": null,
+   "members": [
+    56
+   ]
+  }
+ ]
+}

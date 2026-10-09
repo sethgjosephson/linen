@@ -1,0 +1,383 @@
+{
+ "format": 3,
+ "scenario": "sound localization",
+ "saved": "2026-09-16",
+ "build": [
+  "note",
+  "note",
+  "note",
+  "box",
+  "scatter",
+  "sphere",
+  "scatter",
+  "sphere",
+  "scatter",
+  "gather",
+  "connect",
+  "stimulus",
+  "stimulus",
+  "sphere",
+  "probe",
+  "sphere",
+  "probe",
+  "sphere",
+  "probe",
+  "checkpoint",
+  "chart"
+ ],
+ "nodes": [
+  {
+   "type": "note",
+   "x": -370,
+   "y": 60,
+   "built": 0,
+   "inputs": []
+  },
+  {
+   "type": "note",
+   "x": -351,
+   "y": 737,
+   "built": 1,
+   "inputs": []
+  },
+  {
+   "type": "note",
+   "x": 341,
+   "y": 515,
+   "built": 2,
+   "inputs": []
+  },
+  {
+   "type": "box",
+   "x": 60,
+   "y": 60,
+   "built": 3,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 60,
+   "y": 204,
+   "built": 4,
+   "inputs": [
+    3
+   ]
+  },
+  {
+   "type": "sphere",
+   "x": 300,
+   "y": 60,
+   "built": 5,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 300,
+   "y": 204,
+   "built": 6,
+   "inputs": [
+    5
+   ]
+  },
+  {
+   "type": "sphere",
+   "x": 648,
+   "y": 60,
+   "built": 7,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 648,
+   "y": 204,
+   "built": 8,
+   "inputs": [
+    7
+   ]
+  },
+  {
+   "type": "gather",
+   "x": 60,
+   "y": 416,
+   "built": 9,
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    4,
+    21,
+    24,
+    null
+   ]
+  },
+  {
+   "type": "connect",
+   "x": 60,
+   "y": 560,
+   "built": 10,
+   "inputs": [
+    9
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 704,
+   "built": 11,
+   "inputs": [
+    10,
+    23
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 848,
+   "built": 12,
+   "inputs": [
+    11,
+    26
+   ]
+  },
+  {
+   "type": "sphere",
+   "x": 240,
+   "y": 942,
+   "built": 13,
+   "inputs": []
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 992,
+   "built": 14,
+   "inputs": [
+    12,
+    13
+   ]
+  },
+  {
+   "type": "sphere",
+   "x": 240,
+   "y": 1086,
+   "built": 15,
+   "inputs": []
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 1136,
+   "built": 16,
+   "inputs": [
+    14,
+    15
+   ]
+  },
+  {
+   "type": "sphere",
+   "x": 240,
+   "y": 1230,
+   "built": 17,
+   "inputs": []
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 1280,
+   "built": 18,
+   "inputs": [
+    16,
+    17
+   ]
+  },
+  {
+   "type": "checkpoint",
+   "x": 60,
+   "y": 1424,
+   "built": 19,
+   "inputs": [
+    18
+   ]
+  },
+  {
+   "type": "chart",
+   "x": 60,
+   "y": 1568,
+   "built": 20,
+   "inputs": [
+    19
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 354,
+   "y": 347,
+   "params": {},
+   "name": "dot2",
+   "inputs": [
+    6
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 511,
+   "y": 106,
+   "params": {},
+   "name": "dot3",
+   "inputs": [
+    5
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 510,
+   "y": 674,
+   "params": {},
+   "name": "dot4",
+   "inputs": [
+    22
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 706,
+   "y": 350,
+   "params": {},
+   "name": "dot6",
+   "inputs": [
+    8
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 859,
+   "y": 106,
+   "params": {},
+   "name": "dot7",
+   "inputs": [
+    7
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 860,
+   "y": 813,
+   "params": {},
+   "name": "dot8",
+   "inputs": [
+    25
+   ]
+  }
+ ],
+ "groups": [
+  {
+   "label": "coincidence detectors",
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    3,
+    4
+   ]
+  },
+  {
+   "label": "left ear",
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    5,
+    6
+   ]
+  },
+  {
+   "label": "right ear",
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    7,
+    8
+   ]
+  },
+  {
+   "label": "clicks  one volley per ear, the right one late",
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    11,
+    12
+   ]
+  },
+  {
+   "label": "delay lines  axons at 100 um per ms",
+   "hue": 280,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    9,
+    10
+   ]
+  },
+  {
+   "label": "readout  three places along the row",
+   "hue": 280,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    20
+   ]
+  },
+  {
+   "label": "checkpoint",
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    19
+   ]
+  }
+ ]
+}

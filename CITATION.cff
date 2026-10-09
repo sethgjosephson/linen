@@ -1,0 +1,28 @@
+# Citation metadata (https://citation-file-format.github.io). The version
+# and the release date follow the release tag; the DOI is added when the
+# release is minted on Zenodo.
+cff-version: 1.2.0
+message: "If you use linen in published work, please cite it as below."
+type: software
+title: linen
+abstract: >-
+  An interactive sandbox for 3D spiking neural networks in the browser.
+  Neurons are points in micrometre space built through a procedural node
+  graph, simulated with Izhikevich 2007 dynamics and real conduction delays
+  on a reference engine, a WebGPU engine and a CUDA engine that share one
+  contract, with spike-timing plasticity, a validation battery against
+  published numbers, and export to Brian 2, CSV and Neo.
+authors:
+  - family-names: Josephson
+    given-names: Seth
+license: AGPL-3.0-or-later
+repository-code: https://github.com/sethgjosephson/linen
+url: https://linen.build
+version: 0.1.0
+keywords:
+  - spiking neural network
+  - Izhikevich model
+  - node graph
+  - WebGPU
+  - neuroscience
+  - simulation

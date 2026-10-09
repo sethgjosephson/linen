@@ -1,0 +1,457 @@
+{
+ "format": 3,
+ "scenario": "virtual patch rig",
+ "saved": "2026-09-16",
+ "build": [
+  "note",
+  "note",
+  "sphere",
+  "scatter",
+  "sphere",
+  "scatter",
+  "sphere",
+  "scatter",
+  "sphere",
+  "scatter",
+  "sphere",
+  "scatter",
+  "sphere",
+  "scatter",
+  "sphere",
+  "scatter",
+  "gather",
+  "connect",
+  "stimulus",
+  "probe",
+  "probe",
+  "probe",
+  "probe",
+  "probe",
+  "probe",
+  "probe",
+  "checkpoint",
+  "chart"
+ ],
+ "nodes": [
+  {
+   "type": "note",
+   "x": -370,
+   "y": 60,
+   "built": 0,
+   "inputs": []
+  },
+  {
+   "type": "note",
+   "x": 438,
+   "y": 400,
+   "built": 1,
+   "inputs": []
+  },
+  {
+   "type": "sphere",
+   "x": 60,
+   "y": 5,
+   "built": 2,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 60,
+   "y": 149,
+   "built": 3,
+   "inputs": [
+    2
+   ]
+  },
+  {
+   "type": "sphere",
+   "x": 300,
+   "y": 5,
+   "built": 4,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 300,
+   "y": 149,
+   "built": 5,
+   "inputs": [
+    4
+   ]
+  },
+  {
+   "type": "sphere",
+   "x": 618,
+   "y": 5,
+   "built": 6,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 618,
+   "y": 149,
+   "built": 7,
+   "inputs": [
+    6
+   ]
+  },
+  {
+   "type": "sphere",
+   "x": 936,
+   "y": 5,
+   "built": 8,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 936,
+   "y": 149,
+   "built": 9,
+   "inputs": [
+    8
+   ]
+  },
+  {
+   "type": "sphere",
+   "x": 1254,
+   "y": 5,
+   "built": 10,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 1254,
+   "y": 149,
+   "built": 11,
+   "inputs": [
+    10
+   ]
+  },
+  {
+   "type": "sphere",
+   "x": 1572,
+   "y": 5,
+   "built": 12,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 1572,
+   "y": 149,
+   "built": 13,
+   "inputs": [
+    12
+   ]
+  },
+  {
+   "type": "sphere",
+   "x": 1890,
+   "y": 5,
+   "built": 14,
+   "inputs": []
+  },
+  {
+   "type": "scatter",
+   "x": 1890,
+   "y": 149,
+   "built": 15,
+   "inputs": [
+    14
+   ]
+  },
+  {
+   "type": "gather",
+   "x": 60,
+   "y": 416,
+   "built": 16,
+   "params": {
+    "ports": 8
+   },
+   "inputs": [
+    3,
+    28,
+    29,
+    30,
+    31,
+    32,
+    33,
+    null
+   ]
+  },
+  {
+   "type": "connect",
+   "x": 60,
+   "y": 560,
+   "built": 17,
+   "inputs": [
+    16
+   ]
+  },
+  {
+   "type": "stimulus",
+   "x": 60,
+   "y": 704,
+   "built": 18,
+   "inputs": [
+    17,
+    null
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 848,
+   "built": 19,
+   "inputs": [
+    18,
+    null
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 992,
+   "built": 20,
+   "inputs": [
+    19,
+    null
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 1136,
+   "built": 21,
+   "inputs": [
+    20,
+    null
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 1280,
+   "built": 22,
+   "inputs": [
+    21,
+    null
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 1424,
+   "built": 23,
+   "inputs": [
+    22,
+    null
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 1568,
+   "built": 24,
+   "inputs": [
+    23,
+    null
+   ]
+  },
+  {
+   "type": "probe",
+   "x": 60,
+   "y": 1712,
+   "built": 25,
+   "inputs": [
+    24,
+    null
+   ]
+  },
+  {
+   "type": "checkpoint",
+   "x": 60,
+   "y": 1856,
+   "built": 26,
+   "inputs": [
+    25
+   ]
+  },
+  {
+   "type": "chart",
+   "x": 60,
+   "y": 2000,
+   "built": 27,
+   "inputs": [
+    26
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 356,
+   "y": 211,
+   "params": {},
+   "name": "dot2",
+   "inputs": [
+    5
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 675,
+   "y": 222,
+   "params": {},
+   "name": "dot4",
+   "inputs": [
+    7
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 991,
+   "y": 248,
+   "params": {},
+   "name": "dot6",
+   "inputs": [
+    9
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 1310,
+   "y": 262,
+   "params": {},
+   "name": "dot8",
+   "inputs": [
+    11
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 1629,
+   "y": 284,
+   "params": {},
+   "name": "dot10",
+   "inputs": [
+    13
+   ]
+  },
+  {
+   "type": "pin",
+   "x": 1948,
+   "y": 298,
+   "params": {},
+   "name": "dot12",
+   "inputs": [
+    15
+   ]
+  }
+ ],
+ "groups": [
+  {
+   "label": "RS  regular spiking",
+   "hue": 0,
+   "z": 0,
+   "pad": null,
+   "members": [
+    2,
+    3
+   ]
+  },
+  {
+   "label": "IB  intrinsic burst",
+   "hue": 50,
+   "z": 0,
+   "pad": null,
+   "members": [
+    4,
+    5
+   ]
+  },
+  {
+   "label": "CH  chattering",
+   "hue": 100,
+   "z": 0,
+   "pad": null,
+   "members": [
+    6,
+    7
+   ]
+  },
+  {
+   "label": "FS  fast spiking",
+   "hue": 150,
+   "z": 0,
+   "pad": null,
+   "members": [
+    8,
+    9
+   ]
+  },
+  {
+   "label": "LTS  low threshold",
+   "hue": 200,
+   "z": 0,
+   "pad": null,
+   "members": [
+    10,
+    11
+   ]
+  },
+  {
+   "label": "TC  thalamocortical",
+   "hue": 250,
+   "z": 0,
+   "pad": null,
+   "members": [
+    12,
+    13
+   ]
+  },
+  {
+   "label": "RZ  resonator",
+   "hue": 300,
+   "z": 0,
+   "pad": null,
+   "members": [
+    14,
+    15
+   ]
+  },
+  {
+   "label": "readout  a probe per cell",
+   "hue": 25,
+   "z": 0,
+   "pad": null,
+   "members": [
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25
+   ]
+  },
+  {
+   "label": "the electrode  a ramp to 12 over 3 s, then held",
+   "hue": 55,
+   "z": 0,
+   "pad": null,
+   "members": [
+    16,
+    17,
+    18
+   ]
+  },
+  {
+   "label": "checkpoint",
+   "hue": 0,
+   "z": 0,
+   "pad": null,
+   "members": [
+    26,
+    27
+   ]
+  }
+ ]
+}

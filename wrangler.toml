@@ -1,0 +1,14 @@
+name = "neuron-playground"
+main = "worker.js"
+compatibility_date = "2026-08-01"
+keep_vars = true
+
+# "1" serves the site to everyone; anything else puts it behind the
+# SITE_PASSWORD secret (worker.js)
+[vars]
+SITE_OPEN = "1"
+
+[assets]
+directory = "."
+binding = "ASSETS"
+run_worker_first = true

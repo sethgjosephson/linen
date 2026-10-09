@@ -1,0 +1,22 @@
+#!/bin/sh
+# Pre-commit gate: the pure-JS test suites.
+# Install with
+#   git config core.hooksPath tools/hooks
+# It runs tools/test.mjs --quick, which is every src/ and host/ *.test.mjs and nothing that needs a GPU, a built binary or a spawned server.
+# About five seconds.
+# The cuda suites, the server test and the statistics battery are not run here; run `node tools/test.mjs` and validate.html by hand before a push.
+#
+# NODE points at the interpreter; D:/Tools/node is where this project keeps it when node is not on PATH.
+NODE="$(command -v node || true)"
+[ -z "$NODE" ] && [ -x "/d/Tools/node/node.exe" ] && NODE="/d/Tools/node/node.exe"
+[ -z "$NODE" ] && [ -x "D:/Tools/node/node.exe" ] && NODE="D:/Tools/node/node.exe"
+if [ -z "$NODE" ]; then
+  echo "pre-commit: no node found; skipping the test gate" >&2
+  exit 0
+fi
+"$NODE" tools/test.mjs --quick || {
+  echo "" >&2
+  echo "pre-commit: tests failed. Fix them, or commit with --no-verify if you" >&2
+  echo "know why (a work-in-progress on another machine, say)." >&2
+  exit 1
+}
