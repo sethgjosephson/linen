@@ -1,6 +1,16 @@
 * { margin:0; padding:0; box-sizing:border-box; border-radius:0 !important; }
 /* the page is hidden until main.js has drawn its icons, so the text labels the buttons start with are never seen */
 html.app:not(.ready) body > * { visibility:hidden; }
+/* the splash over the app: black, the wordmark, one line, three links in the app's button style */
+#splash { position:fixed; inset:0; z-index:1000; background:#000; display:flex; align-items:center; justify-content:center; }
+#splash[hidden] { display:none; }
+.splashcard { display:flex; flex-direction:column; align-items:center; gap:22px; padding:24px; max-width:92vw; }
+.splashmark { width:min(420px, 70vw); height:auto; display:block; }
+.splashline { color:#aaa; font-size:12px; letter-spacing:0.5px; margin:0; text-align:center; }
+.splashrow { display:flex; gap:10px; }
+.splashrow button, .splashlink { font:inherit; font-size:11px; letter-spacing:1px; color:#ddd; background:#000;
+  border:1px solid #444; padding:6px 14px; text-decoration:none; cursor:pointer; }
+.splashrow button:hover, .splashlink:hover { color:#fff; border-color:#888; }
 /* Text size for the whole app, from the TEXT slider in the top bar, kept per
    machine. It scales the surfaces made of text rather than the font size
    alone: a size that grows while the padding around it, the height of its

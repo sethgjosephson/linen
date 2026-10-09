@@ -3952,5 +3952,15 @@ for(const [id, name, text] of [
 installTips();
 // the page is drawn only now that its buttons carry their icons (index.html hides it until this class is set)
 document.documentElement.classList.add('ready');
+// The splash shows once per browser, and again from the wordmark; OPEN or Escape puts it away.
+{
+  const splash = document.getElementById('splash'), SEEN = 'linen-splash-v1';
+  let seen = false; try { seen = localStorage.getItem(SEEN) === '1'; } catch(e){}
+  const put = () => { splash.hidden = true; try { localStorage.setItem(SEEN, '1'); } catch(e){} };
+  document.getElementById('splashopen').onclick = put;
+  document.getElementById('apptitle').onclick = e => { e.preventDefault(); splash.hidden = false; document.getElementById('splashopen').focus(); };
+  window.addEventListener('keydown', e => { if(e.key === 'Escape' && !splash.hidden) put(); });
+  if(!seen){ splash.hidden = false; document.getElementById('splashopen').focus(); }
+}
 window.editor = editor; window.viewer = viewer; window.io = io; window.tabs = tabs;   // debug access
 renderTabs();

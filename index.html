@@ -17,7 +17,7 @@
 <div id="app">
   <!-- The top bar carries what acts on the document; anything that controls the running simulation or what the 3D view shows lives in the viewer's own bar, next to the thing it changes. -->
   <div id="topbar">
-    <a id="apptitle" href="./" title="linen"><img class="wordmark" src="brand/linen-plain-dark.svg" alt="linen"></a>
+    <a id="apptitle" href="#" title="about linen"><img class="wordmark" src="brand/linen-plain-dark.svg" alt="linen"></a>
     <span id="netsize" title="neurons and synapses in the wired network"></span>
     <span id="status"></span>
     <!-- Brains are not in this path: they belong to the checkpoint node, which owns the weights. -->
@@ -221,6 +221,18 @@
   </div>
   <div id="vsplit"></div>
   <div id="hsplit"></div>
+</div>
+<!-- The splash: the wordmark, one line, the repository. Shown on a browser's first visit and from the wordmark in the top bar. -->
+<div id="splash" hidden>
+  <div class="splashcard">
+    <img class="splashmark" src="brand/linen-dark.svg" alt="linen">
+    <p class="splashline">A sandbox for 3D spiking neural networks in the browser.</p>
+    <div class="splashrow">
+      <button id="splashopen" type="button">OPEN</button>
+      <a class="splashlink" href="https://github.com/sethgjosephson/linen" target="_blank" rel="noopener">GITHUB</a>
+      <a class="splashlink" href="docs.html" target="_blank" rel="noopener">DOCS</a>
+    </div>
+  </div>
 </div>
 <script type="module" src="src/main.js"></script>
 <script>

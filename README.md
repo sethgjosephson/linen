@@ -180,7 +180,7 @@ Tab menu scenes are at mouse density with unitary weights, in µm. Experiment sc
 
 ## Running without the browser
 
-`tools/linen.mjs` runs a scene from a shell on the reference or CUDA engine; input nodes are not driven, and `run.json` records it.
+`tools/linen.mjs` runs a scene from a shell on the reference or CUDA engine. An input node fed by a test signal is driven on simulated time; one fed by a curriculum, a device or footage is not, and `run.json` records it.
 
 ```
 node tools/linen.mjs run "balanced random net" --seconds 2 --out runs/brn
@@ -188,7 +188,7 @@ node tools/linen.mjs run "balanced random net" --seconds 2 --out runs/brn
 
 | | |
 |---|---|
-| Writes | `run.json`, `rates.csv`, `spikes.txt` (Neo's ASCII layout), `cells.csv`, `settings.json`; `tools/linen_read.py` loads them into pandas and Neo |
+| Writes | `run.json`, `rates.csv`, `release.csv` (graded populations, percent release), `spikes.txt` (Neo's ASCII layout), `cells.csv`, `settings.json`; `tools/linen_read.py` loads them into pandas and Neo |
 | Options | `--over "connect:*:wInh=2.5"`, `--seed`, `--res`, `--bin`, `--tick`, `--cells`, `--engine cpu\|cuda\|remote`, `--host ws://...`; an unknown setting is an error |
 | Battery band | 1 to 30 Hz excitatory, 1 to 40 Hz inhibitory (Brunel 2000), full density, two seconds |
 | This run | 24,127 cells, 14,402,930 synapses; 3.44 Hz excitatory, 10.86 Hz inhibitory |

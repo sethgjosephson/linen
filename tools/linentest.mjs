@@ -78,5 +78,44 @@ const nothing = cli('run', 'a scene by no such name', '--quiet');
 ok('an unknown scene is refused, with the list', nothing.status !== 0
   && /no scene file and no scene called/.test(nothing.stderr || ''), String(nothing.status));
 
+// A graded population never spikes, so a spike count reads it as silent whatever it does; the run reads it as release, the way a probe does.
+// An input node fed by the test signal is driven on simulated time, so a bar on a population moves its rate, and an amplitude of zero on the same node does not.
+const gnode = (id, type, params, inputs = []) => ({ id, type, x:0, y:0, on:true, name:type + ' ' + id, params, inputs:inputs.map(k => k === null ? null : { id:k }) });
+const fgRow = 1 + 8, flRow = 1 + 7;        // the cell type node's row is the type table index plus one; FG and FL are rows 8 and 7
+const gradedScene = path.join(tmp, 'graded.json');
+fs.writeFileSync(gradedScene, JSON.stringify({ v:1, format:13, nextId:100, scenarioName:'graded and driven', nodes:[
+  gnode(1, 'sphere', { center:[0, 0, 0], radius:150 }),
+  gnode(2, 'scatter', { fill:0, count:120, tag:'g' }, [1]),
+  gnode(3, 'scatter', { fill:0, count:120, tag:'s', seed:2 }, [1]),
+  gnode(4, 'gather', { ports:2 }, [2, 3]),
+  gnode(5, 'celltype', { row:fgRow, tag:'g', frac:1 }, [4]),
+  gnode(6, 'celltype', { row:flRow, tag:'s', frac:1 }, [5]),
+  gnode(7, 'connect', { prob:0 }, [6]),
+  gnode(8, 'stimulus', { tag:'g', current:4, mode:0, radius:5000 }, [7, null]),
+  gnode(10, 'testsignal', { pattern:0, period:300, direction:0 }),
+  gnode(9, 'input', { tag:'s', amp:60, jitter:0, transient:0, cols:8, rows:8 }, [8, null, 10]),
+  gnode(11, 'checkpoint', { plast:0 }, [9]),
+] }));
+const dirG = path.join(tmp, 'g'), dirG0 = path.join(tmp, 'g0');
+const g = cli('run', gradedScene, '--seconds', '0.6', '--bin', '200', '--out', dirG, '--quiet');
+ok('a scene with a graded population and a test signal runs', g.status === 0, (g.stderr || '').trim().split('\n').pop());
+const g0 = cli('run', gradedScene, '--seconds', '0.6', '--bin', '200', '--out', dirG0, '--quiet', '--over', 'input:*:amp=0');
+ok('and with the input at zero amplitude', g0.status === 0, (g0.stderr || '').trim().split('\n').pop());
+if(g.status === 0 && g0.status === 0){
+  const G = JSON.parse(fs.readFileSync(path.join(dirG, 'run.json'), 'utf8'));
+  const G0 = JSON.parse(fs.readFileSync(path.join(dirG0, 'run.json'), 'utf8'));
+  const pg = G.populations.find(p => p.tag === 'g'), ps = G.populations.find(p => p.tag === 's');
+  ok('the graded population is marked graded and fires no spikes', pg && pg.graded === true && pg.meanHz === 0, JSON.stringify(pg));
+  ok('its release under a drive above its release threshold is read', pg && pg.releasePct > 1, JSON.stringify(pg));
+  ok('a spiking population carries no release', ps && ps.graded === undefined && ps.releasePct === undefined, JSON.stringify(ps));
+  const rel = fs.existsSync(path.join(dirG, 'release.csv')) ? fs.readFileSync(path.join(dirG, 'release.csv'), 'utf8').trim().split('\n') : [];
+  ok('release.csv has a column for the graded population and a row per bin', rel.length === 4 && rel[0].split(',').length === 2,
+    rel.join(' / '));
+  ok('the test signal input is driven and said to be', G.inputsDriven === true && G.drivenInputs.length === 1, JSON.stringify(G.drivenInputs));
+  const s0 = G0.populations.find(p => p.tag === 's');
+  ok('the bar moves the rate of the population it drives', ps && s0 && ps.meanHz > s0.meanHz + 1,
+    (ps && ps.meanHz) + ' Hz driven against ' + (s0 && s0.meanHz) + ' Hz at zero amplitude');
+}
+
 fs.rmSync(tmp, { recursive:true, force:true });
 report('linen');

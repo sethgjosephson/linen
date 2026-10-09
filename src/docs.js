@@ -1044,7 +1044,8 @@ title:'overview', html:`
 <h2>the tool</h2>
 <p><i>tools/linen.mjs</i>, in the repository (<a href="https://github.com/sethgjosephson/linen">github.com/sethgjosephson/linen</a>).</p>
 <p>Takes a scene file or a Tab menu scene's name, computes it, and runs it on the reference or CUDA engine.</p>
-<p>Leaves input nodes undriven: a scene that takes a signal through one runs without it, and the tool reports it.</p>
+<p>Drives an input node fed by a test signal on simulated time.</p>
+<p>Leaves an input fed by a curriculum, a device or footage undriven, and reports it.</p>
 <h2>commands</h2>
 <pre>node tools/linen.mjs run "mouse cortical column" --seconds 10 --out runs/col</pre>
 <p>Ten simulated seconds of the column, written to runs/col.</p>
@@ -1071,6 +1072,7 @@ title:'overview', html:`
 <table>
 <tr><td class="k">run.json</td><td class="d">The scene, the overridden settings, the size, the engine, the commit, the versions, the wall time.</td></tr>
 <tr><td class="k">rates.csv</td><td class="d">One row per bin, one column per population, in Hz.</td></tr>
+<tr><td class="k">release.csv</td><td class="d">One row per bin, one column per graded population, mean release in percent, read as a probe reads it.</td></tr>
 <tr><td class="k">spikes.txt</td><td class="d">Spike times in milliseconds, one line per cell, the layout Neo's AsciiSpikeTrainIO reads.</td></tr>
 <tr><td class="k">cells.csv</td><td class="d">Each line's cell: population, the node that made it, its index there, cell type, position.</td></tr>
 <tr><td class="k">settings.json</td><td class="d">Every node in the computed graph with the settings it ran; repeats the run exactly.</td></tr>

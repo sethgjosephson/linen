@@ -12,10 +12,12 @@
 //   --over SPEC     settings on nodes: type:tag-or-name:key=value, several
 //                   separated by semicolons, * for every node of that type.
 //                   Repeatable. Settings are read from the nodes, so a run
-//                   here is the run the app would make of the same scene,
-//                   except that input nodes are not driven: a scene's input
-//                   maps get no frames, which the run says and run.json
-//                   records (inputsDriven false, with the maps named).
+//                   here is the run the app would make of the same scene.
+//                   An input node fed by a test signal is driven on
+//                   simulated time, the way a training run drives it; an
+//                   input fed by a curriculum, a microphone, a webcam or
+//                   footage gets no frames, which the run says and run.json
+//                   records (inputsDriven false, with those maps named).
 //   --engine NAME   cpu (the reference engine, in this process), cuda, or
 //                   remote (an engine at --host that speaks the protocol over
 //                   a WebSocket: host/host.mjs, or a custom engine)
@@ -37,6 +39,10 @@
 //   run.json     the scene, the settings that were overridden, the size, the
 //                engine, the commit, the versions and the wall time
 //   rates.csv    one row per bin, one column per population, in Hz
+//   release.csv  one row per bin, one column per graded population (cells
+//                that never spike), the mean release in percent of its
+//                maximum, read from the potentials the way a probe reads it;
+//                written only when the scene has a graded population
 //   spikes.txt   spike times in milliseconds, one line per cell, the layout
 //                Neo's AsciiSpikeTrainIO reads
 //   cells.csv    the cell behind each line of spikes.txt: population, source
@@ -48,10 +54,11 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { NODE_DEFS, NEURON_TYPES, computeNode, setResolution, setMaxSyn, wireConnect, assembleConnect } from '../src/nodes.js';
+import { NODE_DEFS, NEURON_TYPES, computeNode, setResolution, setMaxSyn, wireConnect, assembleConnect, setFileReader, gradedArrays, engineTypes } from '../src/nodes.js';
 import os from 'node:os';
-import { initMessage } from '../src/document.js';
-import { checkHello, missingTerms, ignoredCustom, customNote } from '../src/protocol.js';
+import { initMessage, engineInputs } from '../src/document.js';
+import { checkHello, missingTerms, ignoredCustom, customNote, answers } from '../src/protocol.js';
+import { IORuntime } from '../src/io.js';
 import { migrateScene } from '../src/migrate.js';
 import { loadPlugin, importer, checkScenePlugins } from '../src/plugins.js';
 import { ALL_SCENARIOS } from '../src/experiments.js';
@@ -151,6 +158,11 @@ const asFile = path.resolve(ROOT, target);
 if(/\.json$/i.test(target) && fs.existsSync(asFile)){
   const own = path.join(path.dirname(asFile), '..', 'nodes');
   if(path.basename(path.dirname(asFile)) === 'scenes' && fs.existsSync(own) && !opt.nodes.some(d => path.resolve(ROOT, d) === path.resolve(own))) opt.nodes.push(own);
+  // A scene in a project's scenes folder reads the project's files (points files, connections files, meshes) the way the page does.
+  if(path.basename(path.dirname(asFile)) === 'scenes'){
+    const projDir = path.join(path.dirname(asFile), '..');
+    setFileReader(async p => fs.readFileSync(path.join(projDir, p)));
+  }
   for(const d of opt.nodes) await loadNodeFolder(path.resolve(ROOT, d));
   const loaded = editorFromScene(JSON.parse(fs.readFileSync(asFile, 'utf8')));
   ed = loaded.ed;
@@ -189,13 +201,18 @@ if(net.delayClamped) say('note: ' + net.delayClamped.toLocaleString() + ' synaps
   + net.delayMax + ' ms delay ceiling and are clamped to it');
 
 // ---- the engine
-// Input maps are not driven here: no frame reaches an input node, so a scene that reads a signal through one runs without it.
-// Said on the console and in run.json rather than left to be found.
-const undriven = (net.inputMaps || []).map((m, i) => m.label || m.tag || ('map ' + i));
+// An input map fed by the test signal (source 0, the bar sweep) is driven on simulated time through the stimulus runtime a training run uses, so its frames are the ones the trainer would post.
+// A curriculum needs the glyph atlas only a browser can draw, and a microphone, a webcam or footage needs a device or a folder, so those maps get no frame: said on the console and in run.json rather than left to be found.
+// The engine receives only the driven maps, so the map index of every frame is its index in that list.
+const allMaps = net.inputMaps || [];
+const drivenMaps = allMaps.filter(m => m.source === 0);
+const undriven = allMaps.filter(m => m.source !== 0).map((m, i) => m.tag || ('map ' + i));
 if(undriven.length)
   console.warn('linen: this scene has ' + undriven.length + ' input map' + (undriven.length > 1 ? 's' : '') +
-    ' (' + undriven.join(', ') + ') and this tool does not drive them: its input nodes get no drive');
-const init = { ...initMessage(net), inputs:[] };
+    ' (' + undriven.join(', ') + ') fed by a curriculum, a device or footage, which this tool does not drive: those input nodes get no drive');
+if(drivenMaps.length) say('driving ' + drivenMaps.length + ' input map' + (drivenMaps.length > 1 ? 's' : '') +
+  ' from the test signal (' + drivenMaps.map(m => m.tag).join(', ') + ')');
+const init = { ...initMessage(net), inputs:engineInputs({ inputMaps:drivenMaps }) };
 let post, close;
 const onState = [];
 if(opt.engine === 'cpu'){
@@ -267,6 +284,24 @@ for(let i = 0; i < n; i++){
   if(!pops.has(t)) pops.set(t, { cells:[], bin:0, bins:[] });
   pops.get(t).cells.push(i);
 }
+// A graded cell never spikes, so a population of them reads as its mean release, (v - thr) / slope clamped to [0, 1], from the potentials the engine streams when asked: the probe's readout (probeview.js), sampled every tick.
+// A population that mixes graded and spiking cells reads as spikes, as the probe reads it.
+const G = gradedArrays(net.ntype, engineTypes());
+const gradedPops = G ? [...pops.values()].filter(p => p.cells.every(i => G.grd[i])) : [];
+for(const p of gradedPops){ p.rel = 0; p.relBins = []; }
+let releaseRead = gradedPops.length > 0;
+if(releaseRead && !answers(hello, 'sendV')){
+  console.warn('linen: the ' + hello.engine + ' engine does not stream membrane potentials, so the ' + gradedPops.length +
+    ' graded population' + (gradedPops.length > 1 ? 's' : '') + ' (cells that never spike) get no release readout');
+  releaseRead = false;
+}
+if(releaseRead) post({ cmd:'sendV', on:true });
+let io = null;
+if(drivenMaps.length){
+  io = new IORuntime(e => { console.error('linen: input: ' + e); close(); process.exit(1); });
+  io.attach({ postMessage:d => post(d) }, drivenMaps, init.seed);
+  io.last = -1e9;                                    // the stimulus clock is simulated time and starts at zero
+}
 const want = Math.min(opt.cells, n);
 const stride = want >= n ? 1 : Math.max(1, Math.floor(n/want));
 const kept = [];
@@ -276,9 +311,19 @@ const events = [];                                   // [t_ms, row] into kept
 const runStart = Date.now();
 let spikes = 0;
 for(let t = 0; t < ms; t += opt.tick){
+  if(io) io.frame(t);
   post({ cmd:'tick', steps:opt.tick });
   const st = await waitFrame();
   const fired = st.fired;
+  if(releaseRead){
+    if(!st.v){ console.error('linen: the engine was asked for membrane potentials and sent none'); close(); process.exit(1); }
+    const v = st.v;
+    for(const p of gradedPops){
+      let r = 0;
+      for(const i of p.cells) r += Math.min(1, Math.max(0, (v[i] - G.thr[i])/G.slope[i]));
+      p.rel += opt.tick*r/p.cells.length;
+    }
+  }
   for(let i = 0; i < n; i++){
     const f = fired[i];
     if(!f) continue;
@@ -291,6 +336,7 @@ for(let t = 0; t < ms; t += opt.tick){
     for(const p of pops.values()){
       p.bins.push(p.bin/(p.cells.length*opt.bin/1000));
       p.bin = 0;
+      if(releaseRead && p.relBins){ p.relBins.push(100*p.rel/opt.bin); p.rel = 0; }
     }
     if(!opt.quiet && ((t + opt.tick) % 5000 === 0))
       process.stdout.write('\r' + ((t + opt.tick)/1000) + ' s of ' + (ms/1000) + ' simulated');
@@ -318,6 +364,11 @@ const binCount = pops.values().next().value.bins.length;
 const series = [...pops].map(([tag, p]) => ({ label:tag,
   points:p.bins.map((hz, k) => [(k + 1)*opt.bin, hz]) }));
 fs.writeFileSync(path.join(dir, 'rates.csv'), multiSeriesCsv(series));
+if(releaseRead){
+  const gp = [...pops].filter(([, p]) => p.relBins);
+  fs.writeFileSync(path.join(dir, 'release.csv'), csv(['t_ms', ...gp.map(([tag]) => tag + '_pct')],
+    gp[0][1].relBins.map((_, k) => [(k + 1)*opt.bin, ...gp.map(([, p]) => +p.relBins[k].toFixed(4))])));
+}
 fs.writeFileSync(path.join(dir, 'spikes.txt'), spikeTrainsAscii(events, kept.length));
 fs.writeFileSync(path.join(dir, 'cells.csv'), csv(
   ['row', 'cell', 'population', 'source_node', 'index_in_source', 'cell_type', 'x_um', 'y_um', 'z_um'],
@@ -329,11 +380,14 @@ fs.writeFileSync(path.join(dir, 'settings.json'), JSON.stringify(
 const run = {
   scene:sceneName, source, resolution:opt.res, seconds:opt.seconds, binMs:opt.bin, tickMs:opt.tick,
   inputsDriven:!undriven.length, ...(undriven.length ? { undrivenInputs:undriven } : {}),
+  drivenInputs:drivenMaps.map(m => m.tag),
   overrides:applied, engine:opt.engine === 'cpu' ? 'cpu (src/simworker.js, the reference)'
     : opt.engine === 'cuda' ? 'cuda (cuda/engine.cu)' : 'remote (' + hello.engine + ' at ' + opt.host + ')',
   cells:n, synapses:net.synCount, seed:init.seed,
   populations:[...pops].map(([tag, p]) => ({ tag, cells:p.cells.length,
-    meanHz:+(p.bins.reduce((a, b) => a + b, 0)/Math.max(1, binCount)).toFixed(3) })),
+    meanHz:+(p.bins.reduce((a, b) => a + b, 0)/Math.max(1, binCount)).toFixed(3),
+    ...(p.relBins ? { graded:true, releasePct:releaseRead
+      ? +(p.relBins.reduce((a, b) => a + b, 0)/Math.max(1, p.relBins.length)).toFixed(3) : null } : {}) })),
   spikes, meanHz:+(spikes/(n*ms/1000)).toFixed(3),
   cellsWritten:kept.length, everyNthCell:stride,
   delayClamped:net.delayClamped || 0,
@@ -342,6 +396,9 @@ const run = {
   node:process.version, when:new Date().toString(),
 };
 fs.writeFileSync(path.join(dir, 'run.json'), JSON.stringify(run, null, 1));
-say('wrote ' + path.relative(ROOT, dir).replace(/\\/g, '/') + ': run.json, rates.csv, spikes.txt, cells.csv, settings.json');
+say('wrote ' + path.relative(ROOT, dir).replace(/\\/g, '/') + ': run.json, rates.csv, ' + (releaseRead ? 'release.csv, ' : '') +
+  'spikes.txt, cells.csv, settings.json');
 for(const p of run.populations)
-  say('  ' + p.tag.padEnd(16) + String(p.cells).padStart(8) + ' cells' + p.meanHz.toFixed(2).padStart(9) + ' Hz');
+  say('  ' + p.tag.padEnd(16) + String(p.cells).padStart(8) + ' cells' + (p.graded
+    ? (p.releasePct === null ? '   graded, no readout' : p.releasePct.toFixed(1).padStart(9) + ' % release (graded)')
+    : p.meanHz.toFixed(2).padStart(9) + ' Hz'));
