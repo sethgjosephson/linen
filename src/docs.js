@@ -472,7 +472,7 @@ export const PAGES = [
   { id:'overview',
 title:'overview', html:`
 <h1><img src="brand/linen-dark.svg" alt="linen" style="height:2.4em;display:block;margin:6px 0 14px 0"></h1>
-<p>A sandbox for building and running 3D spiking neural networks in the browser.</p>
+<p>A sandbox for building and running 3D spiking neural networks.</p>
 <h2>at a glance</h2>
 <table>
 <tr><td class="k">network</td><td class="d">Described by a node graph; data flows from top to bottom.</td></tr>

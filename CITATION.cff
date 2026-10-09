@@ -6,7 +6,7 @@ message: "If you use linen in published work, please cite it as below."
 type: software
 title: linen
 abstract: >-
-  An interactive sandbox for 3D spiking neural networks in the browser.
+  An interactive sandbox for 3D spiking neural networks.
   Neurons are points in micrometre space built through a procedural node
   graph, simulated with Izhikevich 2007 dynamics and real conduction delays
   on a reference engine, a WebGPU engine and a CUDA engine that share one
