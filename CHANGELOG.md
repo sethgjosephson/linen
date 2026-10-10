@@ -18,6 +18,8 @@ release lists the number of each that it reads and writes:
 | headless run folder (`run.json`, `rates.csv`, `spikes.txt`, `cells.csv`, `settings.json`) | as written by `tools/linen.mjs` | `tools/linen_read.py` |
 | engine init message | protocol 2 | `src/protocol.js`, refused on mismatch by every engine |
 
-## Unreleased
+## 0.1.0 (2026-10-10)
 
-The first public release.
+The first public release: the node graph, the three engines on one
+contract, the scenes, the headless runner and the validation battery,
+reading and writing the file numbers in the table above.
