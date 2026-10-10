@@ -1,6 +1,15 @@
-# linen
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="brand/linen-dark.svg">
+    <img src="brand/linen-light.svg" alt="linen" width="320">
+  </picture>
+</p>
 
-linen is an interactive sandbox for 3D spiking neural networks.
+<p align="center">A sandbox for 3D spiking neural networks.</p>
+
+<p align="center"><b><a href="https://linen.build">Try it in your browser</a></b> · <a href="#quick-start">Run it locally</a> · <a href="https://linen.build/docs">Docs</a></p>
+
+<p align="center"><img src="figures/readme/everynode.gif" alt="The every node scene turning in the viewer: one neuron picked with its axon and dendrite connections drawn, the shapes its input shows, a burst in its membrane trace and the rates of four populations" width="900"></p>
 
 Each neuron has a position, typed connections (axon out, dendrite in) and biophysical properties that drive its spiking.
 
@@ -11,16 +20,6 @@ Three engines (a browser reference, WebGPU, CUDA) run one contract.
 All spatial units are **micrometers** (velocities in µm/ms; 100 µm/ms = 0.1 m/s, the unmyelinated intracortical range). Delays are distance / velocity in ms.
 
 Built on published models (sources below) for learning and exploring; not a scientific instrument. The docs' limitations page lists what the model leaves out and what each choice costs.
-
-| The model | |
-|---|---|
-| Cells | Izhikevich 2007 point neurons on the measured chapter 8 rows (RS, IB, CH, FS, LTS, TC, RZ) or the seven 2003 presets |
-| Step | One millisecond |
-| Connectivity | Gaussian distance kernels and population pair tables, drawn at wiring time; lognormal weights |
-| Synapses | Current kicks, exponentials or conductances |
-| Plasticity | Pair and triplet STDP; heterosynaptic, transmitter, inhibitory, scaling, short-term and consolidation terms; each from its published source |
-| Export | CSV tables, Neo spike trains, or a Brian 2 case reproducing the reference engine spike for spike |
-| Validation | A battery holds the scenes to published rates |
 
 ## Quick start
 
@@ -44,11 +43,10 @@ Open http://localhost:8173.
 |---|---|
 | `serve.py` | Serves files uncached; owns the project folder (`./project`, or `--project PATH`) and its file API; starts the CUDA engine host for training |
 | Another static server | Runs the graph and simulation; scenes and brains fall back to browser storage, as the top bar shows |
-| `wrangler.toml`, `worker.js` | Hosting as a Cloudflare Worker with static assets; pushes to main deploy once the repo is connected |
-| `SITE_OPEN` | "1" is public; anything else is HTTP Basic Auth with the SITE_PASSWORD secret, refused while it is unset |
-| `.assetsignore` | Keeps tools, tests and documents out of the deploy |
 
 ## Interface
+
+<p align="center"><img src="figures/readme/interface.png" alt="The mouse cortical column in the viewer with one neuron's connections drawn, its membrane trace and the rate of each layer, the node graph below with a box per layer, and a cell type's settings on the right" width="900"></p>
 
 | Panel | |
 |---|---|
@@ -111,6 +109,16 @@ A project's `nodes/*.js` files are node modules: the default export receives `re
 
 ## The science inside
 
+| The model | |
+|---|---|
+| Cells | Izhikevich 2007 point neurons on the measured chapter 8 rows (RS, IB, CH, FS, LTS, TC, RZ) or the seven 2003 presets |
+| Step | One millisecond |
+| Connectivity | Gaussian distance kernels and population pair tables, drawn at wiring time; lognormal weights |
+| Synapses | Current kicks, exponentials or conductances |
+| Plasticity | Pair and triplet STDP; heterosynaptic, transmitter, inhibitory, scaling, short-term and consolidation terms; each from its published source |
+| Export | CSV tables, Neo spike trains, or a Brian 2 case reproducing the reference engine spike for spike |
+| Validation | A battery holds the scenes to published rates |
+
 | | |
 |---|---|
 | Membrane | Izhikevich (2007): C dv/dt = k (v − vr)(v − vt) − u + I, per type in pF, mV and pA (MODEL.md section 1) |
@@ -143,6 +151,8 @@ A project's `nodes/*.js` files are node modules: the default export receives `re
 | Tools | `tools/engine_template.py` (leaky integrate-and-fire, Python); `node tools/enginecheck.mjs ws://host:port`; ENGINE.md section 15 |
 
 ## Scenarios
+
+<p align="center"><img src="figures/readme/column.gif" alt="The mouse cortical column turning, with one neuron's connections drawn through the layers" width="540"></p>
 
 Tab menu scenes are at mouse density with unitary weights, in µm. Experiment scenes (`src/experiments.js`) load by name, `?scenario=the weave`, or from the trainer. Each names its populations and carries probes and a chart.
 
@@ -268,6 +278,14 @@ Shipped: the battery; STDP, homeostasis and the Zenke set; per-pathway rules; th
 Also shipped: brain files, projects, scene tabs; OBJ, glTF, CSV and PLY import; encoders, curricula, analysis and chart nodes.
 
 Open: selection tools with stimulation and virtual lesioning; an LFP-proxy probe; mean-field detail for distant regions.
+
+## Hosting
+
+| | |
+|---|---|
+| `wrangler.toml`, `worker.js` | Hosting as a Cloudflare Worker with static assets; pushes to main deploy once the repo is connected |
+| `SITE_OPEN` | "1" is public; anything else is HTTP Basic Auth with the SITE_PASSWORD secret, refused while it is unset |
+| `.assetsignore` | Keeps tools, tests and documents out of the deploy |
 
 ## Citing
 
