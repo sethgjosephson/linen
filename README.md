@@ -11,15 +11,19 @@
 
 <p align="center"><img src="figures/readme/everynode.gif" alt="The every node scene turning in the viewer: one neuron picked with its axon and dendrite connections drawn, the shapes its input shows, a burst in its membrane trace and the rates of four populations" width="900"></p>
 
-Each neuron has a position, typed connections (axon out, dendrite in) and biophysical properties that drive its spiking.
+Welcome! I hope you enjoy using linen. Build large networks of neurons with intuitive node trees to observe and measure their firing patterns.
 
-A node graph builds the network; it runs live in the browser at tens of thousands of neurons, and at hundreds of millions of synapses on a GPU.
+linen is an ongoing project and was initially built as an educational tool for computational neuroscience. It features established formulas (outlined in references) to model neurons and synapses, and to alter weights with spike-timing-dependent plasticity (STDP) and other learning rules. Feed audio, images, video, or electrical stimuli into the tissue and measure how competition and inhibition can change synapse weights and firing patterns over time.
 
-Three engines (a browser reference, WebGPU, CUDA) run one contract.
+You can start with preset scenarios, many based on real scientific papers and their measurements, or from scratch to build tissues based on your findings (or your imagination). You can even build your own nodes and engines if you want to experiment with different models.
 
-All spatial units are **micrometers** (velocities in µm/ms; 100 µm/ms = 0.1 m/s, the unmyelinated intracortical range). Delays are distance / velocity in ms.
+As of now, linen is not a scientific instrument and is not meant to replace any of the other amazing tools that exist out there, however it does have the ability to import and export file types familiar to computational neuroscientists.
 
-Built on published models (sources below) for learning and exploring; not a scientific instrument. The docs' limitations page lists what the model leaves out and what each choice costs.
+There are a lot of features to dive into, so I hope you can enjoy using it as much as I enjoy working on it. This is a long-term project as I study and learn more about the mechanics of our brains. I would love to get your feedback so I can keep improving it and learn in the process!
+
+Have fun!
+
+Seth
 
 ## Quick start
 
