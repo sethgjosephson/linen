@@ -47,9 +47,7 @@ function rangeText(p){
 }
 
 function nodesPage(){
-  let h = `<h1>node reference</h1>
-    <p>Every tool in the Tab menu. Setting tables are generated from the
-    running code, so they always match the app.</p>`;
+  let h = `<h1>node reference</h1>`;
   for(const [cat, label] of CATS){
     const inCat = Object.entries(NODE_DEFS).filter(([, def]) => (def.cat || 'sim') === cat);
     if(!inCat.length) continue;
@@ -61,9 +59,7 @@ function nodesPage(){
 
 function keysPage(){
   let h = `<h1>keyboard</h1>
-    <p>Bindings shown are the ones in effect. Press KEYS in the top bar to
-    change them: click a binding, then press the key. Bindings are stored per
-    browser. Escape is reserved and cannot be rebound.</p>`;
+    <p>Press KEYS in the top bar to change key bindings.</p>`;
   for(const [g, gl] of GROUPS){
     h += `<h2>${esc(gl)}</h2><table>`;
     for(const k in ACTIONS){

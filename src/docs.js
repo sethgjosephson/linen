@@ -473,262 +473,42 @@ export const PAGES = [
 title:'overview', html:`
 <h1><img src="brand/linen-dark.svg" alt="linen" style="height:2.4em;display:block;margin:6px 0 14px 0"></h1>
 <p>A sandbox for building and running 3D spiking neural networks.</p>
-<h2>at a glance</h2>
-<table>
-<tr><td class="k">network</td><td class="d">Described by a node graph; data flows from top to bottom.</td></tr>
-<tr><td class="k">neuron model</td><td class="d">Izhikevich 2007 form; the classic presets are from Izhikevich 2003 (see references).</td></tr>
-<tr><td class="k">units</td><td class="d">Micrometers; conduction delays come from distance and axon velocity.</td></tr>
-<tr><td class="k">display</td><td class="d">Drawn as it runs.</td></tr>
-<tr><td class="k">first scene</td><td class="d">The guided tour, open by default.</td></tr>
-<tr><td class="k">other scenes</td><td class="d">In the Tab menu, described on the scenarios page.</td></tr>
-<tr><td class="k">sources</td><td class="d">The references page: the papers behind each scene, and other simulators.</td></tr>
-</table>
-<h2>viewer panel</h2>
-<table>
-<tr><td class="k">mouse</td><td class="d">Orbits, pans and zooms.</td></tr>
-<tr><td class="k">click a neuron</td><td class="d">Shows its outgoing connections (white), incoming connections (violet) and a trace of its membrane potential.</td></tr>
-<tr><td class="k">double click a neuron</td><td class="d">Selects the neuron scatter node that created it.</td></tr>
-</table>
-<h2>potential filter</h2>
-<p>SHOW, in the viewer bar, hides neurons whose membrane potential is below the chosen floor.</p>
-<table>
-<tr><td class="k">-100 mV</td><td class="d">Everything visible; no data streams.</td></tr>
-<tr><td class="k">a higher floor</td><td class="d">Only the neurons depolarized past it.</td></tr>
-<tr><td class="k">+40 mV</td><td class="d">Only neurons firing an action potential.</td></tr>
-<tr><td class="k">a firing neuron</td><td class="d">Shown at +40 mV for the frame it spikes in.</td></tr>
-<tr><td class="k">while active</td><td class="d">The engine streams the potential of every neuron each frame.</td></tr>
-</table>
-<h2>spike raster</h2>
-<p>The strip below the 3D view.</p>
-<table>
-<tr><td class="k">time</td><td class="d">Left to right, one pixel column per simulation tick.</td></tr>
-<tr><td class="k">rows</td><td class="d">Up to 220 neurons sampled evenly across the population, in gather order; populations appear as horizontal bands.</td></tr>
-<tr><td class="k">white pixel</td><td class="d">That neuron fired during that tick.</td></tr>
-<tr><td class="k">vertical stripes</td><td class="d">Synchronized firing.</td></tr>
-<tr><td class="k">diagonal structure</td><td class="d">Activity traveling through the network.</td></tr>
-<tr><td class="k">uniform speckle</td><td class="d">Asynchronous irregular firing.</td></tr>
-</table>
-<h2>oscilloscope</h2>
-<p>Appears at the top right of the viewer for a selected neuron and plots its membrane potential over time.</p>
-<table>
-<tr><td class="k">+30 mV line</td><td class="d">The spike cutoff of the classic types.</td></tr>
-<tr><td class="k">-65 mV line</td><td class="d">Their usual reset; rest and threshold are set per type.</td></tr>
-<tr><td class="k">small bumps</td><td class="d">Incoming synaptic charge below threshold.</td></tr>
-<tr><td class="k">ramp and reset</td><td class="d">A spike.</td></tr>
-</table>
-<h2>nodes panel</h2>
-<p>The graph editor.</p>
-<table>
-<tr><td class="k">Tab</td><td class="d">Opens a searchable menu of tools grouped by what a node does to the stream, with the scenarios at the end.</td></tr>
-<tr><td class="k">categories</td><td class="d">Regions, cells, arrange, cell types, wiring, drive, readout, run, routing, notes.</td></tr>
-<tr><td class="k">Ctrl+F</td><td class="d">Finds a node in the open scene by name or type, takes the view to it and selects it.</td></tr>
-<tr><td class="k">click</td><td class="d">Selects a node.</td></tr>
-<tr><td class="k">double click</td><td class="d">Opens its properties; on a shape or an unmasked stimulus, also a 3D manipulator in the viewer.</td></tr>
-<tr><td class="k">w, e, r</td><td class="d">Translate, rotate and scale in the manipulator.</td></tr>
-<tr><td class="k">drag on empty space</td><td class="d">Selection box.</td></tr>
-<tr><td class="k">middle drag</td><td class="d">Pan.</td></tr>
-<tr><td class="k">wheel</td><td class="d">Zoom.</td></tr>
-<tr><td class="k">drop on a wire</td><td class="d">Inserts an unconnected node there.</td></tr>
-<tr><td class="k">create or paste</td><td class="d">With a node selected, puts the new node into the pipe after it.</td></tr>
-<tr><td class="k">shake while dragging</td><td class="d">Disconnects the node.</td></tr>
-<tr><td class="k">every shortcut</td><td class="d">On the keyboard page, with how to change it.</td></tr>
-</table>
-<h2>viewer bindings (1-9)</h2>
-<table>
-<tr><td class="k">digit, node selected</td><td class="d">Binds the node to the digit and shows it in the viewer.</td></tr>
-<tr><td class="k">digit, nothing selected</td><td class="d">Recalls the node bound to it.</td></tr>
-<tr><td class="k">the digit on a node</td><td class="d">Boxed while that node is the active view.</td></tr>
-<tr><td class="k">checkpoint</td><td class="d">Simulated.</td></tr>
-<tr><td class="k">points node</td><td class="d">A static preview of its neurons; a running simulation continues underneath.</td></tr>
-<tr><td class="k">shape node</td><td class="d">Its geometry as a wireframe.</td></tr>
-</table>
-<h2>naming and routing</h2>
-<p>Set a node's name at the top of the properties panel; it is drawn beside the node type.</p>
-<p>Renaming never rewires the network.</p>
-<p>Scenario nodes come named for what they do: populations by tag, a region by what it holds.</p>
-<p>A stimulus is named by its mode and where it lands; Ctrl+F finds any node by name.</p>
-<h2>pins</h2>
-<table>
-<tr><td class="k">ctrl or cmd click a wire</td><td class="d">Splices in a pin at that point, selected and ready to drag.</td></tr>
-<tr><td class="k">reroute key over a wire</td><td class="d">The same.</td></tr>
-<tr><td class="k">reroute key elsewhere</td><td class="d">An unconnected pin.</td></tr>
-<tr><td class="k">mask wires</td><td class="d">Take pins too.</td></tr>
-<tr><td class="k">a pin</td><td class="d">Passes its input through unchanged; adding one never rewires the network.</td></tr>
-</table>
-<h2>properties panel</h2>
-<p>Holds the parameters of the node opened with a double click, and applies edits live.</p>
-<p>Rewires on a geometry or connectivity change, with a progress bar; the previous network keeps running.</p>
-<p>Adjusts the running simulation directly on a stimulus or checkpoint change.</p>
-<h2>top bar</h2>
-<table>
-<tr><td class="k">counts</td><td class="d">Neurons and synapses.</td></tr>
-<tr><td class="k">status</td><td class="d">The last thing that happened.</td></tr>
-<tr><td class="k">project / scene</td><td class="d">What is open, written as a path; each name opens a menu.</td></tr>
-<tr><td class="k">project menu</td><td class="d">Names the folder, opens another one, lists recent ones.</td></tr>
-<tr><td class="k">scene menu</td><td class="d">New scene, save as, reset to the guided tour, and the project's scenes.</td></tr>
-<tr><td class="k">KEYS</td><td class="d">The keyboard shortcuts.</td></tr>
-<tr><td class="k">DOCS</td><td class="d">These pages.</td></tr>
-<tr><td class="k">pane layout</td><td class="d">Steps through four arrangements; its icon fills in the viewer's pane.</td></tr>
-</table>
-<h2>pane layouts</h2>
-<table>
-<tr><td class="k">viewer right</td><td class="d">Properties over the node graph on the left.</td></tr>
-<tr><td class="k">viewer over graph</td><td class="d">Properties down the right.</td></tr>
-<tr><td class="k">viewer left</td><td class="d">The viewer fills the left.</td></tr>
-<tr><td class="k">viewer across top</td><td class="d">Graph and properties side by side below.</td></tr>
-<tr><td class="k">handles</td><td class="d">Drag between panes; each layout keeps its sizes on this machine.</td></tr>
-</table>
-<h2>viewer bar</h2>
-<table>
-<tr><td class="k">pause</td><td class="d">Pauses the simulation.</td></tr>
-<tr><td class="k">lock weights</td><td class="d">Refuses structural edits and the resolution slider; parameter changes go through.</td></tr>
-<tr><td class="k">unlocked</td><td class="d">Building mode: every structural edit rewires from scratch and discards what plasticity learned.</td></tr>
-<tr><td class="k">resolution</td><td class="d">See scaling &amp; proxy.</td></tr>
-<tr><td class="k">per frame</td><td class="d">Simulated time the engine is asked to run between two looks at the viewer.</td></tr>
-<tr><td class="k">realtime factor</td><td class="d">What the engine achieved over the last second; 1.00x is biological speed.</td></tr>
-<tr><td class="k">SHOW</td><td class="d">The potential filter.</td></tr>
-<tr><td class="k">rate</td><td class="d">The mean firing rate.</td></tr>
-<tr><td class="k">SLICE</td><td class="d">A box in the viewer.</td></tr>
-<tr><td class="k">REC</td><td class="d">Records the session.</td></tr>
-</table>
-<h2>per frame</h2>
-<p>Requests simulated time per frame; whether the engine keeps up depends on the size of the network.</p>
-<p>Leaves the dynamics unchanged: they always advance one millisecond at a time.</p>
-<p>Trades smoothness for throughput.</p>
-<p>Helps most at first on a large network, while the round trip dominates, and levels off once arithmetic does.</p>
-<h2>slice</h2>
-<p>Hides cells outside the box and stops them being picked; the network does not change.</p>
-<table>
-<tr><td class="k">first press</td><td class="d">A box over half the tissue, with handles.</td></tr>
-<tr><td class="k">drag</td><td class="d">Moves it.</td></tr>
-<tr><td class="k">scale key and drag</td><td class="d">Resizes it.</td></tr>
-<tr><td class="k">escape</td><td class="d">Hides the handles and keeps the cut.</td></tr>
-<tr><td class="k">press with handles shown</td><td class="d">Turns the cut off.</td></tr>
-<tr><td class="k">saved</td><td class="d">With the scene.</td></tr>
-</table>
-<h2>training runs</h2>
-<p>A training run is a checkpoint left going with a longer clock.</p>
-<table>
-<tr><td class="k">settings</td><td class="d">On the checkpoint node beside the plasticity parameters; they travel with a saved graph.</td></tr>
-<tr><td class="k">START TRAINING</td><td class="d">At the bottom of the checkpoint's properties; begins the run.</td></tr>
-<tr><td class="k">what trains</td><td class="d">Everything upstream of that checkpoint, a scenario or a graph built by hand.</td></tr>
-<tr><td class="k">the page</td><td class="d">Drives the run; graph, properties panel and neuron inspection describe the training network.</td></tr>
-<tr><td class="k">edits</td><td class="d">Accepted during a run, not recomputed.</td></tr>
-<tr><td class="k">metrics file</td><td class="d">Every few simulated minutes: per-population rates, synchrony, weight change, fraction of inhibitory weights at the clamp.</td></tr>
-<tr><td class="k">brain file</td><td class="d">Written less often.</td></tr>
-<tr><td class="k">status file</td><td class="d">Every fifteen seconds: phase, simulated and wall clocks, realtime factor, footprint, any engine error.</td></tr>
-<tr><td class="k">resume</td><td class="d">From a brain in the run folders; loads its weights after wiring and continues the clock and the curriculum.</td></tr>
-<tr><td class="k">not carried</td><td class="d">Homeostatic set points and membrane potentials; set points recalibrate and the warm-up runs again.</td></tr>
-</table>
-<h2>project folder</h2>
-<p>Defaults to ./project, or the folder serve.py was started with; the project menu moves it.</p>
-<p>Takes an empty folder or an existing project; asks before creating a missing one.</p>
-<p>Receives the files of the page and of the engine host, CUDA runs included.</p>
-<p>Restart a running engine host after switching; it keeps the folder it was launched with.</p>
-<table>
-<tr><td class="k">project.json</td><td class="d">The scenes in the project and which one is open.</td></tr>
-<tr><td class="k">scenes/</td><td class="d">One file per node tree.</td></tr>
-<tr><td class="k">brains/</td><td class="d">Brains you saved; never deleted automatically.</td></tr>
-<tr><td class="k">runs/</td><td class="d">One folder per run: run.json, metrics.json, a status file and a brains/ of checkpoints, deleted as newer ones arrive.</td></tr>
-<tr><td class="k">recordings/</td><td class="d">Recorded sessions.</td></tr>
-<tr><td class="k">no serve.py</td><td class="d">Files go to the browser's own storage, per origin and invisible from a file manager.</td></tr>
-<tr><td class="k">which store</td><td class="d">Every write names it; the FILES pane names the folder at the top of its list.</td></tr>
-<tr><td class="k">another port</td><td class="d">Does not see browser storage written from this one.</td></tr>
-</table>
-<h2>scenes</h2>
-<p>A scene is one node tree, saved as a file in the project.</p>
-<table>
-<tr><td class="k">its name</td><td class="d">The second half of the path in the top bar; click for the scene menu.</td></tr>
-<tr><td class="k">saving</td><td class="d">Continuous: edits go into the open scene as they are made; there is no save button.</td></tr>
-<tr><td class="k">opening another</td><td class="d">Loses nothing and does not ask.</td></tr>
-<tr><td class="k">SAVE AS</td><td class="d">Copies the screen to a new name and continues in the copy; the scene left stays as it was.</td></tr>
-<tr><td class="k">NEW</td><td class="d">Starts a scene from the guided tour graph.</td></tr>
-<tr><td class="k">open scenes</td><td class="d">Recorded in the project, for the next launch and anything else that opens the folder.</td></tr>
-</table>
-<h2>scene tabs</h2>
-<table>
-<tr><td class="k">plus button</td><td class="d">Opens a project scene in a new tab, or starts a new one.</td></tr>
-<tr><td class="k">click a tab</td><td class="d">Goes to it.</td></tr>
-<tr><td class="k">cross or middle click</td><td class="d">Closes the tab; the scene stays in the project.</td></tr>
-<tr><td class="k">a tab</td><td class="d">Changes what the node graph edits and nothing else.</td></tr>
-<tr><td class="k">eye</td><td class="d">Marks the scene the viewer and the simulation hold.</td></tr>
-<tr><td class="k">viewer key in a tab</td><td class="d">Views that scene; until then it is edited and saved, not computed.</td></tr>
-<tr><td class="k">undo</td><td class="d">One history per tab.</td></tr>
-<tr><td class="k">weight lock</td><td class="d">While on, another scene cannot take the viewer.</td></tr>
-<tr><td class="k">viewed scene only</td><td class="d">Resolution slider, brain saving, export and training; used from another tab, each reports it.</td></tr>
-<tr><td class="k">copy and paste</td><td class="d">Keeps wires between copied nodes; a wire from outside survives only in its own scene.</td></tr>
-<tr><td class="k">paste elsewhere</td><td class="d">Keeps name, population tag and seed unless the scene already has them.</td></tr>
-</table>
-<h2>scenario layout</h2>
-<p>Lays out a Tab menu scenario identically on every opening.</p>
-<table>
-<tr><td class="k">populations</td><td class="d">A row along the top, each region above the neuron scatters it fills.</td></tr>
-<tr><td class="k">gathers</td><td class="d">Below them, at the left.</td></tr>
-<tr><td class="k">trunk</td><td class="d">One straight line down: connect, stimuli, probes, checkpoint, chart.</td></tr>
-<tr><td class="k">wire into the trunk</td><td class="d">Drops down a lane right of its population through pins, level with each node it feeds.</td></tr>
-<tr><td class="k">masking shape</td><td class="d">Sits beside the trunk node it masks.</td></tr>
-<tr><td class="k">save layout</td><td class="d">Scene menu; makes a hand arrangement the scenario's default.</td></tr>
-<tr><td class="k">what it records</td><td class="d">Node and backdrop positions, wires, nodes added or removed (pins, a rebuilt gather tree, a note).</td></tr>
-<tr><td class="k">where</td><td class="d">The site's layouts folder through the local server, or a download to put there.</td></tr>
-<tr><td class="k">settings</td><td class="d">Stay with the scenario; a changed one is named when the layout is saved.</td></tr>
-<tr><td class="k">stale layout</td><td class="d">Set aside with a message after the scenario's code changes its nodes, until saved again.</td></tr>
-</table>
-<h2>scene links</h2>
-<p>The scene menu copies a link carrying the whole scene file, deflated, after the hash.</p>
-<p>Uploads nothing: that part never leaves the browser, and only people given the link can open it.</p>
-<p>Restores the scene exactly, every seed and the resolution included.</p>
-<p>Becomes the open file only when saved as one.</p>
-<h2>brain files</h2>
-<table>
-<tr><td class="k">SAVE BRAIN</td><td class="d">On the checkpoint's run tab; writes a .npb file into brains/ in the project folder.</td></tr>
-<tr><td class="k">contents</td><td class="d">The graph and every synapse's weight, keyed by pair identity: source population and index of both neurons.</td></tr>
-<tr><td class="k">scope</td><td class="d">One checkpoint's weights; reopened, the other checkpoints are at baseline.</td></tr>
-<tr><td class="k">several checkpoints</td><td class="d">Each carries its own brain; the viewer digits switch between them.</td></tr>
-<tr><td class="k">LOAD BRAIN</td><td class="d">Applies a brain to the active checkpoint.</td></tr>
-<tr><td class="k">matching graph</td><td class="d">Only the weights load, for example the next checkpoint of the same run; brains load back to back.</td></tr>
-<tr><td class="k">other graph</td><td class="d">Opens in a tab of its own as a new scene named after the file.</td></tr>
-<tr><td class="k">project menu</td><td class="d">Lists the project's brains, saved and run checkpoints, newest first; takes one from a file.</td></tr>
-<tr><td class="k">rewiring</td><td class="d">Reapplies an attached brain: new synapses at baseline, vanished pairs dropped, nothing resurrected onto different tissue.</td></tr>
-<tr><td class="k">checkpoint <em>node</em></td><td class="d">The graph terminal that runs a simulation.</td></tr>
-<tr><td class="k">brain <em>file</em></td><td class="d">A saved state on disk.</td></tr>
-</table>
-<h2>recording a session</h2>
-<p>REC in the viewer bar records the running simulation until pressed again.</p>
-<table>
-<tr><td class="k">rates</td><td class="d">Per probed population, every 20 ms of simulated time, for as long as it runs.</td></tr>
-<tr><td class="k">events</td><td class="d">Every setting change on any node with its values before and after; pause, resume, weight lock, rewiring.</td></tr>
-<tr><td class="k">weights</td><td class="d">Count, mean, spread and maximum of excitatory and inhibitory weights, before and after.</td></tr>
-<tr><td class="k">stop</td><td class="d">Writes a JSON of everything and a CSV, a row per bin with events where they fell.</td></tr>
-<tr><td class="k">chart node</td><td class="d">Its recording plot draws the record as it runs, edits as marked lines.</td></tr>
-</table>
+<h2>finding your way around</h2>
+<p>The screen has three parts. The node graph is where you build a network, the viewer shows it running in 3D, and the properties panel holds the settings of whichever node you open. The guided tour is open when you first arrive, and the other scenes are in the Tab menu, each described on the scenarios page. The references page lists the papers behind them.</p>
+<p>A network is described entirely by its graph, with data flowing from top to bottom. Everything is measured in micrometers, so the time a signal takes to reach another neuron depends on how far it has to travel.</p>
+<h2>the viewer</h2>
+<p>Use the mouse to orbit, pan and zoom around the tissue. Clicking a neuron shows its outgoing connections in white and its incoming ones in violet, and an oscilloscope appears at the top right with its membrane potential. Small bumps there are synaptic input that stayed below threshold, and a ramp followed by a sharp reset is a spike. Double-clicking a neuron selects the node that created it.</p>
+<p>The strip under the 3D view is the spike raster. Time runs from left to right, each row is a neuron, and a white dot means that neuron fired. Vertical stripes mean many neurons are firing together, diagonal patterns show activity traveling through the tissue, and an even speckle is asynchronous, irregular firing.</p>
+<h2>the viewer bar</h2>
+<p>The bar above the viewer pauses the simulation, locks the weights and sets the resolution, which the scaling page explains. Per frame sets how much simulated time runs between screen updates. A larger value gets more done on a big network but looks less smooth, and underneath, the simulation still steps one millisecond at a time. The realtime factor beside it shows how well the engine is keeping up, where 1.00x is biological speed.</p>
+<p>SHOW hides neurons whose membrane potential is below a level you choose, so at +40 mV you only see the cells that are firing. SLICE puts a box in the viewer and hides everything outside it, which is handy for looking inside dense tissue without changing the network. REC records the session, as described further down.</p>
+<p>Locking the weights matters once a network has learned something. While they're unlocked, any change to the structure rebuilds the network from scratch and throws away what plasticity learned. Locked, setting changes still go through, but structural edits and the resolution slider are turned away until you unlock.</p>
+<h2>building in the node graph</h2>
+<p>Press Tab to open a searchable menu of every tool, grouped by what it does, with the scenarios at the end. Click a node to select it, and double-click to open its properties. On a shape or a stimulus, double-clicking also gives you a handle in the viewer that you can move, rotate and scale with W, E and R. Ctrl+F finds any node by name.</p>
+<p>Wires connect by dragging from one port to another. Dropping a node onto a wire inserts it there, and giving a node a quick shake while you drag it pulls it out of its connections. Ctrl-clicking a wire adds a pin, which only reroutes the wire. Names are just labels, so renaming a node never changes the network. The keyboard page lists every shortcut.</p>
+<p>The number keys bind nodes to the viewer. Select a node and press a digit to show it, then press that digit later to come back to it. A checkpoint shows the running simulation, a points node previews its neurons, and a shape shows its outline.</p>
+<h2>changing settings</h2>
+<p>The properties panel applies your edits as you make them. Changing a shape or the wiring rebuilds the network while the old one keeps running, and changing a stimulus or the checkpoint adjusts the running simulation in place.</p>
+<h2>the top bar</h2>
+<p>The top bar shows how many neurons and synapses are running and what just happened. The path in the middle, project / scene, opens menus for switching projects and scenes. KEYS changes key bindings, DOCS opens these pages, and the layout button cycles through four pane arrangements, each keeping the sizes you drag it to.</p>
+<h2>projects and scenes</h2>
+<p>When you run linen with serve.py, your work lives in a project folder on your disk, ./project unless you pick another from the project menu. Without the server, it's kept in your browser's storage instead, which belongs to the address you opened linen from.</p>
+<p>A scene is one node graph, and it saves continuously as you work, so there's no save button. SAVE AS makes a copy to keep working in, and NEW starts a fresh scene from the guided tour. Scenes open in tabs under the graph. Switching tabs changes what you're editing, and the eye icon marks the scene the viewer is running; pressing a viewer key in another tab moves the viewer there. Each tab keeps its own undo history, and copy and paste works between them.</p>
+<p>The scene menu can also copy a link that carries the whole scene inside it. Nothing is uploaded, and whoever opens the link gets the scene exactly as you had it, down to every seed. Scenarios from the Tab menu open with the same layout every time, and the scene menu can save your own arrangement as a scenario's default.</p>
+<h2>brains, training and recordings</h2>
+<p>A brain file holds a network's learned weights. SAVE BRAIN on the checkpoint's run tab writes one to the project's brains folder, and LOAD BRAIN brings it back. If the graph matches, only the weights load; otherwise the brain opens as a new scene. When you rewire after loading, connections that still exist keep their weights and new ones start fresh.</p>
+<p>A training run is a checkpoint left running for a long time. Its settings sit on the checkpoint node, and START TRAINING at the bottom of its properties begins the run. As it goes, it writes metrics every few simulated minutes and brain checkpoints you can resume from, all in a folder under runs.</p>
+<p>REC records whatever is running until you press it again: the firing rate of each probed population, every setting you change and when, and a summary of the weights before and after. It saves as JSON and CSV in the project's recordings folder, and a chart node can plot the recording as it happens.</p>
 <h2>live input and output</h2>
-<table>
-<tr><td class="k">input node</td><td class="d">Maps a signal onto a population while the simulation runs.</td></tr>
-<tr><td class="k">signal port</td><td class="d">A curriculum, a test signal, a live device or a footage node.</td></tr>
-<tr><td class="k">signal</td><td class="d">Supplies per-channel gains only; the graph defines which neurons and the mapping.</td></tr>
-<tr><td class="k">mask port</td><td class="d">Selects the neurons driven; the raster lies over their bounding box.</td></tr>
-<tr><td class="k">no mask</td><td class="d">The input maps onto the whole network.</td></tr>
-<tr><td class="k">probe node</td><td class="d">Reads a population's firing rate to an overlay.</td></tr>
-<tr><td class="k">probe audio</td><td class="d">Spikes as a rate-modulated crackle, or one oscillator per frequency band along an axis.</td></tr>
-<tr><td class="k">audio button</td><td class="d">Added to the panel; browsers start audio only after a click.</td></tr>
-<tr><td class="k">edits</td><td class="d">Apply to the running simulation without rewiring.</td></tr>
-</table>
-<h2>the default scene</h2>
-<table>
-<tr><td class="k">tissue</td><td class="d">A thin sheet of about 14,000 neurons at mouse cortex density, local Gaussian connectivity.</td></tr>
-<tr><td class="k">types</td><td class="d">80% regular spiking, 20% fast spiking.</td></tr>
-<tr><td class="k">pacemaker</td><td class="d">Chattering cells (a bursting cortical class; Gray and McCormick 1996) under constant bias; each burst crosses as a wave.</td></tr>
-<tr><td class="k">second source</td><td class="d">Pulsed, on a different rhythm; the fronts collide.</td></tr>
-<tr><td class="k">regime</td><td class="d">Near-synchronous fronts recruit most neurons, with quiet periods between: disinhibited slices, not awake cortex.</td></tr>
-<tr><td class="k">awake cortex</td><td class="d">Waves modulate sparse firing instead of recruiting whole populations.</td></tr>
-<tr><td class="k">larger sheet</td><td class="d">Traveling waves, three times the area; front speed within the 1-10 cm/s reported for such slices.</td></tr>
-<tr><td class="k">front speed</td><td class="d">Measured by the validation battery.</td></tr>
-</table>` },
+<p>An input node feeds a signal into a population while the simulation runs. The signal can come from a curriculum, a test signal, your microphone or webcam, or a folder of images, and a mask decides which neurons receive it. Probe nodes work the other way, showing a population's firing rate as it runs, and they can even play it as sound once you click the audio button.</p>
+<h2>the guided tour</h2>
+<p>The scene you see first is a thin sheet of about 14,000 neurons at the density of mouse cortex. A cluster of chattering cells, a bursting cortical cell type (Gray and McCormick 1996), fires in bursts, and each burst crosses the sheet as a wave. A second source pulses on a different rhythm, so the two sets of waves collide.</p>
+<p>This is closer to a slice of cortex in a dish than to an awake brain, where waves gently shape sparse firing instead of recruiting nearly every cell. The traveling waves scene is a larger version of the same sheet, and its wave fronts move at the speeds measured in cortical slices.</p>` },
   { id:'keys', title:'keyboard', html:'' },          // generated from keymap.js
   { id:'nodes', title:'node reference', html:'' },   // generated
   { id:'scenarios', title:'scenarios', html:`
 <h1>scenarios</h1>
-<p>Prebuilt networks opened from the Tab menu; every node is editable.</p>
+<p>Prebuilt networks opened from the Tab menu.</p>
 <h2>common to all</h2>
 <table>
 <tr><td class="k">dimensions</td><td class="d">Micrometers.</td></tr>
@@ -1011,33 +791,10 @@ title:'overview', html:`
 </table>` },
   { id:'scaling', title:'scaling & proxy', html:`
 <h1>scaling and the resolution slider</h1>
-<p>Runs a reduced version of a scene while preserving its mean activity.</p>
-<h2>mouse cortex</h2>
-<p>Roughly 10<sup>5</sup> neurons and 10<sup>9</sup> synapses per cubic millimeter.</p>
-<h2>what the slider does</h2>
-<table>
-<tr><td class="k">RES 40%</td><td class="d">Every neuron scatter places 40% of its authored count.</td></tr>
-<tr><td class="k">method</td><td class="d">The downscaling procedure of van Albada, Helias and Diesmann (2015), applied by the wiring.</td></tr>
-<tr><td class="k">weights</td><td class="d">Scaled by 1/&radic;0.4, preserving the variance of each neuron&rsquo;s input.</td></tr>
-<tr><td class="k">DC current</td><td class="d">Per neuron; restores the mean input.</td></tr>
-<tr><td class="k">its inputs</td><td class="d">The neuron&rsquo;s actual excitatory and inhibitory in-degrees and the firing rate measured at 100%.</td></tr>
-<tr><td class="k">preserved</td><td class="d">Mean rates and the activity regime.</td></tr>
-<tr><td class="k">authored parameters</td><td class="d">Unchanged.</td></tr>
-</table>
-<h2>what is not preserved</h2>
-<table>
-<tr><td class="k">correlations</td><td class="d">Scale with network size; downscaling cannot preserve them (van Albada et al.).</td></tr>
-<tr><td class="k">oscillation amplitudes</td><td class="d">Qualitative at reduced resolution.</td></tr>
-<tr><td class="k">synchrony</td><td class="d">Qualitative at reduced resolution.</td></tr>
-<tr><td class="k">training</td><td class="d">Refused below 100%.</td></tr>
-</table>
-<h2>limits and overrides</h2>
-<table>
-<tr><td class="k">synapse budget</td><td class="d">Caps the wiring; set from what the machine reports it can hold, never below 50 million.</td></tr>
-<tr><td class="k">SYN (top bar)</td><td class="d">Overrides the budget, in millions, for this machine.</td></tr>
-<tr><td class="k">density % of real</td><td class="d">On the connect node; declares the authored graph&rsquo;s density relative to biology.</td></tr>
-<tr><td class="k">target rates</td><td class="d">On the connect node; override the automatically measured rate.</td></tr>
-</table>` },
+<p>A cubic millimeter of mouse cortex holds about a hundred thousand neurons and a billion synapses, which is a lot to run in a browser. The resolution slider lets you work with a smaller version of a scene that still behaves much like the full one.</p>
+<p>At 40%, for example, every neuron scatter places 40% of its neurons. Each neuron then receives fewer connections, so linen makes up for it the way van Albada, Helias and Diesmann (2015) describe. The remaining weights grow by 1/&radic;0.4, which keeps the size of each neuron's input fluctuations, and a small steady current restores each neuron's average input, based on the firing rates measured at full size. Your own settings are never changed, and going back to a resolution you've already visited is instant.</p>
+<p>Average firing rates and the overall pattern of activity carry over well. Correlations between neurons don't, because they depend on the size of the network itself, so synchrony and the strength of oscillations are only approximate below 100%. That's also why training only runs at full size.</p>
+<p>linen also caps how many synapses it will build, based on the memory your machine reports and never below 50 million, and SYN in the top bar lets you change that cap. On the connect node, density % of real tells linen how much sparser your graph already is than real tissue, and target rates let you choose the firing rates the compensation aims for instead of measuring them.</p>` },
   { id:'headless', title:'without the browser', html:`
 <h1>running a scene without the browser</h1>
 <p>Runs a scene from a shell and writes what happened into a folder.</p>
