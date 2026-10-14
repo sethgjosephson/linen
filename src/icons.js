@@ -22,6 +22,8 @@ const ICONS = {
   close:   '<path d="M4 4 L12 12 M12 4 L4 12"/>',
   eye:     '<path d="M1.5 8 C4 3.5 12 3.5 14.5 8 C12 12.5 4 12.5 1.5 8 Z"/><circle cx="8" cy="8" r="1.8"/>',
   expand:  '<path d="M2 6 V2 H6 M10 2 H14 V6 M14 10 V14 H10 M6 14 H2 V10"/>',
+  popout:  '<path d="M7 3.5 H2.5 V13.5 H12.5 V9 M9.5 2.5 H13.5 V6.5 M13.5 2.5 L7.5 8.5"/>',
+  popin:   '<path d="M7 3.5 H2.5 V13.5 H12.5 V9 M13.5 2.5 L7.5 8.5 M7.5 4.5 V8.5 H11.5"/>',
   text:    '<path d="M2 3 H14 M2 6 H10 M2 9 H14 M2 12 H8"/>',
   browse:  '<path d="M2 4 H6 L7.5 6 H14 V13 H2 Z"/><path d="M8 8 V11.5 M6.5 10 L8 11.5 L9.5 10"/>',
   // spike display: a flash toward white, and a flash in color from gray
@@ -59,10 +61,12 @@ export function iconify(el, name, text = ''){
 // The browser's own title tooltip waits about a second and cannot be styled, so the title moves into data-tip on hover and shows at once under the button, its name above the description.
 // A button whose state changes sets a new title; the next show picks it up.
 // The shortcut hints in the pane headers are cut off once the text is large, so hovering one lists every shortcut in it, one per line.
-export function installTips(){
-  const tip = document.createElement('div');
+// doc: the document to show them in, the page's own or the viewer window's
+export function installTips(doc = document){
+  const win = doc.defaultView || window;
+  const tip = doc.createElement('div');
   tip.id = 'tip'; tip.hidden = true;
-  document.body.appendChild(tip);
+  doc.body.appendChild(tip);
   const HINT = '.panehead .hint, #graphHint';
   let cur = null, timer = 0;
   const show = () => {
@@ -85,19 +89,19 @@ export function installTips(){
   const place = () => {
     tip.hidden = false;
     const r = cur.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
-    const x = Math.min(Math.max(4, r.left + r.width/2 - w/2), innerWidth - w - 4);
+    const x = Math.min(Math.max(4, r.left + r.width/2 - w/2), win.innerWidth - w - 4);
     let y = r.bottom + 6;
-    if(y + h > innerHeight - 4) y = r.top - h - 6;
+    if(y + h > win.innerHeight - 4) y = r.top - h - 6;
     tip.style.left = x + 'px'; tip.style.top = y + 'px';
   };
-  document.addEventListener('pointerover', e => {
+  doc.addEventListener('pointerover', e => {
     const el = e.target.closest ? e.target.closest('button.icon-only, ' + HINT) : null;
     if(el === cur) return;
     cur = el; clearTimeout(timer);
     if(!el){ tip.hidden = true; return; }
     timer = setTimeout(show, 120);
   });
-  document.addEventListener('pointerout', e => { if(!e.relatedTarget){ cur = null; clearTimeout(timer); tip.hidden = true; } });
-  document.addEventListener('click', () => { if(cur && !tip.hidden) setTimeout(show, 0); }, true);
-  addEventListener('scroll', () => { tip.hidden = true; }, true);
+  doc.addEventListener('pointerout', e => { if(!e.relatedTarget){ cur = null; clearTimeout(timer); tip.hidden = true; } });
+  doc.addEventListener('click', () => { if(cur && !tip.hidden) setTimeout(show, 0); }, true);
+  win.addEventListener('scroll', () => { tip.hidden = true; }, true);
 }

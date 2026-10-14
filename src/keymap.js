@@ -26,9 +26,10 @@ export const ACTIONS = {
   gizmoScale:   { group:'viewer',   label:'gizmo scale',          def:'r' },
   closeGizmo:   { group:'viewer',   label:'close gizmo',          def:'Escape', fixed:true },
   viewSlots:    { group:'viewer',   label:'bind or recall view',  def:'1 to 9', fixed:true },
+  maximizePane: { group:'panes',    label:'fill the window with the pane under the cursor, or restore', def:'Space' },
 };
 
-export const GROUPS = [['graph', 'node graph'], ['viewer', 'viewer']];
+export const GROUPS = [['graph', 'node graph'], ['viewer', 'viewer'], ['panes', 'panes']];
 
 let custom = {};
 try { custom = JSON.parse(localStorage.getItem(STORE)) || {}; } catch(e){}
@@ -56,8 +57,10 @@ export function eventToBinding(e){
   if(['Control','Shift','Alt','Meta'].includes(e.key)) return '';
   let s = '';
   if(e.ctrlKey || e.metaKey) s += 'ctrl+';
-  if(e.shiftKey && e.key.length > 1) s += 'shift+';
-  return s + (e.key.length === 1 ? e.key.toLowerCase() : e.key);
+  // the spacebar's key is a blank, which would read as nothing on the keyboard page
+  const key = e.key === ' ' ? 'Space' : e.key;
+  if(e.shiftKey && key.length > 1) s += 'shift+';
+  return s + (key.length === 1 ? key.toLowerCase() : key);
 }
 
 // Does this event fire this action?

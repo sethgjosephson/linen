@@ -91,7 +91,8 @@ export class Viewer {
     this.onPickSource = null; this.onPickPopulation = null; this.gizmo = null; this.geoMesh = null;
     this.raycaster = new THREE.Raycaster();
     this.raycaster.params.Points.threshold = 35;
-    new ResizeObserver(() => this._resize(container)).observe(container);
+    this._ro = new ResizeObserver(() => this._resize(this.container));
+    this._ro.observe(container);
     this._resize(container);
     this._bindPointer();
     window.addEventListener('keydown', e => {
@@ -104,10 +105,12 @@ export class Viewer {
   }
   // The renderer and everything tied to its canvas, in one place, so the canvas can be replaced: a context the driver has taken away during a CUDA run is not always given back, and a new renderer re-uploads the scene on its first frame (three.js caches per renderer).
   _makeRenderer(){
-    this.renderer = new THREE.WebGLRenderer({ antialias:true });
+    // The canvas belongs to the container's own document and the pixel ratio to its window, so the viewer can be drawn in another window (moveTo), on a monitor with another scale.
+    const doc = this.container.ownerDocument, win = doc.defaultView || window;
+    this.renderer = new THREE.WebGLRenderer({ antialias:true, canvas:doc.createElement('canvas') });
     // the slicer box cuts the connection lines with clipping planes on their materials (setSlice keeps the planes; off, they are far away)
     this.renderer.localClippingEnabled = true;
-    this.renderer.setPixelRatio(devicePixelRatio);
+    this.renderer.setPixelRatio(win.devicePixelRatio);
     // before the label layer, which stays on top
     this.container.insertBefore(this.renderer.domElement, this.container.firstChild);
   }
@@ -155,6 +158,27 @@ export class Viewer {
     this._bindPointer();
     this._ctxLost = false;
     this._resize(this.container);
+    this.renderer.render(this.scene, this.camera);
+  }
+  // The same scene and camera drawn in another container, in this window or another one (the viewer window).
+  // A WebGL context cannot move between documents, so the renderer and everything bound to its canvas are made again there; the population labels move with it.
+  moveTo(container){
+    this.closeGizmo();
+    const old = this.renderer;
+    try { old.dispose(); } catch(e){}
+    if(old.domElement.parentNode) old.domElement.parentNode.removeChild(old.domElement);
+    if(this._ro) this._ro.disconnect();
+    this.container = container;
+    this._makeRenderer();
+    container.appendChild(this.labelEl);
+    this._bindCanvas();
+    this._bindControls();
+    this._bindPointer();
+    this._ctxLost = false;
+    const win = container.ownerDocument.defaultView || window;
+    this._ro = new win.ResizeObserver(() => this._resize(this.container));
+    this._ro.observe(container);
+    this._resize(container);
     this.renderer.render(this.scene, this.camera);
   }
   _resize(el){

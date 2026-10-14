@@ -45,9 +45,14 @@ import { csv, download, downloadText, canvasPng, seriesCsv, multiSeriesCsv, band
 import { withMeta } from './png.js';
 import { attachInputs, setupInputs, updateInputs } from './inputview.js';
 
+// The viewer's own window while the viewer is in it (VIEWER WINDOW), else null.
+// The viewer bar and everything under it live there meanwhile, so an element of theirs looked up by id is looked for in both documents.
+let viewerWin = null;
+const byId = id => document.getElementById(id) || (viewerWin && !viewerWin.closed ? viewerWin.document.getElementById(id) : null);
+let setVbh = () => {};                     // the bar's height into --vbh, for whichever document the bar is in
 const statusEl = document.getElementById('status');
-const rateEl = document.getElementById('rate');
-const rtfEl = document.getElementById('rtf');
+const rateEl = byId('rate');
+const rtfEl = byId('rtf');
 const propsEl = document.getElementById('props');
 const rasterCv = document.getElementById('raster');
 
@@ -154,16 +159,17 @@ setPropsGraph(() => ({
 editor.scenarios = SCENARIOS;
 // The viewer bar wraps in a narrow pane; the viewer and the scope sit below whatever height it takes, through a CSS variable the stylesheet reads.
 {
-  const vb = document.getElementById('viewerbar');
+  const vb = byId('viewerbar');
   const setH = () => {
-    const h = vb.offsetHeight + 'px';
-    if(document.documentElement.style.getPropertyValue('--vbh') === h) return;
-    document.documentElement.style.setProperty('--vbh', h);
+    const h = vb.offsetHeight + 'px', root = vb.ownerDocument.documentElement;
+    if(root.style.getPropertyValue('--vbh') === h) return;
+    root.style.setProperty('--vbh', h);
     // the viewer's canvas sizes itself on resize; a taller strip is one
     window.dispatchEvent(new Event('resize'));
   };
   if('ResizeObserver' in window) new ResizeObserver(setH).observe(vb);
   window.addEventListener('resize', setH);
+  setVbh = setH;
   setH();
 }
 window.editor = editor;   // debug access, as window.viewer already is
@@ -179,8 +185,9 @@ viewer.onPickSource = id => inShownTab(() => {
   if(n) editor.selectExternal(n);
 });
 // the panel row for whatever the pointer is over in the viewer, so the two lists of regions agree about which one is live
+const regionsEl = document.getElementById('regions');   // by reference: it moves to the viewer window with the rest of the viewer
 viewer.onHoverPopulation = tag => {
-  const body = document.querySelector('#regions .ovbody');
+  const body = regionsEl && regionsEl.querySelector('.ovbody');
   if(!body) return;
   for(const row of body.children) row.classList.toggle('on', row.dataset.tag === tag);
 };
@@ -508,7 +515,7 @@ function onParamEdit(node){
 // The edits are found by comparing a node's settings with the copy taken at the last edit, so every path that changes a setting through onParamEdit is logged without each control saying so.
 let recording = null, lastRecording = null;
 const paramShadow = new Map();
-const recEl = document.getElementById('rec');
+const recEl = byId('rec');
 function noteEdit(node){
   if(!recording || !node || tabs.cur !== tabs.shown) return;
   const before = paramShadow.get(node.id) || {}, after = node.params || {};
@@ -571,7 +578,7 @@ function figureInfo(node){
     runs: gs ? gs.reduce((n, g) => n + g.histories.length, 0) : undefined,
     runGroups: gs ? gs.length : undefined,
     simSeconds:+(recorder.t/1000).toFixed(3), neurons:net ? net.count : undefined, synapses:net ? net.synCount : undefined,
-    resolutionPercent:+document.getElementById('res').value, savedAt:new Date().toISOString() };
+    resolutionPercent:+byId('res').value, savedAt:new Date().toISOString() };
 }
 function figureCaption(node){
   const i = figureInfo(node), smooth = +node.params.smooth > 0 && ((node.params.plot|0) === 7 || (node.params.plot|0) === 11);
@@ -791,7 +798,7 @@ const NAMES_FIT = 6;
 // Every population in the scene, in its color, with its count.
 // A row lights its box in the viewer; clicking one selects the node that made the population, which is what clicking its name in the viewer does.
 function buildRegionsPanel(){
-  const panel = document.getElementById('regions');
+  const panel = regionsEl;
   if(!panel) return;
   const body = panel.querySelector('.ovbody');
   const show = popBoxesOn && popBoxList.length > NAMES_FIT;
@@ -816,7 +823,7 @@ function buildRegionsPanel(){
 }
 
 {
-  const btn = document.getElementById('popboxes');
+  const btn = byId('popboxes');
   const KEY = 'np-pop-boxes';
   popBoxesOn = localStorage.getItem(KEY) === '1';
   const apply = () => {
@@ -838,7 +845,7 @@ function buildRegionsPanel(){
 // The slicer box: off, on with its handles, on with the handles hidden.
 // One button cycles off to on-with-handles; escape (the gizmo key) hides the handles and keeps the cut; the button on a handled box turns the cut off, and on an unhandled one brings the handles back.
 {
-  const btn = document.getElementById('slicebtn');
+  const btn = byId('slicebtn');
   btn.onclick = () => {
     const on = !!(sceneSlice && sceneSlice.on);
     if(!on){
@@ -862,7 +869,7 @@ function buildRegionsPanel(){
 }
 // Color by population is a per-machine preference rather than part of the document, like the other viewer controls.
 {
-  const btn = document.getElementById('popcolor');
+  const btn = byId('popcolor');
   const KEY = 'np-color-by';
   let mode = localStorage.getItem(KEY) === 'population' ? 'population' : 'type';
   const apply = () => {
@@ -882,7 +889,7 @@ function buildRegionsPanel(){
 }
 
 {
-  const btn = document.getElementById('spikestyle');
+  const btn = byId('spikestyle');
   const KEY = 'np-spike-style';
   const STATE = {
     bright: ['bright', 'spikes flash bright',
@@ -909,7 +916,7 @@ function buildRegionsPanel(){
   apply();
 }
 {
-  const btn = document.getElementById('spikesign');
+  const btn = byId('spikesign');
   const KEY = 'np-spike-sign';
   const STATE = {
     '0': ['spikeEI', 'all spikes',
@@ -953,13 +960,13 @@ function applySlice(s){
   sceneSlice = sliceNormalize(s);
   if(viewer.sliceEditing) viewer.closeGizmo();
   viewer.setSlice(sceneSlice);
-  const btn = document.getElementById('slicebtn');
+  const btn = byId('slicebtn');
   if(btn) btn.classList.toggle('on', !!(sceneSlice && sceneSlice.on));
 }
 // The viewer-side settings of the scene in the editor.
 // The live ones (the slider, the slicer box, the locked hues) are the shown scene's; a tab that is not shown keeps its own on the tab.
 const sceneSettings = () => tabs.cur !== tabs.shown && tabs.cur.held ? tabs.cur.held
-  : { resolution: +document.getElementById('res').value, slice: sceneSlice, hues: sceneHues };
+  : { resolution: +byId('res').value, slice: sceneSlice, hues: sceneHues };
 function setSceneSettings(v){
   if(tabs.cur === tabs.shown){
     if(v.resolution) applyResolution(v.resolution, false);
@@ -1057,12 +1064,15 @@ function barMenu(anchor, items){
     if(!it.off) el.onclick = () => { closeBarMenu(); it.run(); };
     m.appendChild(el);
   }
-  document.body.appendChild(m);
+  // in the document the button is in, which is the viewer window's for the viewer bar while it is there
+  const mdoc = anchor.ownerDocument, mwin = mdoc.defaultView || window;
+  const innerWidth = mwin.innerWidth, innerHeight = mwin.innerHeight;
+  mdoc.body.appendChild(m);
   anchor.classList.add('open');
   const a = anchor.getBoundingClientRect(), r = m.getBoundingClientRect();
   // under the button, or over it when the button sits low on the page (the scene tabs do, in the layouts with the graph at the bottom)
   m.style.top = (a.bottom + r.height > innerHeight - 4 ? Math.max(4, a.top - r.height) : a.bottom) + 'px';
-  { const tip = document.getElementById('tip'); if(tip) tip.hidden = true; }
+  { const tip = mdoc.getElementById('tip'); if(tip) tip.hidden = true; }
   // right-aligned to the button, then pulled back on screen if it would run off the edge, which is the common case for a bar sitting at the right
   m.style.left = Math.max(4, Math.min(a.left, innerWidth - r.width - 4)) + 'px';
   barOpen = { el:m, anchor };
@@ -2629,7 +2639,17 @@ function drawRaster(fired){
   if(!doc.curNet) return;
   if(!rasterIdx || Math.floor((rasterIdx.length-1)*doc.curNet.count/rasterIdx.length) >= doc.curNet.count)
     setupRaster(doc.curNet.count);
-  if(rasterCv.width !== rasterCv.clientWidth) rasterCv.width = rasterCv.clientWidth;
+  // A canvas clears when its width is set, so a new width (a layout, the maximize key, the viewer window) would wipe the history.
+  // The newest column is at the right edge, so the old picture is redrawn against that edge.
+  if(rasterCv.clientWidth && rasterCv.width !== rasterCv.clientWidth){
+    const keep = document.createElement('canvas');
+    keep.width = rasterCv.width; keep.height = rasterCv.height;
+    keep.getContext('2d').drawImage(rasterCv, 0, 0);
+    rasterCv.width = rasterCv.clientWidth;
+    const c0 = rasterCv.getContext('2d');
+    c0.fillStyle = '#000'; c0.fillRect(0, 0, rasterCv.width, rasterCv.height);
+    c0.drawImage(keep, rasterCv.width - keep.width, 0);
+  }
   const c = rasterCv.getContext('2d'), w = rasterCv.width, h = rasterCv.height;
   c.drawImage(rasterCv, -1, 0);
   c.fillStyle = '#000'; c.fillRect(w-1, 0, 1, h);
@@ -2644,8 +2664,8 @@ function drawRaster(fired){
 // The checkpoint node's steps param is the authored default; this is how fast you happen to be watching, the same relationship the resolution slider has to the authored network.
 // It changes nothing about the dynamics, which always advance 1 ms at a time, only how much of that is done between two looks at the viewer.
 let simSpeed = 2;
-const speedEl = document.getElementById('speed');
-const speedLabel = document.getElementById('speedlabel');
+const speedEl = byId('speed');
+const speedLabel = byId('speedlabel');
 function showSpeed(){
   // Named for what it sets, not for what it achieves.
   // A label of SPEED would promise something it cannot deliver: the same 10 ms per frame runs the guided tour near realtime and a 157M synapse scene at a quarter of it, because the engine's ability to keep up is what varies.
@@ -2659,6 +2679,96 @@ function setSpeed(v, fromUser){
 }
 speedEl.oninput = () => setSpeed(+speedEl.value, true);
 setSpeed(2);
+
+// ---- the viewer in its own window ----
+// The whole viewer moves to a second window, to put on another screen: its title, its bar, the 3D view, its readouts, the oscilloscope, the inputs, regions and probes panels and the raster.
+// The page keeps a button in its top bar to bring it back, and the graph and the properties take its room.
+// The window draws on its own animation frames and steps the engine on them too, so the view keeps moving while this window is covered.
+{
+  const home = document.getElementById('viewer');
+  const pane = document.getElementById('viewerPane'), bar = byId('viewerbar');
+  const btn = byId('popout');
+  const backBtn = document.getElementById('viewerback');
+  let moved = [];
+  const bringBack = () => {
+    if(!viewerWin) return;
+    const w = viewerWin;
+    viewerWin = null;
+    // the raster's picture, copied out before its window goes, since a closing window takes its canvases' contents with it
+    const snap = document.createElement('canvas');
+    snap.width = rasterCv.width; snap.height = rasterCv.height;
+    try { snap.getContext('2d').drawImage(rasterCv, 0, 0); } catch(e){}
+    pane.prepend(...moved);                      // back in their order
+    moved = [];
+    rasterCv.getContext('2d').drawImage(snap, 0, 0);
+    backBtn.hidden = true;
+    setVbh();
+    applyPanels();                               // the layout as it was
+    window.dispatchEvent(new Event('resize'));
+    requestAnimationFrame(() => editor.draw());
+    viewer.moveTo(home);
+    if(!w.closed) w.close();
+    btn.classList.remove('on');
+    status('the viewer is back in this window');
+  };
+  backBtn.onclick = bringBack;
+  btn.onclick = () => {
+    if(viewerWin){ bringBack(); return; }
+    const w = window.open('', 'linen-viewer', 'popup,width=1280,height=800');
+    if(!w){ status('the browser blocked the viewer window; allow pop-ups for this page and press VIEWER WINDOW again', true); return; }
+    const d = w.document;
+    d.open(); d.write('<!doctype html><html class="app ready"><head><meta charset="utf-8"><title>linen \u00b7 viewer</title></head><body></body></html>'); d.close();
+    // the page's stylesheets, by absolute address, so the readouts and labels look the same there
+    for(const n of document.querySelectorAll('link[rel="stylesheet"], style')){
+      const c = d.importNode(n, true);
+      if(n.href) c.href = n.href;
+      d.head.appendChild(c);
+    }
+    d.body.style.cssText = 'margin:0;background:#000;overflow:hidden';
+    // a pane of the same name, so the page's styles place everything as they do here, less the bar's height
+    const box = d.createElement('div');
+    box.id = 'viewerPane';
+    box.style.cssText = 'position:fixed;inset:0';
+    d.body.appendChild(box);
+    moved = [...pane.children].filter(el => el.id !== 'glLost');
+    box.append(...moved);
+    viewerWin = w;
+    viewer.moveTo(home);
+    installTips(d);
+    // the bar's height for the styles there, and kept as the window is resized
+    new w.ResizeObserver(() => setVbh()).observe(bar);
+    setVbh();
+    // a bar menu closes on a click elsewhere, as it does in the page
+    w.addEventListener('mousedown', e => {
+      if(barOpen && !barOpen.el.contains(e.target) && e.target !== barOpen.anchor) closeBarMenu();
+    }, true);
+    backBtn.hidden = false;
+    btn.classList.add('on');
+    maxPane = null;
+    applyPanels();                               // the graph and the properties take the viewer's room
+    window.dispatchEvent(new Event('resize'));
+    requestAnimationFrame(() => editor.draw());
+    // keys typed over the viewer window reach the page, so the gizmo keys and escape work there; the maximize key stays with the window it was pressed in
+    w.addEventListener('keydown', e => {
+      if(keyMatches(e, 'maximizePane')) return;
+      window.dispatchEvent(new KeyboardEvent('keydown', { key:e.key, code:e.code, ctrlKey:e.ctrlKey, metaKey:e.metaKey,
+        shiftKey:e.shiftKey, altKey:e.altKey, repeat:e.repeat, bubbles:true, cancelable:true }));
+    });
+    const frame = () => {
+      if(viewerWin !== w || w.closed) return;
+      w.requestAnimationFrame(frame);
+      step();
+      viewer.frame();
+    };
+    w.requestAnimationFrame(frame);
+    // back at once, while that window's page still exists
+    w.addEventListener('pagehide', () => { if(viewerWin === w) bringBack(); });
+    status('the viewer is in its own window; close it, or press the viewer button in the top bar, to bring it back');
+  };
+  // a closed window that sent no pagehide (a crash, a forced close) is noticed here
+  setInterval(() => { if(viewerWin && viewerWin.closed) bringBack(); }, 1000);
+  window.addEventListener('pagehide', () => { if(viewerWin && !viewerWin.closed) viewerWin.close(); });
+}
 
 // ---- main loop ----
 // The tick rides on animation frames, which a hidden tab or a window behind another one stops.
@@ -2677,7 +2787,8 @@ function step(){
 function loop(){
   requestAnimationFrame(loop);
   step();
-  viewer.frame();
+  // in its own window the viewer is drawn on that window's frames, which keep coming while this one is covered
+  if(!viewerWin) viewer.frame();
 }
 requestAnimationFrame(loop);
 setInterval(() => { if(performance.now() - lastStep > 250) step(); }, 100);
@@ -2759,6 +2870,9 @@ const LAYOUTS = {
 };
 const LAYOUT_ORDER = ['right', 'classic', 'left', 'wide'];
 const panels = { train:240, layout:'classic', sizes:{} };
+// The pane filling the window, 'viewer' or 'graph', or null for the layout.
+// Not saved: the app always opens in its layout.
+let maxPane = null;
 try {
   const saved = JSON.parse(localStorage.getItem(UI_STORE)) || {};
   // sizes kept before there were layouts belong to the one there was
@@ -2785,6 +2899,25 @@ function applyPanels(){
   z.lower = Math.max(80, Math.min(window.innerHeight - 200, z.lower));
   const side = Math.round(z.side*ui) + 'px';
   appEl.dataset.layout = panels.layout;
+  if(maxPane){
+    appEl.dataset.max = maxPane;
+    appEl.style.gridTemplateAreas = `"top" "${maxPane}"`;
+    appEl.style.gridTemplateColumns = 'minmax(0,1fr)';
+    appEl.style.gridTemplateRows = `${Math.round(28*ui)}px minmax(0,1fr)`;
+    try { localStorage.setItem(UI_STORE, JSON.stringify(panels)); } catch(e){}
+    return;
+  }
+  delete appEl.dataset.max;
+  if(viewerWin){
+    // The viewer is in its own window: the graph and the properties share the page below the top bar, on the sides this layout gives them.
+    appEl.dataset.popped = '1';
+    appEl.style.gridTemplateAreas = L.sideLeft ? '"top top top" "props vsplit graph"' : '"top top top" "graph vsplit props"';
+    appEl.style.gridTemplateColumns = L.sideLeft ? `${side} 5px minmax(0,1fr)` : `minmax(0,1fr) 5px ${side}`;
+    appEl.style.gridTemplateRows = `${Math.round(28*ui)}px minmax(0,1fr)`;
+    try { localStorage.setItem(UI_STORE, JSON.stringify(panels)); } catch(e){}
+    return;
+  }
+  delete appEl.dataset.popped;
   appEl.style.gridTemplateAreas = L.areas;
   appEl.style.gridTemplateColumns = L.sideLeft ? `${side} 5px minmax(0,1fr)` : `minmax(0,1fr) 5px ${side}`;
   appEl.style.gridTemplateRows = `${Math.round(28*ui)}px minmax(0,1fr) 5px ${Math.round(z.lower)}px`;
@@ -2832,6 +2965,7 @@ function bindSplit(id, key, vertical){
     btn.title = 'pane layout: ' + L.tip + '. Click for the next one; each layout keeps the pane sizes you gave it.';
   };
   btn.onclick = () => {
+    maxPane = null;
     panels.layout = LAYOUT_ORDER[(LAYOUT_ORDER.indexOf(panels.layout) + 1) % LAYOUT_ORDER.length];
     applyPanels(); show();
     window.dispatchEvent(new Event('resize'));     // the viewer's canvas and the graph take their new boxes
@@ -2840,6 +2974,33 @@ function bindSplit(id, key, vertical){
     status('pane layout: ' + LAYOUTS[panels.layout].name);
   };
   show();
+}
+// The maximize key, as in a compositor: over the viewer or the node graph it fills the window with that pane, and pressed again anywhere it puts the layout back.
+// The pane is the one under the pointer when the key goes down.
+{
+  let px = -1, py = -1;
+  window.addEventListener('pointermove', e => { px = e.clientX; py = e.clientY; }, { passive:true });
+  window.addEventListener('keydown', e => {
+    if(e.repeat || !keyMatches(e, 'maximizePane')) return;
+    if(/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || document.activeElement.isContentEditable) return;
+    // a dialog open over the panes keeps the key
+    if([...document.querySelectorAll('.dlg')].some(d => d.style.display && d.style.display !== 'none')) return;
+    let next = null;
+    if(!maxPane){
+      const under = px >= 0 ? document.elementFromPoint(px, py) : null;
+      const pane = under && under.closest('#viewerPane, #graphPane');
+      if(!pane) return;
+      next = pane.id === 'viewerPane' ? 'viewer' : 'graph';
+      if(next === 'viewer' && viewerWin) return;    // the viewer is in its own window
+    }
+    e.preventDefault();          // a focused button would also take the spacebar as a click
+    maxPane = next;
+    applyPanels();
+    window.dispatchEvent(new Event('resize'));   // the viewer's canvas and the graph take their new boxes
+    requestAnimationFrame(() => editor.draw());
+    status(maxPane ? (maxPane === 'viewer' ? 'viewer' : 'node graph') + ' fills the window; press the key again to restore the layout'
+      : 'pane layout: ' + LAYOUTS[panels.layout].name);
+  });
 }
 bindSplit('vsplit', 'side', false);
 bindSplit('hsplit', 'lower', true);
@@ -2894,7 +3055,7 @@ applyPanels();
 
 
 // ---- resolution slider: one knob, the compensation included ----
-const resEl = document.getElementById('res'), resLabel = document.getElementById('reslabel');
+const resEl = byId('res'), resLabel = byId('reslabel');
 function applyResolution(v, recomputeNow){
   resEl.value = v; liveRes = v;
   resLabel.textContent = `RES ${v}%`;
@@ -2914,7 +3075,7 @@ resEl.oninput = () => {
 // Not labeled WIRING / LIVE, which would be the easiest thing in the app to misread: wiring means growing the synapses everywhere else, including the progress line in this same bar, so a button reading WIRING looks like it would rewire the network when it means the opposite.
 // And a label carrying the state rather than the action never makes it obvious which of the two a click gets.
 // It locks the learned weights, so it says that, and it says which way round it currently is.
-const liveEl = document.getElementById('live');
+const liveEl = byId('live');
 liveEl.onclick = () => {
   doc.livePhase = !doc.livePhase;
   if(recording) recording.mark(doc.livePhase ? 'weights locked' : 'weights unlocked');
@@ -2927,8 +3088,8 @@ function exitLive(){ if(doc.livePhase) liveEl.onclick(); }
 
 // ---- potential filter: hide neurons below a membrane-potential floor ----
 // per-neuron potentials stream from the engine only while the filter is active (sendV), so the default costs nothing
-const vmEl = document.getElementById('vmfloor');
-const vmValEl = document.getElementById('vmfloorval');
+const vmEl = byId('vmfloor');
+const vmValEl = byId('vmfloorval');
 function applyVmFilter(){
   const v = +vmEl.value;
   viewer.setPotentialFloor(v);
@@ -2972,9 +3133,9 @@ const fmtLeft = mins => {
 };
 let runPaused = false;
 globalThis.__npTrainHead = d => {
-  const bar = document.getElementById('viewerbar');
+  const bar = byId('viewerbar');
   if(bar) bar.classList.add('training');
-  const st = document.getElementById('tbstate');
+  const st = byId('tbstate');
   if(st && !runPaused && !runFailed){
     const stalled = watchStall(+d.simMin.toFixed(2));
     st.classList.toggle('failed', stalled);
@@ -2989,11 +3150,11 @@ globalThis.__npTrainHead = d => {
         (d.pumped ? ', paced by the engine host so this tab cannot stall it' : '');
   }
   const frac = d.targetMin > 0 ? Math.min(1, d.simMin/d.targetMin) : 0;
-  const cl = document.getElementById('tbclock');
+  const cl = byId('tbclock');
   if(cl) cl.textContent = `sim ${d.simMin.toFixed(1)} / ${d.targetMin.toFixed(0)} min`;
-  const fill = document.getElementById('tbfill');
+  const fill = byId('tbfill');
   if(fill) fill.style.width = (frac*100).toFixed(2) + '%';
-  const eta = document.getElementById('tbeta');
+  const eta = byId('tbeta');
   if(eta){
     // at the rate it is actually managing, not the rate it was asked for
     const left = d.xRealtime > 0 ? (d.targetMin - d.simMin)/d.xRealtime : Infinity;
@@ -3027,14 +3188,14 @@ globalThis.__npTrainTab = markTab;
 // The run's own pause.
 // Deliberately not the viewer's PAUSE, which stops the interactive simulation this page owns: during a run there is no such simulation, and stopping the view of a run is not the same act as stopping the run. train.js reports the state it settled in, so the label follows the run rather than the click.
 {
-  const btn = document.getElementById('tbpause');
+  const btn = byId('tbpause');
   if(btn) btn.onclick = () => {
     if(!globalThis.__npTrainPause) return;
     runPaused = !!globalThis.__npTrainPause();
     btn.innerHTML = icon(runPaused ? 'play' : 'pause');
     btn.setAttribute('aria-label', runPaused ? 'resume run' : 'pause run');
     btn.classList.toggle('on', runPaused);
-    const st = document.getElementById('tbstate');
+    const st = byId('tbstate');
     if(st){
       st.textContent = runPaused ? 'PAUSED' : 'TRAINING';
       st.classList.toggle('paused', runPaused);
@@ -3044,7 +3205,7 @@ globalThis.__npTrainTab = markTab;
       ? 'training paused: the network and its learned weights are kept'
       : 'training resumed');
   };
-  const sv = document.getElementById('tbsave');
+  const sv = byId('tbsave');
   if(sv) sv.onclick = () => {
     if(!globalThis.__npTrainSave) return;
     const r = globalThis.__npTrainSave();
@@ -3058,11 +3219,11 @@ globalThis.__npTrainTab = markTab;
 // A run that has failed must not look like one that is training.
 globalThis.__npTrainFailed = msg => {
   runFailed = true;
-  const st = document.getElementById('tbstate');
+  const st = byId('tbstate');
   if(st){ st.textContent = 'ENGINE FAILED'; st.classList.add('failed');
     st.classList.remove('warmup', 'paused', 'done');
     st.title = msg || 'the engine stopped'; }
-  const cl = document.getElementById('tbclock');
+  const cl = byId('tbclock');
   if(cl) cl.textContent = 'stopped';
   status(msg || 'the engine stopped', true);
 };
@@ -3079,18 +3240,18 @@ function clearTrainHead(done){
   // Both go out when the run ends: its engine is gone, so there is nothing left to pause and nothing left to read weights from.
   // SAVE BRAIN in the top bar comes back at the same moment and is the way to keep the finished network.
   // A finished run keeps its headline in the bar, but not its controls: a disabled pause beside the live pause reads as two pause buttons.
-  const btn = document.getElementById('tbpause');
+  const btn = byId('tbpause');
   if(btn){ btn.disabled = !!done; btn.hidden = !!done; btn.classList.remove('on');
     btn.innerHTML = icon('pause'); btn.setAttribute('aria-label', 'pause run');
     btn.title = 'pause the training run. The network, the learned weights and the run clock are kept.'; }
-  const sv = document.getElementById('tbsave');
+  const sv = byId('tbsave');
   if(sv){ sv.disabled = !!done; sv.hidden = !!done; }
-  const st = document.getElementById('tbstate');
+  const st = byId('tbstate');
   if(st){ st.textContent = done ? 'RUN FINISHED' : 'TRAINING';
     st.classList.toggle('done', !!done);
     st.classList.remove('warmup'); st.classList.remove('paused'); }
   if(!done){
-    const bar = document.getElementById('viewerbar');
+    const bar = byId('viewerbar');
     if(bar) bar.classList.remove('training');
   }
 }
@@ -3103,34 +3264,34 @@ function setRunLock(on){
     if(on){ el.dataset.wasTitle = el.title || ''; el.title = why; }
     else if(el.dataset.wasTitle !== undefined){ el.title = el.dataset.wasTitle; }
   }
-  const lab = document.getElementById('reslabel');
+  const lab = byId('reslabel');
   if(lab) lab.classList.toggle('runlocked', on);
-  const sl = document.getElementById('speedlabel');
+  const sl = byId('speedlabel');
   if(sl) sl.classList.toggle('runlocked', on);
   if(on){
     // The status line keeps whatever was last written to it, and anything about the previous run is wrong the moment a new one starts.
     status('training run started on the graph on screen');
     // Reveal the run's block now, not when the first status arrives.
     // That status comes after the wiring, which at full density takes twenty minutes, and until then the bar would show nothing at all: a run being set up would look exactly like no run.
-    const bar0 = document.getElementById('viewerbar');
+    const bar0 = byId('viewerbar');
     if(bar0) bar0.classList.add('training');
     for(const id of ['tbpause', 'tbsave']){ const b = document.getElementById(id); if(b) b.hidden = false; }
     // Same for the headline: the first status only arrives once the run is past its wiring, so without this the bar reads FINISHED over a starting run.
-    const st = document.getElementById('tbstate');
+    const st = byId('tbstate');
     if(st){ st.textContent = 'STARTING'; st.classList.remove('done', 'paused', 'warmup');
       st.title = 'the run is computing its own copy of the network; the clock ' +
         'starts when that finishes'; }
-    const cl = document.getElementById('tbclock');
+    const cl = byId('tbclock');
     if(cl) cl.textContent = 'wiring';
-    const et = document.getElementById('tbeta');
+    const et = byId('tbeta');
     if(et) et.textContent = '';
-    const fl = document.getElementById('tbfill');
+    const fl = byId('tbfill');
     if(fl) fl.style.width = '0%';
     for(const id of ['tbpause', 'tbsave']){
       const b = document.getElementById(id);
       if(b){ b.disabled = false; b.classList.remove('on'); }
     }
-    const pb = document.getElementById('tbpause');
+    const pb = byId('tbpause');
     if(pb){ pb.innerHTML = icon('pause'); pb.setAttribute('aria-label', 'pause run'); }
     runPaused = false;
   }
@@ -3773,7 +3934,7 @@ brainFileEl.onchange = () => { if(brainFileEl.files[0]) loadBrain(brainFileEl.fi
 function pickBrainFile(){ brainFileEl.value = ''; brainFileEl.click(); }
 
 // ---- top bar ----
-document.getElementById('pause').onclick = e => {
+byId('pause').onclick = e => {
   paused = !paused;
   if(recording) recording.mark(paused ? 'pause' : 'resume');
   const b = e.currentTarget;
@@ -3960,7 +4121,7 @@ if(URL_Q.get('audit') === 'settings'){
 // the buttons that carry an icon, dressed once; their words stay in the title, and the ones whose meaning is not a picture keep a word beside it
 for(const [id, name, text] of [
     ['pause', 'pause', ''], ['live', 'unlock', ''],
-    ['popboxes', 'box', ''], ['popcolor', 'palette', ''], ['slicebtn', 'slice', ''],
+    ['popboxes', 'box', ''], ['popcolor', 'palette', ''], ['slicebtn', 'slice', ''], ['popout', 'popout', ''], ['viewerback', 'popin', ''],
     ['tbpause', 'pause', ''], ['tbsave', 'save', ''],
     ['keysbtn', 'keys', ''], ['docsbtn', 'docs', ''],
     ['projUp', 'up', ''], ['newProjBrowse', 'browse', ''],

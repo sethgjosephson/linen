@@ -31,6 +31,7 @@
       <label id="synlabel" for="synbudget" title="synapse budget for wiring on this machine, in millions. Wiring past it is refused with a message. Kept for this machine.">SYN</label>
       <input id="synbudget" type="number" min="1" max="4000" step="10"
         title="synapse budget for wiring on this machine, in millions. Wiring past it is refused with a message. Blank returns to the size this machine reports it can hold.">
+      <button id="viewerback" hidden title="the viewer is in its own window; this brings it back into the page">VIEWER</button>
       <button id="layoutbtn"></button>
       <label id="uilabel" for="uiscale" title="text size for the app, kept for this machine. The 3D view, the raster and the node graph keep their own scale.">TEXT</label>
       <select id="uiscale" title="text size for the app, kept for this machine"></select>
@@ -170,6 +171,7 @@
       <button id="spikestyle"></button>
       <button id="spikesign"></button>
       <button id="slicebtn" title="slicer box: cells outside a box are hidden, nothing about the network changes. Drag the box to move it, press the scale key (r) and drag to resize, escape hides the handles and keeps the cut, SLICE again turns it off. Saved with the scene.">SLICE</button>
+      <button id="popout" title="the whole viewer, this bar included, in its own window, to put on another screen; the graph and properties take the room here. Close that window, or press VIEWER in the top bar, to bring it back.">VIEWER WINDOW</button>
       <!-- Shown only while a run is going, in the same strip as everything else that describes the running simulation. -->
       <span class="vbsep tbonly"></span>
       <button id="tbpause" class="tbonly" title="pause the training run. The network, the learned weights and the run's clock are kept.">PAUSE RUN</button>

@@ -178,6 +178,8 @@ button:hover { border-color:#888; color:#fff; }
 #tbeta { color:#666; margin-left:auto; flex:0 1 auto; min-width:0;
   overflow:hidden; text-overflow:ellipsis; }
 #viewer canvas { display:block; }
+/* the viewer in its own window: the page has no viewer pane, and the split under it has nothing to divide */
+#app[data-popped] #viewerPane, #app[data-popped] #hsplit { display:none; }
 /* Shown over the viewport when the driver takes the WebGL context. It has
    to be readable against whatever the dead canvas is showing, which is
    white on this machine, so it paints its own ground. */
@@ -267,6 +269,10 @@ button:hover { border-color:#888; color:#fff; }
 #hsplit { grid-area:hsplit; cursor:row-resize; }
 #hsplit::after { content:''; position:absolute; left:0; right:0; top:2px; height:1px; background:#333; }
 #vsplit:hover::after, #hsplit:hover::after { background:#888; }
+/* one pane filling the window below the top bar (the maximize key); the rest step aside */
+#app[data-max] #vsplit, #app[data-max] #hsplit,
+#app[data-max="viewer"] #rightCol, #app[data-max="viewer"] #graphPane,
+#app[data-max="graph"] #rightCol, #app[data-max="graph"] #viewerPane { display:none; }
 #graph { position:absolute; inset:46px 0 0 0; width:100%; height:calc(100% - 46px); display:block; }
 /* Scene tabs, attached to the node graph because they change what it edits
    and nothing else. The tab in the editor is lit; the eye marks the scene
