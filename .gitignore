@@ -20,3 +20,6 @@ project-mandelbulb/
 project-fly/
 ip/
 references/*.pdf
+
+desktop/node_modules/
+desktop/dist/

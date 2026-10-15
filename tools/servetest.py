@@ -40,8 +40,14 @@ def req(method, path, body=None):
 # The server's own output is kept rather than thrown away: when it fails to start, its traceback is the only thing that says why, and discarding it turns a clear error into a probe loop that times out.
 LOG = os.path.join(PROJ, 'server.log')
 logf = open(LOG, 'wb')
-srv = subprocess.Popen([sys.executable, '-u', os.path.join(ROOT, 'serve.py'),
-                        str(PORT), '--project', PROJ],
+# NPTEST_SERVER names another server to put through the same test, as a command line: the desktop app's server is "node desktop/serve.mjs".
+# The port and the project folder are appended the way serve.py takes them.
+import shlex
+# Split without POSIX rules on Windows so a backslash path survives, then drop the quotes that mode leaves on a quoted token.
+cmd = ([t.strip('"') for t in shlex.split(os.environ['NPTEST_SERVER'], posix=(os.name != 'nt'))]
+       if os.environ.get('NPTEST_SERVER')
+       else [sys.executable, '-u', os.path.join(ROOT, 'serve.py')])
+srv = subprocess.Popen(cmd + [str(PORT), '--project', PROJ],
                        stdout=logf, stderr=logf, cwd=ROOT)
 try:
     up = False

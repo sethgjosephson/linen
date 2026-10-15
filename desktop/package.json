@@ -1,0 +1,14 @@
+{
+  "name": "linen-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "description": "linen as a desktop app: the web app in an Electron window with its server and engine host inside",
+  "type": "module",
+  "main": "main.mjs",
+  "scripts": {
+    "start": "electron ."
+  },
+  "devDependencies": {
+    "electron": "^44.7.2"
+  }
+}

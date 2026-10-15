@@ -54,17 +54,14 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { NODE_DEFS, NEURON_TYPES, computeNode, setResolution, setMaxSyn, wireConnect, assembleConnect, setFileReader, gradedArrays, engineTypes } from '../src/nodes.js';
+import { NEURON_TYPES, computeNode, setResolution, setMaxSyn, wireConnect, assembleConnect, gradedArrays, engineTypes } from '../src/nodes.js';
 import os from 'node:os';
 import { initMessage, engineInputs } from '../src/document.js';
 import { checkHello, missingTerms, ignoredCustom, customNote, answers } from '../src/protocol.js';
 import { IORuntime } from '../src/io.js';
-import { migrateScene } from '../src/migrate.js';
-import { loadPlugin, importer, checkScenePlugins } from '../src/plugins.js';
-import { ALL_SCENARIOS } from '../src/experiments.js';
 import { csv, multiSeriesCsv, spikeTrainsAscii } from '../src/figure.js';
 import { inProcessWorker } from './harness.mjs';
-import { splitTerms, applyOverrides } from './overrides.mjs';
+import { loadScene } from './scene.mjs';
 
 const HERE = path.dirname(fileURLToPath(import.meta.url)), ROOT = path.join(HERE, '..');
 
@@ -111,82 +108,12 @@ const say = s => { if(!opt.quiet) console.log(s); };
 inProcessWorker(wireConnect, assembleConnect);       // node has no Worker; the wiring runs here
 // the synapse budget: --syn in millions, else half the machine's memory at 13 bytes a synapse while wiring (the page derives it from the device)
 setMaxSyn(opt.syn > 0 ? opt.syn : Math.floor(os.totalmem()*0.5/13));
-function blankNode(type, id, x, y){
-  const def = NODE_DEFS[type], params = {};
-  def.params.forEach(p => params[p.k] = structuredClone(p.def));
-  return { id, type, x, y, params, name:'', on:true, inputs:new Array(def.inputs).fill(null) };
-}
-function fakeEditor(){
-  const nodes = [];
-  return { nodes, nextId:1, groups:[],
-    byId(id){ return nodes.find(n => n.id === id); },
-    addNode(type, x, y){ const n = blankNode(type, this.nextId++, x, y); nodes.push(n); return n; } };
-}
-// Node modules (src/plugins.js): every .js in each folder, loaded the way the page loads a project's nodes folder.
-async function loadNodeFolder(dir){
-  if(!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()){ console.error('linen: no folder of node modules at ' + dir); process.exit(1); }
-  for(const name of fs.readdirSync(dir).sort()){
-    if(!/\.m?js$/.test(name)) continue;
-    const r = await loadPlugin(name, fs.readFileSync(path.join(dir, name), 'utf8'), importer());
-    if(r.error){ console.error('linen: ' + r.error); process.exit(1); }
-    say('node module ' + name + ': ' + r.keys.join(', '));
-  }
-}
-// This is what editor.load does, without a canvas under it.
-function editorFromScene(data){
-  data = migrateScene(data);
-  try { checkScenePlugins(data); }
-  catch(e){ console.error('linen: ' + e.message + '\n  (node modules load from --nodes DIR, and from the nodes folder beside the scenes folder the scene file is in)'); process.exit(1); }
-  const ed = fakeEditor();
-  ed.nextId = data.nextId || 1;
-  for(const sn of data.nodes || []){
-    if(!NODE_DEFS[sn.type]) continue;
-    const n = blankNode(sn.type, sn.id, sn.x, sn.y);
-    const def = NODE_DEFS[sn.type];
-    def.params.forEach(pd => { if(sn.params && sn.params[pd.k] !== undefined) n.params[pd.k] = structuredClone(sn.params[pd.k]); });
-    n.name = sn.name || '';
-    n.on = sn.on === false ? false : true;
-    const nIn = Math.max(def.inputs, sn.inputs ? sn.inputs.length : 0);
-    n.inputs = new Array(nIn).fill(null).map((_, k) => sn.inputs && sn.inputs[k] ? { id:sn.inputs[k].id } : null);
-    ed.nodes.push(n);
-  }
-  for(const n of ed.nodes) n.inputs = n.inputs.map(c => c && ed.byId(c.id) ? c : null);
-  return { ed, name:data.scenarioName || '' };
-}
-let ed, sceneName, source;
-const asFile = path.resolve(ROOT, target);
-if(/\.json$/i.test(target) && fs.existsSync(asFile)){
-  const own = path.join(path.dirname(asFile), '..', 'nodes');
-  if(path.basename(path.dirname(asFile)) === 'scenes' && fs.existsSync(own) && !opt.nodes.some(d => path.resolve(ROOT, d) === path.resolve(own))) opt.nodes.push(own);
-  // A scene in a project's scenes folder reads the project's files (points files, connections files, meshes) the way the page does.
-  if(path.basename(path.dirname(asFile)) === 'scenes'){
-    const projDir = path.join(path.dirname(asFile), '..');
-    setFileReader(async p => fs.readFileSync(path.join(projDir, p)));
-  }
-  for(const d of opt.nodes) await loadNodeFolder(path.resolve(ROOT, d));
-  const loaded = editorFromScene(JSON.parse(fs.readFileSync(asFile, 'utf8')));
-  ed = loaded.ed;
-  sceneName = loaded.name || path.basename(target, '.json');
-  source = path.relative(ROOT, asFile).replace(/\\/g, '/');
-} else {
-  const sc = ALL_SCENARIOS.find(s => s.name.toLowerCase() === target.toLowerCase())
-    || ALL_SCENARIOS.find(s => s.name.toLowerCase().includes(target.toLowerCase()));
-  if(!sc){
-    console.error('linen: no scene file and no scene called ' + target + '. The scenes are:\n  '
-      + ALL_SCENARIOS.map(s => s.name).join('\n  '));
-    process.exit(1);
-  }
-  ed = fakeEditor(); sc.build(ed);
-  sceneName = sc.name; source = 'scene ' + sc.name;
-}
-
-// ---- settings on nodes, which is where every setting lives
+// ---- the scene, with the settings given here on its nodes, which is where every setting lives
 const overrides = [...opt.over.flatMap(s => s.split(';')).map(s => s.trim()).filter(Boolean)];
 if(opt.seed !== null) overrides.push('connect:*:seed=' + opt.seed);
-let applied;
-try { applied = applyOverrides(ed.nodes, overrides); }
+let ed, sceneName, source, applied;
+try { ({ ed, sceneName, source, applied } = await loadScene(target, { root:ROOT, nodes:opt.nodes, overrides, say })); }
 catch(e){ console.error('linen: ' + e.message); process.exit(1); }
-for(const a of applied) say('setting ' + a.term + ' on ' + a.nodes + ' node' + (a.nodes === 1 ? '' : 's'));
 
 // ---- compute
 setResolution(opt.res);

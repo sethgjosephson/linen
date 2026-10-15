@@ -37,6 +37,16 @@ python3 serve.py 8173      # on Windows: py serve.py 8173
 
 Then open http://localhost:8173. Running it locally also gives linen a project folder, so your scenes and trained networks are saved as files on your disk.
 
+There's also a desktop app, which is the same linen in a window of its own, with the server and the engine host inside it, so nothing runs in a browser tab and a long training run keeps its full speed in the background. For now it runs from source and needs [Node](https://nodejs.org):
+
+```
+cd linen/desktop
+npm install
+npm start
+```
+
+The first launch asks where your project folder should live. It has been run on Windows so far; macOS and Linux should work but haven't been tried, and an installer will come later.
+
 ## A quick tour
 
 <p align="center"><img src="figures/readme/interface.png" alt="The mouse cortical column in the viewer with one neuron's connections drawn, its membrane trace and the rate of each layer, the node graph below with a box per layer, and a cell type's settings on the right" width="900"></p>

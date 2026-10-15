@@ -31,7 +31,9 @@ __global__ void stepKick(int n, int cur,
     const unsigned short* pool, const float* poolK, unsigned int* poolCnt,
     unsigned int poolG, unsigned int par, float vmin,
     const float* C7, const float* k7, const float* vr7, const float* vt7, const float* vp7,
-    const unsigned char* grd, const float* gthr, const float* gslp){
+    const unsigned char* grd, const float* gthr, const float* gslp,
+    unsigned int* spk, unsigned int* nSpk,
+    unsigned int* dlv, float* dlvAmp, unsigned int* nDlv){
   int i = blockIdx.x*blockDim.x + threadIdx.x;
   if(i >= n) return;
   // Izhikevich 2007 (MODEL.md 1): u is measured from the rest, the membrane is k (v - vr)(v - vt) over C, the spike at the row's vpeak
@@ -63,17 +65,17 @@ __global__ void stepKick(int n, int cur,
     }
     ui += a[i]*(b[i]*(vi - vri) - ui);
     const float vpk = vp7[i];
-  // a graded cell (MODEL.md 1): no spike, no reset, no refractory period; each millisecond its synapses carry a spike of amplitude r
+  // a graded cell (MODEL.md 1): no spike, no reset, no refractory period; each millisecond its synapses carry a spike of amplitude r, delivered by the delivery pass from the list
   if(grd && grd[i]){
     float r = fminf(1.0f, fmaxf(0.0f, (vi - gthr[i])/gslp[i]));
-    if(r > 0.0f) for(int s = preStart[i], e = preStart[i+1]; s < e; s++)
-      atomicAdd(&ring[((cur + delay[s]) % ROWS)*n + post[s]], w[s]*r);
+    if(r > 0.0f){ unsigned int k = atomicAdd(nDlv, 1u); dlv[k] = (unsigned int)i; dlvAmp[k] = r; }
     v[i] = vi; u[i] = ui; fired[i] = 0;
     return;
   }
   unsigned char f = 0;
   if(vi >= vpk){
     vi = c[i]; ui += d[i]; f = 1;
+    spk[atomicAdd(nSpk, 1u)] = (unsigned int)i;   // the list of this step's spikes, which the learning passes walk
     if(refrac > 0) refCnt[i] = (unsigned char)refrac;
     if(pool && pool[i]) atomicAdd(&poolCnt[par*poolG + pool[i]], 1u);
     counts[i]++;
@@ -91,10 +93,26 @@ __global__ void stepKick(int n, int cur,
       if(!stpOrder) stpR[i] = stpR[i] + stpU*(1.0f - stpR[i]);
       sf = rel*stpScale;
     }
-    for(int s = preStart[i], e = preStart[i+1]; s < e; s++)
-      atomicAdd(&ring[((cur + delay[s]) % ROWS)*n + post[s]], w[s]*sf);
+    unsigned int k = atomicAdd(nDlv, 1u); dlv[k] = (unsigned int)i; dlvAmp[k] = sf;   // delivered by deliverKick from the list
   }
   v[i] = vi; u[i] = ui; fired[i] = f;
+}
+
+// Delivery, a warp per entry of the step's list (a spiking cell with its release, or a graded cell with its amplitude): the 32 lanes stride over that cell's synapses, each adding its weight times the amplitude into the ring row its delay lands on.
+// Every delay is at least one step, so no entry writes the row the step just read, and the pass runs after the membrane step and before the learning passes, as the per-neuron form delivered inside the step.
+// Sums into the ring are atomic and land in whatever order the warps run, as before.
+__global__ void deliverKick(const unsigned int* dlv, const float* dlvAmp, const unsigned int* nDlv,
+    int n, int cur, float* ring,
+    const int* preStart, const int* post, const float* w, const unsigned char* delay){
+  const unsigned int lane = threadIdx.x & 31u;
+  const unsigned int warps = (gridDim.x*blockDim.x) >> 5;
+  const unsigned int count = *nDlv;
+  for(unsigned int k = (blockIdx.x*blockDim.x + threadIdx.x) >> 5; k < count; k += warps){
+    const int i = (int)dlv[k];
+    const float amp = dlvAmp[k];
+    for(int s = preStart[i] + (int)lane, e = preStart[i+1]; s < e; s += 32)
+      atomicAdd(&ring[((cur + delay[s]) % ROWS)*n + post[s]], w[s]*amp);
+  }
 }
 
 __global__ void stepExp(int n, int cur, float decE, float decI,
@@ -114,7 +132,9 @@ __global__ void stepExp(int n, int cur, float decE, float decI,
     const float* C7, const float* k7, const float* vr7, const float* vt7, const float* vp7,
     const unsigned char* grd, const float* gthr, const float* gslp,
     int KX, float* gX, float* ringX, const float* decX, const float* itauX, const unsigned char* pmask,
-    int cond, float eE, float eI, const float* erevX){
+    int cond, float eE, float eI, const float* erevX,
+    unsigned int* spk, unsigned int* nSpk,
+    unsigned int* dlv, float* dlvAmp, unsigned int* nDlv){
   int i = blockIdx.x*blockDim.x + threadIdx.x;
   if(i >= n) return;
   const float uRef = vr7[i];               // u is measured from the rest (2007)
@@ -158,19 +178,14 @@ __global__ void stepExp(int n, int cur, float decE, float decI,
     const float vpk = vp7[i];
   if(grd && grd[i]){
     float r = fminf(1.0f, fmaxf(0.0f, (vi - gthr[i])/gslp[i]));
-    if(r > 0.0f) for(int s = preStart[i], e = preStart[i+1]; s < e; s++){
-      float wt = w[s]*r;
-      int slot = (cur + delay[s]) % ROWS, at = slot*n + post[s];
-      int ch = pmask ? (pmask[s] >> 5) : 0;
-      if(ch >= 2) atomicAdd(&ringX[((size_t)(ch - 2)*ROWS + slot)*n + post[s]], wt);
-      else atomicAdd(wt > 0 ? &ring[at] : &ring2[at], wt);
-    }
+    if(r > 0.0f){ unsigned int k = atomicAdd(nDlv, 1u); dlv[k] = (unsigned int)i; dlvAmp[k] = r; }   // delivered by deliverExp from the list
     v[i] = vi; u[i] = ui; gE[i] = ge; gI[i] = gi; fired[i] = 0;
     return;
   }
   unsigned char f = 0;
   if(vi >= vpk){
     vi = c[i]; ui += d[i]; f = 1;
+    spk[atomicAdd(nSpk, 1u)] = (unsigned int)i;   // the list of this step's spikes, which the learning passes walk
     if(refrac > 0) refCnt[i] = (unsigned char)refrac;
     if(pool && pool[i]) atomicAdd(&poolCnt[par*poolG + pool[i]], 1u);
     counts[i]++;
@@ -186,15 +201,29 @@ __global__ void stepExp(int n, int cur, float decE, float decI,
       if(!stpOrder) stpR[i] = stpR[i] + stpU*(1.0f - stpR[i]);  // as published: facilitation after release
       sf = rel*stpScale;
     }
-    for(int s = preStart[i], e = preStart[i+1]; s < e; s++){
-      float wt = w[s]*sf;
+    unsigned int k = atomicAdd(nDlv, 1u); dlv[k] = (unsigned int)i; dlvAmp[k] = sf;   // delivered by deliverExp from the list
+  }
+  v[i] = vi; u[i] = ui; gE[i] = ge; gI[i] = gi; fired[i] = f;
+}
+
+// The exponential and conductance form of the delivery pass (see deliverKick): excitatory and inhibitory weights into their own rings, a receptor channel into its own.
+__global__ void deliverExp(const unsigned int* dlv, const float* dlvAmp, const unsigned int* nDlv,
+    int n, int cur, float* ring, float* ring2, float* ringX,
+    const int* preStart, const int* post, const float* w, const unsigned char* delay, const unsigned char* pmask){
+  const unsigned int lane = threadIdx.x & 31u;
+  const unsigned int warps = (gridDim.x*blockDim.x) >> 5;
+  const unsigned int count = *nDlv;
+  for(unsigned int k = (blockIdx.x*blockDim.x + threadIdx.x) >> 5; k < count; k += warps){
+    const int i = (int)dlv[k];
+    const float amp = dlvAmp[k];
+    for(int s = preStart[i] + (int)lane, e = preStart[i+1]; s < e; s += 32){
+      float wt = w[s]*amp;
       int slot = (cur + delay[s]) % ROWS, at = slot*n + post[s];
       int ch = pmask ? (pmask[s] >> 5) : 0;
       if(ch >= 2) atomicAdd(&ringX[((size_t)(ch - 2)*ROWS + slot)*n + post[s]], wt);
       else atomicAdd(wt > 0 ? &ring[at] : &ring2[at], wt);
     }
   }
-  v[i] = vi; u[i] = ui; gE[i] = ge; gI[i] = gi; fired[i] = f;
 }
 
 __device__ inline float softBound(float wv, float delta, float wmax){
@@ -228,71 +257,90 @@ __device__ __forceinline__ bool isCommitted(int commit, const float* wRef,
     const float* R, int s){
   return commit && wRef && R[R_consW] > 0.0f && wRef[s] >= R[R_consW]*0.9f;
 }
-__global__ void plastOut(int n, const unsigned char* fired,
+// The two weight-update halves run over the list of the neurons that fired this step (spk, nSpk, written by the step kernel), a warp per spike: the 32 lanes stride over that neuron's synapses.
+// One thread per neuron walking every synapse of a spiking cell alone left the rest of its warp idle, which at a few hertz was most of the card for the whole pass.
+// Each synapse is still updated by exactly one lane with the per-synapse arithmetic below, so the weights come out the same bits as the per-neuron form did.
+#define WARP 32u
+__device__ __forceinline__ void plastOutSyn(int s, const int* post, float* w,
+    const unsigned char* pmask, const float* Kpost,
+    float iAlpha, const float* alphaI, const float* wRef, int commit){
+  unsigned int rid = pmask ? (pmask[s] & 31u) : 1u;   // the rule is the low five bits; the channel the top three
+  if(rid == 0u) return;                    // 0 is frozen
+  const float* R = cRules + rid*RULE_STRIDE;
+  if(isCommitted(commit, wRef, R, s)) return;
+  const float wmax = R[R_wmax];
+  const int wdep = R[R_wdep] != 0.0f;
+  float wj = w[s];
+  if(wj > 0){
+    float nw = wj - R[R_aM]*Kpost[post[s]]*(wdep ? wj : 1.0f) + R[R_tin];
+    if(nw > wmax) nw = wmax;
+    w[s] = nw > 1e-4f ? nw : 1e-4f;
+  } else {
+    float al = alphaI ? alphaI[post[s]] : iAlpha;
+    float dd = -R[R_iEta]*(Kpost[post[s]] - al);
+    if(wdep) dd = softBound(wj, dd, wmax);
+    float nw = wj + dd;
+    if(nw > -1e-4f) nw = -1e-4f;
+    if(nw < -wmax) nw = -wmax;
+    w[s] = nw;
+  }
+}
+__global__ void plastOut(const unsigned int* spk, const unsigned int* nSpk,
     const int* preStart, const int* post, float* w,
     const unsigned char* pmask, const float* Kpost,
     float iAlpha, const float* alphaI, const float* wRef, int commit){
-  int i = blockIdx.x*blockDim.x + threadIdx.x;
-  if(i >= n || !fired[i]) return;
-  for(int s = preStart[i], e = preStart[i+1]; s < e; s++){
-    unsigned int rid = pmask ? (pmask[s] & 31u) : 1u;   // the rule is the low five bits; the channel the top three
-    if(rid == 0u) continue;                  // 0 is frozen
-    const float* R = cRules + rid*RULE_STRIDE;
-    if(isCommitted(commit, wRef, R, s)) continue;
-    const float wmax = R[R_wmax];
-    const int wdep = R[R_wdep] != 0.0f;
-    float wj = w[s];
-    if(wj > 0){
-      float nw = wj - R[R_aM]*Kpost[post[s]]*(wdep ? wj : 1.0f) + R[R_tin];
-      if(nw > wmax) nw = wmax;
-      w[s] = nw > 1e-4f ? nw : 1e-4f;
-    } else {
-      float al = alphaI ? alphaI[post[s]] : iAlpha;
-      float dd = -R[R_iEta]*(Kpost[post[s]] - al);
-      if(wdep) dd = softBound(wj, dd, wmax);
-      float nw = wj + dd;
-      if(nw > -1e-4f) nw = -1e-4f;
-      if(nw < -wmax) nw = -wmax;
-      w[s] = nw;
-    }
+  const unsigned int lane = threadIdx.x & 31u;
+  const unsigned int warps = (gridDim.x*blockDim.x) >> 5;
+  const unsigned int count = *nSpk;
+  for(unsigned int k = (blockIdx.x*blockDim.x + threadIdx.x) >> 5; k < count; k += warps){
+    const int i = (int)spk[k];
+    for(int s = preStart[i] + (int)lane, e = preStart[i+1]; s < e; s += (int)WARP)
+      plastOutSyn(s, post, w, pmask, Kpost, iAlpha, alphaI, wRef, commit);
   }
 }
 
 // The triplet and heterosynaptic terms read the slow postsynaptic trace before this millisecond's spike is added, matching the reference: the triplet potentiates by postsynaptic history (Pfister and Gerstner 2006), and the cubed trace gates heterosynaptic regression toward the reference weight so only bursting engages it (Zenke et al. 2015).
-__global__ void plastIn(int n, const unsigned char* fired,
+__device__ __forceinline__ void plastInSyn(int s, int pre, float* w,
+    const unsigned char* pmask, const float* Kpre,
+    const float* wRef, float z, float gate, int commit){
+  unsigned int rid = pmask ? (pmask[s] & 31u) : 1u;   // the rule is the low five bits; the channel the top three
+  if(rid == 0u) return;
+  const float* R = cRules + rid*RULE_STRIDE;
+  if(isCommitted(commit, wRef, R, s)) return;
+  const float wmax = R[R_wmax], het = R[R_het];
+  const int wdep = R[R_wdep] != 0.0f;
+  float wp = w[s], kp = Kpre[pre];
+  if(wp > 0){
+    float nw = wp + (R[R_aP] + R[R_trip]*z)*kp;
+    if(het > 0 && wRef){
+      float hetF = het*gate;
+      if(hetF > 1.0f) hetF = 1.0f;
+      nw -= hetF*(wp - wRef[s]);
+    }
+    if(nw > wmax) nw = wmax;
+    w[s] = nw > 1e-4f ? nw : 1e-4f;
+  } else {
+    float dd = -R[R_iEta]*kp;
+    if(wdep) dd = softBound(wp, dd, wmax);
+    float nw = wp + dd;
+    w[s] = nw > -wmax ? nw : -wmax;
+  }
+}
+__global__ void plastIn(const unsigned int* spk, const unsigned int* nSpk,
     const int* inStart, const int* revSyn, const int* revPre, float* w,
     const unsigned char* pmask, const float* Kpre,
     const float* Kslow, const float* wRef, float kRef, int commit){
-  int i = blockIdx.x*blockDim.x + threadIdx.x;
-  if(i >= n || !fired[i]) return;
-  float z = Kslow ? Kslow[i] : 0.0f;
-  // the gate is this neuron's trace against its set point, so it is shared; only the amplitude multiplying it is per rule
-  float g = z/kRef;
-  float gate = g*g*g;
-  for(int k = inStart[i], ke = inStart[i+1]; k < ke; k++){
-    int s = revSyn[k];
-    unsigned int rid = pmask ? (pmask[s] & 31u) : 1u;   // the rule is the low five bits; the channel the top three
-    if(rid == 0u) continue;
-    const float* R = cRules + rid*RULE_STRIDE;
-    if(isCommitted(commit, wRef, R, s)) continue;
-    const float wmax = R[R_wmax], het = R[R_het];
-    const int wdep = R[R_wdep] != 0.0f;
-    float wp = w[s], kp = Kpre[revPre[k]];
-    if(wp > 0){
-      float nw = wp + (R[R_aP] + R[R_trip]*z)*kp;
-      if(het > 0 && wRef){
-        float hetF = het*gate;
-        if(hetF > 1.0f) hetF = 1.0f;
-        nw -= hetF*(wp - wRef[s]);
-      }
-      if(nw > wmax) nw = wmax;
-      w[s] = nw > 1e-4f ? nw : 1e-4f;
-    } else {
-      float dd = -R[R_iEta]*kp;
-      if(wdep) dd = softBound(wp, dd, wmax);
-      float nw = wp + dd;
-      w[s] = nw > -wmax ? nw : -wmax;
-    }
+  const unsigned int lane = threadIdx.x & 31u;
+  const unsigned int warps = (gridDim.x*blockDim.x) >> 5;
+  const unsigned int count = *nSpk;
+  for(unsigned int k = (blockIdx.x*blockDim.x + threadIdx.x) >> 5; k < count; k += warps){
+    const int i = (int)spk[k];
+    float z = Kslow ? Kslow[i] : 0.0f;
+    // the gate is this neuron's trace against its set point, so it is shared; only the amplitude multiplying it is per rule
+    float g = z/kRef;
+    float gate = g*g*g;
+    for(int kk = inStart[i] + (int)lane, ke = inStart[i+1]; kk < ke; kk += (int)WARP)
+      plastInSyn(revSyn[kk], revPre[kk], w, pmask, Kpre, wRef, z, gate, commit);
   }
 }
 

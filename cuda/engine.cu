@@ -108,15 +108,36 @@ struct Net {
   int *pre, *post, *inStart, *revSyn, *revPre;
   unsigned char *delay, *pmask, *fired;
   unsigned int *counts;
+  unsigned int *spk = nullptr, *nSpk = nullptr;   // the neurons that fired this step, as a list with its count, for the learning passes
+  unsigned int *dlv = nullptr, *nDlv = nullptr; float *dlvAmp = nullptr;   // the cells delivering this step (spiking, or graded with a release) with their amplitudes, for the delivery pass
   unsigned int seed = 1, t = 0;      // noise seed from the host; simulated ms since init
   unsigned long long *total;
   int cur = 0;
 };
 static Net N;
 
+// Where the time goes, when LINEN_PROFILE is set in the environment: each kind of launch is bracketed by events and waited for, and the totals print to stderr when the input ends.
+// The waits serialize the stream, so the run is slower than a real one; the shares are what the table is for.
+// The profilers were tried first: Nsight Systems does not follow this child on Windows, and Nsight Compute's replay of a kernel saves and restores every buffer, which at a gigabyte of synapses never finished.
+static int PROF = 0;
+static cudaEvent_t profA, profB;
+struct ProfSlot { const char* name; double ms; unsigned long long n; };
+static ProfSlot prof[] = { {"step", 0, 0}, {"stp", 0, 0}, {"plastOut", 0, 0}, {"plastIn", 0, 0}, {"trace", 0, 0},
+  {"scale", 0, 0}, {"consolidate", 0, 0}, {"memsets", 0, 0}, {"deliver", 0, 0} };
+#define PK(slot, ...) do { if(PROF){ cudaEventRecord(profA); __VA_ARGS__; cudaEventRecord(profB); cudaEventSynchronize(profB); \
+  float ms_ = 0; cudaEventElapsedTime(&ms_, profA, profB); prof[slot].ms += ms_; prof[slot].n++; } else { __VA_ARGS__; } } while(0)
+static void profReport(){
+  double T = 0; for(const ProfSlot& p : prof) T += p.ms;
+  fprintf(stderr, "engine.cu profile: %-12s %9s %10s %9s %6s\n", "kind", "total ms", "launches", "avg us", "share");
+  for(const ProfSlot& p : prof) if(p.n)
+    fprintf(stderr, "engine.cu profile: %-12s %9.1f %10llu %9.1f %5.1f%%\n", p.name, p.ms, p.n, 1000.0*p.ms/(double)p.n, T > 0 ? 100.0*p.ms/T : 0.0);
+}
+
 int main(){
   _setmode(0, _O_BINARY);
   _setmode(1, _O_BINARY);
+  PROF = getenv("LINEN_PROFILE") ? 1 : 0;
+  if(PROF){ cudaEventCreate(&profA); cudaEventCreate(&profB); }
   std::vector<unsigned char> hostFired;
   std::vector<char> payload;
   for(;;){
@@ -209,6 +230,10 @@ int main(){
       CK(cudaMalloc((void**)&N.ext, n*4)); CK(cudaMalloc((void**)&N.namp, n*4));
       CK(cudaMalloc((void**)&N.fired, n)); CK(cudaMalloc((void**)&N.counts, n*4));
       CK(cudaMalloc((void**)&N.total, 8));
+      CK(cudaMalloc((void**)&N.spk, (size_t)n*4)); CK(cudaMalloc((void**)&N.nSpk, 4));
+      CK(cudaMemset(N.nSpk, 0, 4));
+      CK(cudaMalloc((void**)&N.dlv, (size_t)n*4)); CK(cudaMalloc((void**)&N.dlvAmp, (size_t)n*4)); CK(cudaMalloc((void**)&N.nDlv, 4));
+      CK(cudaMemset(N.nDlv, 0, 4));
       CK(cudaMemset(N.ring, 0, (size_t)ROWS*n*4));
       CK(cudaMemset(N.ring2, 0, (size_t)ROWS*n*4));
       CK(cudaMemset(N.gE, 0, n*4)); CK(cudaMemset(N.gI, 0, n*4));
@@ -425,11 +450,15 @@ int main(){
       CK(cudaMemcpy(c0.data(), N.counts, n*4, cudaMemcpyDeviceToHost));
       // 255 is "did not fire in this tick"; the kernels only ever write a smaller value, and only the first time
       if(N.sendT && N.firstMs) CK(cudaMemset(N.firstMs, 255, n));
+      // the learning passes take a warp per spike over the step's list: n/32 warps, one per cell that could fire, striding when a step's list is longer than that
+      int gridW = grid; if(gridW > 4096) gridW = 4096;
       for(unsigned int t = 0; t < steps; t++){
         int cur = N.cur;
         unsigned int par = N.t & 1u;         // which pool count half this step writes
+        CK(cudaMemsetAsync(N.nSpk, 0, 4));   // the step kernel fills both lists afresh
+        CK(cudaMemsetAsync(N.nDlv, 0, 4));
         if(N.syn)
-          stepExp<<<grid, block>>>(n, cur, decE, decI, itauE, itauI,
+          PK(0, stepExp<<<grid, block>>>(n, cur, decE, decI, itauE, itauI,
             N.a, N.b, N.c, N.d, N.bias, N.ext, N.namp, N.t, N.seed,
             N.v, N.u, N.ring, N.ring2, N.gE, N.gI,
             N.pre, N.post, N.w, N.delay, N.fired, N.counts, N.total,
@@ -439,9 +468,10 @@ int main(){
             N.poolG > 1 ? N.pool : nullptr, N.poolK, N.poolCnt, N.poolG, par, N.vmin,
             N.C7, N.k7, N.vr7, N.vt7, N.vp7, N.grd, N.gthr, N.gslp,
             N.KX, N.gX, N.ringX, N.decX, N.itauX, N.KX ? N.pmask : nullptr,
-            N.syn == 2 ? 1 : 0, N.eE, N.eI, N.erevX);
+            N.syn == 2 ? 1 : 0, N.eE, N.eI, N.erevX,
+            N.spk, N.nSpk, N.dlv, N.dlvAmp, N.nDlv));
         else
-          stepKick<<<grid, block>>>(n, cur,
+          PK(0, stepKick<<<grid, block>>>(n, cur,
             N.a, N.b, N.c, N.d, N.bias, N.ext, N.namp, N.t, N.seed,
             N.v, N.u, N.ring,
             N.pre, N.post, N.w, N.delay, N.fired, N.counts, N.total,
@@ -449,28 +479,36 @@ int main(){
             N.stp > 0 ? N.stpX : nullptr, N.stpR, N.stpU, stpScale, N.stpOrder,
             N.sendT ? N.firstMs : nullptr, (int)t,
             N.poolG > 1 ? N.pool : nullptr, N.poolK, N.poolCnt, N.poolG, par, N.vmin,
-            N.C7, N.k7, N.vr7, N.vt7, N.vp7, N.grd, N.gthr, N.gslp);
+            N.C7, N.k7, N.vr7, N.vt7, N.vp7, N.grd, N.gthr, N.gslp,
+            N.spk, N.nSpk, N.dlv, N.dlvAmp, N.nDlv));
+        // delivery from the step's list, before the learning passes change the weights, as the per-neuron form delivered inside the step
+        if(N.syn)
+          PK(8, deliverExp<<<gridW, block>>>(N.dlv, N.dlvAmp, N.nDlv, n, cur, N.ring, N.ring2, N.ringX,
+            N.pre, N.post, N.w, N.delay, N.KX ? N.pmask : nullptr));
+        else
+          PK(8, deliverKick<<<gridW, block>>>(N.dlv, N.dlvAmp, N.nDlv, n, cur, N.ring,
+            N.pre, N.post, N.w, N.delay));
         // the half this step read is zeroed for the step after next
         if(N.poolG > 1)
           CK(cudaMemsetAsync(N.poolCnt + (size_t)(par ^ 1u)*N.poolG, 0, (size_t)N.poolG*4));
         N.t++;                              // simulated ms, the noise counter
         if(N.stp > 0 && N.stpX)
-          stpStepK<<<grid, block>>>(n, N.stpX, N.stpR, N.stpU,
-            expf(-1.0f/N.stpTauD), expf(-1.0f/N.stpTauF));
+          PK(1, stpStepK<<<grid, block>>>(n, N.stpX, N.stpR, N.stpU,
+            expf(-1.0f/N.stpTauD), expf(-1.0f/N.stpTauF)));
         if(N.watch >= 0 && N.vtrace && t < N.vtraceCap)
           watchK<<<1, 1>>>(N.v, N.vtrace, (int)t, N.watch);
         if(N.plast){
           // while calibrating, measure and change nothing: the traces and the spike accumulator still advance, the weights do not
           if(!N.calibrating){
-          plastOut<<<grid, block>>>(n, N.fired, N.pre, N.post, N.w, N.pmask,
-            N.Kpost, iAlpha, N.alphaI, N.wRef, N.commit);
-          plastIn<<<grid, block>>>(n, N.fired, N.inStart, N.revSyn, N.revPre,
+          PK(2, plastOut<<<gridW, block>>>(N.spk, N.nSpk, N.pre, N.post, N.w, N.pmask,
+            N.Kpost, iAlpha, N.alphaI, N.wRef, N.commit));
+          PK(3, plastIn<<<gridW, block>>>(N.spk, N.nSpk, N.inStart, N.revSyn, N.revPre,
             N.w, N.pmask, N.Kpre, N.Kslow, N.wRef,
-            N.tauY*(N.iRho > 0 ? N.iRho : 5.0f)*0.001f, N.commit);
+            N.tauY*(N.iRho > 0 ? N.iRho : 5.0f)*0.001f, N.commit));
           }
-          traceStep<<<grid, block>>>(n, N.fired, N.Kpre, N.Kpost, decS, decM,
+          PK(4, traceStep<<<grid, block>>>(n, N.fired, N.Kpre, N.Kpost, decS, decM,
             N.Kslow, expf(-1.0f/N.tauY),
-            (N.scaleOn > 0 || N.calibrating) ? N.spkAcc : nullptr);
+            (N.scaleOn > 0 || N.calibrating) ? N.spkAcc : nullptr));
           if(N.calibrating){
             N.calAcc += 1.0f;
             if(N.calAcc >= N.calS*1000.0f){
@@ -485,8 +523,8 @@ int main(){
             N.scaleAcc += 1.0f;
             if(N.scaleAcc >= 1000.0f){
               N.scaleAcc = 0;
-              scaleK<<<grid, block>>>(n, N.inStart, N.revSyn, N.w, N.pmask,
-                N.spkAcc, N.iRho > 0 ? N.iRho : 5.0f, N.sEta, N.rhoI, N.wRef, N.commit);
+              PK(5, scaleK<<<grid, block>>>(n, N.inStart, N.revSyn, N.w, N.pmask,
+                N.spkAcc, N.iRho > 0 ? N.iRho : 5.0f, N.sEta, N.rhoI, N.wRef, N.commit));
             }
           }
           // the reference weight follows the weight through a double well, on the published cadence rather than every step
@@ -495,14 +533,14 @@ int main(){
             if(N.consAcc >= N.consStep){
               N.consAcc = 0;
               int mb = 256, mg = (int)((N.m + mb - 1)/mb);
-              consolidateK<<<mg, mb>>>(N.m, N.w, N.wRef, N.pmask,
-                N.consStep/N.tauCons);
+              PK(6, consolidateK<<<mg, mb>>>(N.m, N.w, N.wRef, N.pmask,
+                N.consStep/N.tauCons));
             }
           }
         }
-        CK(cudaMemsetAsync(N.ring + (size_t)cur*n, 0, n*4));
-        if(N.syn) CK(cudaMemsetAsync(N.ring2 + (size_t)cur*n, 0, n*4));
-        for(int x = 0; x < N.KX; x++) CK(cudaMemsetAsync(N.ringX + ((size_t)x*ROWS + cur)*n, 0, n*4));
+        PK(7, CK(cudaMemsetAsync(N.ring + (size_t)cur*n, 0, n*4));
+          if(N.syn) CK(cudaMemsetAsync(N.ring2 + (size_t)cur*n, 0, n*4));
+          for(int x = 0; x < N.KX; x++) CK(cudaMemsetAsync(N.ringX + ((size_t)x*ROWS + cur)*n, 0, n*4)));
         N.cur = (N.cur + 1) % ROWS;
       }
       std::vector<unsigned int> c1(n);
@@ -550,5 +588,6 @@ int main(){
       reply(101, wf.data(), ((size_t)N.m + extra)*4);
     }
   }
+  if(PROF) profReport();
   return 0;
 }

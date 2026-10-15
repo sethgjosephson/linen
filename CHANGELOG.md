@@ -16,7 +16,20 @@ release lists the number of each that it reads and writes:
 | recording (`recordings/*.json`) | linen-recording-1 | `src/recording.js` |
 | trial matrix (`runs/*/trials.npt`) | np-trials-1 | `src/train.js`, `tools/np_trials.py` |
 | headless run folder (`run.json`, `rates.csv`, `spikes.txt`, `cells.csv`, `settings.json`) | as written by `tools/linen.mjs` | `tools/linen_read.py` |
-| engine init message | protocol 2 | `src/protocol.js`, refused on mismatch by every engine |
+| engine init message | protocol 3 | `src/protocol.js`, refused on mismatch by every engine |
+
+## Unreleased
+
+- Space fills the window with the pane under the cursor, the viewer or
+  the node graph, and restores it.
+- VIEWER WINDOW in the viewer bar moves the whole viewer, its bar, the
+  oscilloscope, the panels and the raster, into a window of its own, to
+  put on another screen; a VIEWER button in the top bar brings it back.
+- The desktop app, from source: an Electron window with the server and
+  the engine host inside it (`desktop/`, see the README).
+- The CUDA engine delivers spikes and applies both learning passes over
+  the step's spike list, a warp per spike; with learning it runs 1.5 to
+  8x faster on the measured networks.
 
 ## 0.1.0 (2026-10-10)
 

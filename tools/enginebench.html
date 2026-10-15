@@ -1,0 +1,29 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>linen engine bench</title>
+<!-- The WebGPU half of tools/enginebench.mjs: loads an init message written by that tool, times the WebGPU worker on it with the same loop the other engines are timed by, and leaves the result on window.bench for the tool to read. -->
+<pre id="out" style="background:#000;color:#ccc;margin:0;padding:12px"></pre>
+<script type="module">
+import { unpackMessage, makeInbox, timeEngine } from './benchcore.js';
+const Q = new URLSearchParams(location.search);
+const out = document.getElementById('out');
+const say = s => { out.textContent += s + '\n'; };
+window.bench = { done:false };
+try {
+  const buf = await (await fetch(Q.get('dump'))).arrayBuffer();
+  const init = unpackMessage(buf);
+  say('init message: ' + init.count.toLocaleString() + ' cells, ' + init.post.length.toLocaleString() + ' synapses');
+  const w = new Worker(new URL('../src/gpuworker.js', import.meta.url), { type:'module' });
+  const inbox = makeInbox();
+  w.onmessage = e => inbox.push(e.data);
+  w.onerror = e => inbox.push({ cmd:'error', message:e.message || 'the worker failed to load' });
+  const r = await timeEngine({ post:d => w.postMessage(d), next:inbox.next, init, ready:true,
+    warmMs:+Q.get('warm'), ms:+Q.get('ms'), tick:+Q.get('tick'), now:() => performance.now()/1000 });
+  w.terminate();
+  say(JSON.stringify(r));
+  window.bench = { done:true, result:r };
+} catch(e){
+  say('error: ' + e.message);
+  window.bench = { done:true, error:e.message };
+}
+</script>

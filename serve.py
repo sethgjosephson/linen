@@ -86,7 +86,8 @@ def project_path(rel):
     if not rel:
         return None
     parts = [p for p in posixpath.normpath(rel).split('/') if p not in ('', '.')]
-    if any(p == '..' for p in parts):
+    # a component that is only dots is never a name anyone asked for, and what Windows makes of "...." differs from Linux
+    if any(set(p) == {'.'} for p in parts):
         return None
     full = os.path.realpath(os.path.join(PROJECT, *parts))
     root = os.path.realpath(PROJECT)

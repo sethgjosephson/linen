@@ -31,9 +31,9 @@ const results = [];
 let failed = 0;
 const t0 = Date.now();
 
-function run(label, cmd, args){
+function run(label, cmd, args, env = {}){
   const start = Date.now();
-  const r = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8' });
+  const r = spawnSync(cmd, args, { cwd: ROOT, encoding: 'utf8', env: { ...process.env, ...env } });
   const ms = Date.now() - start;
   const bad = r.status !== 0;
   if(bad) failed++;
@@ -55,6 +55,8 @@ if(!quick){
       run(join('cuda', f), node, [join(ROOT, 'cuda', f)]);
   const py = process.platform === 'win32' ? 'python' : 'python3';
   run('tools/servetest.py', py, [join(ROOT, 'tools', 'servetest.py')]);
+  // the desktop app's server (desktop/serve.mjs) through the same test, so the two servers answer alike
+  run('servetest.py (desktop)', py, [join(ROOT, 'tools', 'servetest.py')], { NPTEST_SERVER: `"${node}" desktop/serve.mjs` });
   // the headless runner end to end (tools/linentest.mjs): it computes a small scene twice and reads back what it wrote, a few seconds
   run('tools/linentest.mjs', node, [join(ROOT, 'tools', 'linentest.mjs')]);
   // an engine of one's own end to end (tools/remotetest.mjs): the Python template engine on a port, a scene run on it, a term it lacks refused; needs NumPy and websockets
