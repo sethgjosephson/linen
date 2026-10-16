@@ -1,0 +1,487 @@
+{
+ "v": 1,
+ "format": 11,
+ "nextId": 14,
+ "view": {
+  "x": 0,
+  "y": 0,
+  "scale": 1
+ },
+ "viewSlots": {},
+ "activeView": null,
+ "scenarioName": "gamma from inhibition",
+ "groups": [
+  {
+   "label": "volume",
+   "members": [
+    3
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "pyramids  RS",
+   "members": [
+    4
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "fast spiking  FS",
+   "members": [
+    5
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "wiring  interneurons dense and strong",
+   "members": [
+    6,
+    7
+   ],
+   "hue": 280,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "drive  tonic and noise",
+   "members": [
+    8,
+    9
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "readout",
+   "members": [
+    10,
+    11,
+    13
+   ],
+   "hue": 280,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "checkpoint  exponential synapses, GABA-A at 6 ms",
+   "members": [
+    12
+   ],
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": 1,
+   "type": "note",
+   "x": -380,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Gamma from inhibition\n\nA patch of cortex at density, driven tonically, and paced into the gamma band by its fast spiking cells. Every pyramidal volley recruits the interneurons, their inhibition silences the patch for about one GABA-A decay, and then the next volley follows (Whittington et al. 2000). The rate over time chart shows the rhythm, which is 35 Hz here.",
+    "width": 340,
+    "near": ""
+   },
+   "inputs": []
+  },
+  {
+   "id": 2,
+   "type": "note",
+   "x": -380,
+   "y": 230,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Something to try: raise the drive and the band shifts up. Lengthen the inhibitory time constant on the checkpoint (tau I, 6 ms) and the rhythm slows, since the silence after each volley lasts longer. Set the inhibitory weight to zero on the connect node and the rhythm goes away with it.",
+    "width": 340,
+    "near": "wiring"
+   },
+   "inputs": []
+  },
+  {
+   "id": 3,
+   "type": "sphere",
+   "x": 40,
+   "y": 20,
+   "on": true,
+   "name": "pyr + fs sphere",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 200
+   },
+   "inputs": []
+  },
+  {
+   "id": 4,
+   "type": "scatter",
+   "x": 40,
+   "y": 75,
+   "on": true,
+   "name": "pyr",
+   "params": {
+    "fill": 1,
+    "density": 72000,
+    "count": 2000,
+    "type": 10,
+    "tag": "pyr",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 3
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "type": "scatter",
+   "x": 190,
+   "y": 75,
+   "on": true,
+   "name": "fs",
+   "params": {
+    "fill": 1,
+    "density": 18000,
+    "count": 2000,
+    "type": 13,
+    "tag": "fs",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 3
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "type": "gather",
+   "x": 115,
+   "y": 155,
+   "on": true,
+   "name": "pyr + fs",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 4
+    },
+    {
+     "id": 5
+    },
+    null,
+    null
+   ]
+  },
+  {
+   "id": 7,
+   "type": "connect",
+   "x": 115,
+   "y": 220,
+   "on": true,
+   "name": "pyr + fs wiring",
+   "params": {
+    "radius": 500,
+    "sigma": 200,
+    "prob": 0.15,
+    "wExc": 50,
+    "wInh": -150,
+    "wdist": 1,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "pyr fs 3 2\nfs pyr 3 2\nfs fs 3 1",
+    "velocity": 200,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 6
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "type": "stimulus",
+   "x": 115,
+   "y": 280,
+   "on": true,
+   "name": "tonic drive",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 1200,
+    "tag": "pyr",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 7
+    },
+    null
+   ]
+  },
+  {
+   "id": 9,
+   "type": "stimulus",
+   "x": 265,
+   "y": 280,
+   "on": true,
+   "name": "noise on all cells",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 50,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 8
+    },
+    null
+   ]
+  },
+  {
+   "id": 10,
+   "type": "probe",
+   "x": 40,
+   "y": 400,
+   "on": true,
+   "name": "pyramids probe",
+   "params": {
+    "label": "pyramids",
+    "tag": "pyr",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 9
+    },
+    null
+   ]
+  },
+  {
+   "id": 11,
+   "type": "probe",
+   "x": 190,
+   "y": 400,
+   "on": true,
+   "name": "fast spiking probe",
+   "params": {
+    "label": "fast spiking",
+    "tag": "fs",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 10
+    },
+    null
+   ]
+  },
+  {
+   "id": 12,
+   "type": "checkpoint",
+   "x": 115,
+   "y": 460,
+   "on": true,
+   "name": "simulation",
+   "params": {
+    "steps": 1,
+    "engine": 0,
+    "syn": 1,
+    "tauE": 3,
+    "tauI": 6,
+    "eRevE": 0,
+    "eRevI": -70,
+    "psc": 1,
+    "refrac": 2,
+    "vmin": -90,
+    "plast": 0,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 16.8,
+    "tauM": 33.7,
+    "trip": 0,
+    "tauY": 114,
+    "tin": 0,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "het": 0,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "tauCons": 20,
+    "consStep": 1.2,
+    "commit": 0,
+    "stpPreset": 0,
+    "stp": 0,
+    "stpU": 0.5,
+    "stpNorm": 0,
+    "stpOrder": 0,
+    "stpTauD": 800,
+    "stpTauF": 1,
+    "variants": [],
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trEngine": 0,
+    "trHost": "ws://localhost:8801",
+    "exportSecs": 2
+   },
+   "inputs": [
+    {
+     "id": 11
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "type": "chart",
+   "x": 265,
+   "y": 520,
+   "on": true,
+   "name": "rate of pyramids",
+   "params": {
+    "plot": 7,
+    "pop": "pyramids",
+    "window": 0.5,
+    "smooth": 0,
+    "which": 0,
+    "field": "decode",
+    "bins": 40,
+    "height": 130,
+    "source": "",
+    "title": "",
+    "xText": "",
+    "yText": "",
+    "yMin": "",
+    "yMax": "",
+    "grid": 1,
+    "legend": 1,
+    "cmap": 0,
+    "preview": 0,
+    "format": 0,
+    "sizePreset": 0,
+    "figW": 180,
+    "figH": 100,
+    "dpi": 300,
+    "theme": 0,
+    "figFont": 0,
+    "fontPt": 8,
+    "linePt": 1,
+    "caption": 0
+   },
+   "inputs": [
+    {
+     "id": 12
+    }
+   ]
+  }
+ ]
+}

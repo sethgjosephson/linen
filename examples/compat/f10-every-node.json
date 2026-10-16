@@ -1,0 +1,1287 @@
+{
+ "v": 1,
+ "format": 10,
+ "nextId": 47,
+ "view": {
+  "x": 0,
+  "y": 0,
+  "scale": 1
+ },
+ "viewSlots": {},
+ "activeView": null,
+ "scenarioName": "every node",
+ "groups": [
+  {
+   "label": "the ball  sphere, neuron scatters, retype",
+   "members": [
+    7,
+    11,
+    12,
+    26
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "the slab  box, neuron scatter, every arrange node, cell type",
+   "members": [
+    8,
+    9,
+    13,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21,
+    27
+   ],
+   "hue": 270,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "the patch  noise field, neuron scatter, repeat, population",
+   "members": [
+    10,
+    14,
+    22,
+    23,
+    24,
+    25
+   ],
+   "hue": 190,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "wiring  gather to connect",
+   "members": [
+    28,
+    29,
+    30,
+    31,
+    32,
+    33
+   ],
+   "hue": 140,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "drive  currents, a bar sweep, a lesson",
+   "members": [
+    34,
+    35,
+    36,
+    37,
+    38,
+    39
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "readout  a probe per population, analysis, chart",
+   "members": [
+    40,
+    41,
+    42,
+    43,
+    44,
+    46
+   ],
+   "hue": 175,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "run  the checkpoint, plasticity on",
+   "members": [
+    45
+   ],
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": 1,
+   "type": "note",
+   "x": -380,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "EVERY NODE. One scene with a node of every kind that needs no file or device, each doing its job on a small tissue, so the graph itself is the reference: read the notes beside each group, then double-click any node for its settings. The ball is the balanced random net at density; the slab and the patch are there for the nodes that shape and select cells.",
+    "width": 340,
+    "near": ""
+   },
+   "inputs": []
+  },
+  {
+   "id": 2,
+   "type": "note",
+   "x": -380,
+   "y": 200,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "The ball: a sphere region, a neuron scatter per class filling it at a density per cubic millimetre, and a retype node that makes a fraction of the excitatory cells intrinsically bursting.",
+    "width": 340,
+    "near": "the ball"
+   },
+   "inputs": []
+  },
+  {
+   "id": 3,
+   "type": "note",
+   "x": -380,
+   "y": 340,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "The slab: a box region and its neuron scatter, then every arrange node in a chain: move shifts it, twist turns it about an axis by position, gauss blur jitters every coordinate, noise warp bends it with a smooth field, gradient thins it along an axis, cull removes the cells inside the small sphere, and operations applies a formula to every cell. A cell type node then names a new row for it from the measured regular-spiking numbers.",
+    "width": 340,
+    "near": "the slab"
+   },
+   "inputs": []
+  },
+  {
+   "id": 4,
+   "type": "note",
+   "x": -380,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "The patch: a noise field region, a seeded density pattern inside a bounds box, filled by a neuron scatter. Repeat lays down two copies of it, tile1 and tile2; a population node picks each copy out of the stream by its tag, so the two can be handled apart (here one is moved further along), and both are gathered back in.",
+    "width": 340,
+    "near": "the patch"
+   },
+   "inputs": []
+  },
+  {
+   "id": 5,
+   "type": "note",
+   "x": -380,
+   "y": 700,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Wiring: gather joins the four populations; receptors declares channels beyond E and I; plasticity names a pair STDP rule on the ball's excitatory synapses; feedback inhibition pools the ball's excitatory cells; project runs a tract from the ball to the slab; connect grows the local synapses, the balanced net's wiring inside the ball.",
+    "width": 340,
+    "near": "wiring"
+   },
+   "inputs": []
+  },
+  {
+   "id": 6,
+   "type": "note",
+   "x": -380,
+   "y": 880,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Drive: a noise current on every cell, a pulse train on the slab through its box as a mask, a bar sweep from the test signal fed onto the slab as a sheet, and a lesson of shapes from the curriculum fed onto the ball. Readout: a probe per population, an analysis node that measures what the lesson does, the checkpoint with plasticity on, and a chart of the ball's excitatory rate.",
+    "width": 340,
+    "near": "drive"
+   },
+   "inputs": []
+  },
+  {
+   "id": 7,
+   "type": "sphere",
+   "x": 40,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 250
+   },
+   "inputs": []
+  },
+  {
+   "id": 8,
+   "type": "box",
+   "x": 340,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     900,
+     0,
+     0
+    ],
+    "size": [
+     400,
+     200,
+     400
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 9,
+   "type": "sphere",
+   "x": 490,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     900,
+     0,
+     0
+    ],
+    "radius": 60
+   },
+   "inputs": []
+  },
+  {
+   "id": 10,
+   "type": "noisefield",
+   "x": 640,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -900,
+     0,
+     0
+    ],
+    "size": [
+     500,
+     300,
+     500
+    ],
+    "pattern": 1,
+    "scale": 150,
+    "coverage": 0.5,
+    "octaves": 2,
+    "direction": [
+     1,
+     0,
+     0
+    ],
+    "seed": 3
+   },
+   "inputs": []
+  },
+  {
+   "id": 11,
+   "type": "scatter",
+   "x": 40,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "fill": 1,
+    "density": 72000,
+    "count": 2000,
+    "type": 0,
+    "tag": "exc",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 7
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "type": "scatter",
+   "x": 190,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "fill": 1,
+    "density": 18000,
+    "count": 2000,
+    "type": 3,
+    "tag": "inh",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 7
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "type": "scatter",
+   "x": 340,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "fill": 1,
+    "density": 40000,
+    "count": 2000,
+    "type": 0,
+    "tag": "slab",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 3
+   },
+   "inputs": [
+    {
+     "id": 8
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "type": "scatter",
+   "x": 640,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "fill": 1,
+    "density": 60000,
+    "count": 2000,
+    "type": 0,
+    "tag": "patch",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 4
+   },
+   "inputs": [
+    {
+     "id": 10
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "type": "move",
+   "x": 340,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "translate": [
+     0,
+     40,
+     0
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": [
+    {
+     "id": 13
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "type": "twist",
+   "x": 340,
+   "y": 185,
+   "on": true,
+   "name": "",
+   "params": {
+    "axis": 1,
+    "angle": 30,
+    "center": [
+     900,
+     0,
+     0
+    ]
+   },
+   "inputs": [
+    {
+     "id": 15
+    }
+   ]
+  },
+  {
+   "id": 17,
+   "type": "gaussblur",
+   "x": 340,
+   "y": 240,
+   "on": true,
+   "name": "",
+   "params": {
+    "sigma": 8,
+    "seed": 5
+   },
+   "inputs": [
+    {
+     "id": 16
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "type": "noisewarp",
+   "x": 340,
+   "y": 295,
+   "on": true,
+   "name": "",
+   "params": {
+    "amplitude": 20,
+    "scale": 300,
+    "seed": 6
+   },
+   "inputs": [
+    {
+     "id": 17
+    }
+   ]
+  },
+  {
+   "id": 19,
+   "type": "gradient",
+   "x": 340,
+   "y": 350,
+   "on": true,
+   "name": "",
+   "params": {
+    "axis": 1,
+    "start": 1,
+    "end": 0.6,
+    "seed": 7
+   },
+   "inputs": [
+    {
+     "id": 18
+    }
+   ]
+  },
+  {
+   "id": 20,
+   "type": "cull",
+   "x": 340,
+   "y": 405,
+   "on": true,
+   "name": "",
+   "params": {
+    "keep": 0
+   },
+   "inputs": [
+    {
+     "id": 19
+    },
+    {
+     "id": 9
+    }
+   ]
+  },
+  {
+   "id": 21,
+   "type": "ops",
+   "x": 340,
+   "y": 460,
+   "on": true,
+   "name": "",
+   "params": {
+    "expr": "y = y + sin(x*0.02)*10",
+    "a": 0,
+    "b": 0,
+    "c": 0,
+    "d": 0,
+    "seed": 1,
+    "shuffle": 0
+   },
+   "inputs": [
+    {
+     "id": 20
+    }
+   ]
+  },
+  {
+   "id": 22,
+   "type": "repeat",
+   "x": 640,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "copies": 2,
+    "pops": 0,
+    "tag": "tile",
+    "translate": [
+     0,
+     0,
+     600
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "mirror": 0
+   },
+   "inputs": [
+    {
+     "id": 14
+    }
+   ]
+  },
+  {
+   "id": 23,
+   "type": "population",
+   "x": 640,
+   "y": 185,
+   "on": true,
+   "name": "",
+   "params": {
+    "tag": "tile1.patch",
+    "hue": -1
+   },
+   "inputs": [
+    {
+     "id": 22
+    }
+   ]
+  },
+  {
+   "id": 24,
+   "type": "population",
+   "x": 790,
+   "y": 185,
+   "on": true,
+   "name": "",
+   "params": {
+    "tag": "tile2.patch",
+    "hue": -1
+   },
+   "inputs": [
+    {
+     "id": 22
+    }
+   ]
+  },
+  {
+   "id": 25,
+   "type": "move",
+   "x": 790,
+   "y": 240,
+   "on": true,
+   "name": "",
+   "params": {
+    "translate": [
+     0,
+     0,
+     200
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": [
+    {
+     "id": 24
+    }
+   ]
+  },
+  {
+   "id": 26,
+   "type": "ntype",
+   "x": 40,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 1,
+    "tag": "",
+    "frac": 0.15
+   },
+   "inputs": [
+    {
+     "id": 11
+    }
+   ]
+  },
+  {
+   "id": 27,
+   "type": "celltype",
+   "x": 340,
+   "y": 515,
+   "on": true,
+   "name": "",
+   "params": {
+    "name": "slabcell",
+    "tag": "slab",
+    "preset": 0,
+    "sign": 0,
+    "kind": 0,
+    "C": 100,
+    "k": 0.7,
+    "vr": -60,
+    "vt": -40,
+    "vpeak": 35,
+    "a": 0.03,
+    "b": -2,
+    "c": -50,
+    "d": 100,
+    "thr": -55,
+    "slope": 10,
+    "hue": 300
+   },
+   "inputs": [
+    {
+     "id": 21
+    }
+   ]
+  },
+  {
+   "id": 28,
+   "type": "gather",
+   "x": 190,
+   "y": 570,
+   "on": true,
+   "name": "",
+   "params": {
+    "ports": 5
+   },
+   "inputs": [
+    {
+     "id": 26
+    },
+    {
+     "id": 12
+    },
+    {
+     "id": 27
+    },
+    {
+     "id": 23
+    },
+    {
+     "id": 25
+    }
+   ]
+  },
+  {
+   "id": 29,
+   "type": "receptor",
+   "x": 190,
+   "y": 625,
+   "on": true,
+   "name": "",
+   "params": {
+    "table": "ach 3 + acetylcholine\ngabaa 8 - gaba\nglucl 30 - glutamate histamine"
+   },
+   "inputs": [
+    {
+     "id": 28
+    }
+   ]
+  },
+  {
+   "id": 30,
+   "type": "plasticity",
+   "x": 190,
+   "y": 680,
+   "on": true,
+   "name": "",
+   "params": {
+    "preset": 0,
+    "name": "stdp",
+    "from": "exc",
+    "to": "exc",
+    "aP": 0.008,
+    "aM": 0.001,
+    "wmax": 30,
+    "wdep": 1,
+    "trip": 0,
+    "iEta": 0.002,
+    "het": 0,
+    "tin": 0,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10
+   },
+   "inputs": [
+    {
+     "id": 29
+    }
+   ]
+  },
+  {
+   "id": 31,
+   "type": "pool",
+   "x": 190,
+   "y": 735,
+   "on": true,
+   "name": "",
+   "params": {
+    "tag": "exc",
+    "gain": -1
+   },
+   "inputs": [
+    {
+     "id": 30
+    }
+   ]
+  },
+  {
+   "id": 32,
+   "type": "project",
+   "x": 190,
+   "y": 790,
+   "on": true,
+   "name": "",
+   "params": {
+    "from": "exc",
+    "to": "slab",
+    "axisFrom": 1,
+    "axisTo": 1,
+    "dispersed": 1,
+    "flipU": 0,
+    "flipV": 0,
+    "sigma": 60,
+    "prob": 0.35,
+    "fanout": 20,
+    "offset": 0,
+    "across": "",
+    "weight": 0.5,
+    "velocity": 5000,
+    "tract": 0,
+    "frozen": 0,
+    "rule": "",
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 31
+    },
+    null
+   ]
+  },
+  {
+   "id": 33,
+   "type": "connect",
+   "x": 190,
+   "y": 845,
+   "on": true,
+   "name": "",
+   "params": {
+    "radius": 300,
+    "sigma": 3000,
+    "prob": 0.1,
+    "wExc": 0.5,
+    "wInh": -2.5,
+    "wdist": 1,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "",
+    "velocity": 100,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 32
+    }
+   ]
+  },
+  {
+   "id": 34,
+   "type": "stimulus",
+   "x": 190,
+   "y": 900,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 12,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 33
+    },
+    null
+   ]
+  },
+  {
+   "id": 35,
+   "type": "stimulus",
+   "x": 190,
+   "y": 955,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 500,
+    "tag": "slab",
+    "mode": 1,
+    "period": 200,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 34
+    },
+    {
+     "id": 8
+    }
+   ]
+  },
+  {
+   "id": 36,
+   "type": "testsignal",
+   "x": 490,
+   "y": 1010,
+   "on": true,
+   "name": "",
+   "params": {
+    "pattern": 0,
+    "period": 1500,
+    "direction": 0
+   },
+   "inputs": []
+  },
+  {
+   "id": 37,
+   "type": "input",
+   "x": 190,
+   "y": 1010,
+   "on": true,
+   "name": "",
+   "params": {
+    "tag": "slab",
+    "map": 0,
+    "code": 1,
+    "axis": 1,
+    "cols": 8,
+    "rows": 8,
+    "arbor": 0.8,
+    "fanin": 8,
+    "seed": 1,
+    "transient": 0.6,
+    "lagMs": 0,
+    "jitter": 1,
+    "amp": 2500
+   },
+   "inputs": [
+    {
+     "id": 35
+    },
+    {
+     "id": 8
+    },
+    {
+     "id": 36
+    }
+   ]
+  },
+  {
+   "id": 38,
+   "type": "curriculum",
+   "x": 490,
+   "y": 1065,
+   "on": true,
+   "name": "",
+   "params": {
+    "sense": 0,
+    "acuity": 1,
+    "jitter": 0.18,
+    "scaleVar": 0.25,
+    "rotVar": 12,
+    "voice": 0,
+    "offset": 0,
+    "set": 4,
+    "order": 1,
+    "onMs": 400,
+    "offMs": 350,
+    "phases": "",
+    "scramble": 0,
+    "place": 0,
+    "placeOrder": 0,
+    "seed": 1,
+    "probeEvery": 0,
+    "condNames": "both, sight, sound",
+    "calCycles": 0,
+    "reSweepEvery": 0
+   },
+   "inputs": [
+    null
+   ]
+  },
+  {
+   "id": 39,
+   "type": "input",
+   "x": 190,
+   "y": 1065,
+   "on": true,
+   "name": "",
+   "params": {
+    "tag": "exc",
+    "map": 0,
+    "code": 1,
+    "axis": 1,
+    "cols": 12,
+    "rows": 12,
+    "arbor": 0.8,
+    "fanin": 8,
+    "seed": 1,
+    "transient": 0.6,
+    "lagMs": 0,
+    "jitter": 1,
+    "amp": 120
+   },
+   "inputs": [
+    {
+     "id": 37
+    },
+    {
+     "id": 7
+    },
+    {
+     "id": 38
+    }
+   ]
+  },
+  {
+   "id": 40,
+   "type": "probe",
+   "x": 190,
+   "y": 1120,
+   "on": true,
+   "name": "",
+   "params": {
+    "label": "exc",
+    "tag": "exc",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 39
+    },
+    null
+   ]
+  },
+  {
+   "id": 41,
+   "type": "probe",
+   "x": 190,
+   "y": 1175,
+   "on": true,
+   "name": "",
+   "params": {
+    "label": "inh",
+    "tag": "inh",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 40
+    },
+    null
+   ]
+  },
+  {
+   "id": 42,
+   "type": "probe",
+   "x": 190,
+   "y": 1230,
+   "on": true,
+   "name": "",
+   "params": {
+    "label": "slab",
+    "tag": "slab",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 41
+    },
+    null
+   ]
+  },
+  {
+   "id": 43,
+   "type": "probe",
+   "x": 190,
+   "y": 1285,
+   "on": true,
+   "name": "",
+   "params": {
+    "label": "tiles",
+    "tag": "tile*.patch",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 42
+    },
+    null
+   ]
+  },
+  {
+   "id": 44,
+   "type": "analysis",
+   "x": 190,
+   "y": 1340,
+   "on": true,
+   "name": "",
+   "params": {
+    "cap": 8192,
+    "topQ": 0.1,
+    "setExpr": "both and not sight and not sound",
+    "probeWith": "sight, sound",
+    "margin": 0.15,
+    "minCells": 4,
+    "minTrials": 2,
+    "nPerm": 40,
+    "doDecode": 1,
+    "doBind": 1,
+    "doTiming": 1,
+    "doLike": 1,
+    "exportTrials": 0
+   },
+   "inputs": [
+    {
+     "id": 43
+    }
+   ]
+  },
+  {
+   "id": 45,
+   "type": "checkpoint",
+   "x": 190,
+   "y": 1395,
+   "on": true,
+   "name": "",
+   "params": {
+    "steps": 2,
+    "engine": 0,
+    "syn": 1,
+    "tauE": 3,
+    "tauI": 8,
+    "eRevE": 0,
+    "eRevI": -70,
+    "psc": 1,
+    "refrac": 2,
+    "vmin": -90,
+    "plast": 1,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 16.8,
+    "tauM": 33.7,
+    "trip": 0,
+    "tauY": 114,
+    "tin": 0,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "het": 0,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "tauCons": 20,
+    "consStep": 1.2,
+    "commit": 0,
+    "stpPreset": 0,
+    "stp": 0,
+    "stpU": 0.5,
+    "stpNorm": 0,
+    "stpOrder": 0,
+    "stpTauD": 800,
+    "stpTauF": 1,
+    "variants": [],
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trEngine": 0,
+    "trHost": "ws://localhost:8801",
+    "exportSecs": 2
+   },
+   "inputs": [
+    {
+     "id": 44
+    }
+   ]
+  },
+  {
+   "id": 46,
+   "type": "chart",
+   "x": 190,
+   "y": 1450,
+   "on": true,
+   "name": "",
+   "params": {
+    "plot": 7,
+    "pop": "exc",
+    "window": 5,
+    "which": 0,
+    "field": "decode",
+    "bins": 40,
+    "height": 130,
+    "source": ""
+   },
+   "inputs": [
+    {
+     "id": 45
+    }
+   ]
+  }
+ ]
+}

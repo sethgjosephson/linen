@@ -37,7 +37,9 @@ export function sourceHash(text){
 
 // What a module is handed besides registerNode: the stream helpers the built-in compute functions use, and the seeded draws of src/rand.js.
 // A draw keyed on a cell's identity (pairHash, pairGauss with the cell's src and lidx) is the same at every computation, whatever else the graph holds.
-const HELPERS = { need, clonePts, h32, pairHash, pairGauss, rng };
+// The apiVersion field counts the shape of this object and what registerNode takes; a module written against a later one can refuse to load with a clear message instead of failing on a missing helper.
+export const API_VERSION = 1;
+const HELPERS = { apiVersion:API_VERSION, need, clonePts, h32, pairHash, pairGauss, rng };
 
 // module name -> { module, hash, keys, error }: every module this page or process has loaded, and how it went.
 const loaded = new Map();

@@ -107,11 +107,12 @@ const stamp = () => { const d = new Date(), p = x => String(x).padStart(2, '0');
 // The root is the checkout the page is served from, the project is the project folder, port 0 takes a free one, and host is the bind address.
 // The pick({ start, title }) callback resolves to a chosen folder, '' for cancelled; without it /project/pick says there is no picker.
 // The hostLaunch { exe, env } is the process that runs host/host.mjs, the vendored or PATH node by default (the desktop app passes its own binary as node).
+// The host's log goes to host/host.log under the root, or into logDir when given.
 // Resolves with { server, port, project(), setProject(p) } once listening.
-export function startServer({ root, project, port = 0, host = '127.0.0.1', pick = null, hostLaunch = null, log = () => {} }){
+export function startServer({ root, project, port = 0, host = '127.0.0.1', pick = null, hostLaunch = null, logDir = null, log = () => {} }){
   root = path.resolve(root);
   let PROJECT = path.resolve(project);
-  const HOST_LOG = path.join(root, 'host', 'host.log');
+  const HOST_LOG = logDir ? path.join(path.resolve(logDir), 'host.log') : path.join(root, 'host', 'host.log');
   const json = (res, code, obj) => {
     const body = Buffer.from(JSON.stringify(obj));
     res.writeHead(code, { 'Content-Type':'application/json', 'Content-Length':body.length, 'Cache-Control':'no-store' });

@@ -1,0 +1,308 @@
+{
+ "v": 1,
+ "nextId": 10,
+ "view": {
+  "x": 0,
+  "y": 0,
+  "scale": 1
+ },
+ "viewSlots": {},
+ "activeView": null,
+ "scenarioName": "balanced random net",
+ "groups": [
+  {
+   "label": "volume",
+   "members": [
+    3
+   ],
+   "hue": 280,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "excitatory  8000 RS",
+   "members": [
+    4
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "inhibitory  2000 FS",
+   "members": [
+    5
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "sparse random wiring and noise drive",
+   "members": [
+    6,
+    7,
+    8
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "checkpoint  the simulation",
+   "members": [
+    9
+   ],
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": 1,
+   "type": "note",
+   "x": -380,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "BALANCED RANDOM NETWORK. Sparse random connectivity, inhibition stronger than excitation, and noise drive. This is the Brunel (2000) setup and it is the reference for what healthy cortical background activity looks like.",
+    "width": 340
+   },
+   "inputs": []
+  },
+  {
+   "id": 2,
+   "type": "note",
+   "x": -380,
+   "y": 170,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Raise the inhibitory weight and the network settles into asynchronous irregular firing at a few Hz, a uniform speckle in the raster. Lower it and the population synchronises into visible vertical stripes. The battery measures both regimes and the population Fano factor that separates them.",
+    "width": 340
+   },
+   "inputs": []
+  },
+  {
+   "id": 3,
+   "type": "sphere",
+   "x": 40,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 500
+   },
+   "inputs": []
+  },
+  {
+   "id": 4,
+   "type": "scatter",
+   "x": 40,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 8000,
+    "type": 0,
+    "tag": "",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 3
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "type": "scatter",
+   "x": 190,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 2000,
+    "type": 3,
+    "tag": "",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 3
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "type": "merge",
+   "x": 115,
+   "y": 155,
+   "on": true,
+   "name": "",
+   "params": {},
+   "inputs": [
+    {
+     "id": 4
+    },
+    {
+     "id": 5
+    },
+    null,
+    null
+   ]
+  },
+  {
+   "id": 7,
+   "type": "connect",
+   "x": 115,
+   "y": 220,
+   "on": true,
+   "name": "",
+   "params": {
+    "radius": 250,
+    "sigma": 300,
+    "prob": 0.12,
+    "wExc": 4,
+    "wInh": -20,
+    "wdist": 0,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "",
+    "velocity": 100,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 6
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "type": "stimulus",
+   "x": 115,
+   "y": 280,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 9,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 7
+    },
+    null
+   ]
+  },
+  {
+   "id": 9,
+   "type": "output",
+   "x": 115,
+   "y": 340,
+   "on": true,
+   "name": "",
+   "params": {
+    "steps": 2,
+    "engine": 0,
+    "syn": 0,
+    "tauE": 3,
+    "tauI": 8,
+    "plast": 0,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 20,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "trip": 0,
+    "tauY": 114,
+    "stp": 0,
+    "stpU": 0.2,
+    "stpTauD": 200,
+    "stpTauF": 600,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "het": 0,
+    "tin": 0,
+    "refrac": 2,
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trEngine": 0
+   },
+   "inputs": [
+    {
+     "id": 8
+    }
+   ]
+  }
+ ]
+}

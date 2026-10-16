@@ -1,0 +1,635 @@
+{
+ "v": 1,
+ "format": 12,
+ "nextId": 19,
+ "view": {
+  "x": 0,
+  "y": 0,
+  "scale": 1
+ },
+ "viewSlots": {},
+ "activeView": null,
+ "scenarioName": "working memory",
+ "plugins": [],
+ "groups": [
+  {
+   "label": "volume",
+   "members": [
+    4
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "two selective populations and an inhibitory pool",
+   "members": [
+    5,
+    6,
+    7
+   ],
+   "hue": 190,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "wiring  strong within a population, weak across",
+   "members": [
+    8,
+    9
+   ],
+   "hue": 140,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "background",
+   "members": [
+    10
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "cue  a and b in turn, every 4 s",
+   "members": [
+    11,
+    12
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "read  a and b alike, 1.6 s after each cue",
+   "members": [
+    13
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "readout",
+   "members": [
+    14,
+    15,
+    16,
+    18
+   ],
+   "hue": 175,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "checkpoint  facilitating synapses",
+   "members": [
+    17
+   ],
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": 1,
+   "type": "note",
+   "x": -380,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Working memory in synapses\n\nTwo selective populations, a and b, share a patch of cortex with one inhibitory pool. Every four seconds a cue drives one of them for 300 ms, a and b taking turns, and then the whole patch goes silent. 1.6 s after each cue, a weak pulse is given equally to both. Without a cue the two would answer it alike, at about 12 Hz each. After a cue, the cued one answers at 15 Hz and the other at under 5. The cued population's synapses are still facilitated, so it ignites first and its inhibition holds the other one down. The item was held in the synapses and not in firing (Mongillo, Barak and Tsodyks 2008).\n\nThe answer is a burst of a few tens of milliseconds, so the raster under the viewer is the best place to watch: the two populations take turns answering the same pulse. Raise PER FRAME in the viewer bar to run it faster.",
+    "width": 340,
+    "near": ""
+   },
+   "inputs": []
+  },
+  {
+   "id": 2,
+   "type": "note",
+   "x": -380,
+   "y": 200,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "The mechanism is on the checkpoint: short-term plasticity with a low release probability (0.2), a short depression (200 ms) and a long facilitation (1500 ms), which is the facilitating class of prefrontal excitatory synapses (Wang et al. 2006). A rested synapse releases a fifth of its weight and a facilitated one up to three or four times that, and that is the difference between a population that cannot sustain a burst and one that can. One difference from the paper: in this model the setting applies to every synapse, inhibitory ones included, where the paper facilitates only the excitatory to excitatory ones.",
+    "width": 340,
+    "near": "checkpoint"
+   },
+   "inputs": []
+  },
+  {
+   "id": 3,
+   "type": "note",
+   "x": -380,
+   "y": 380,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Something to try: set the facilitation tau on the checkpoint to 50 ms and the two populations answer every read pulse alike, since nothing of the cue is left by then. Move the read pulse later (its onset, in ms) and the uncued population recovers as the facilitation fades: 1.4 Hz with the read 0.8 s after the cue, 3.6 at 1.6 s and 5.5 at 2.4 s. Bypass one cue node (d) and that population never wins.",
+    "width": 340,
+    "near": "cue"
+   },
+   "inputs": []
+  },
+  {
+   "id": 4,
+   "type": "sphere",
+   "x": 40,
+   "y": 20,
+   "on": true,
+   "name": "mema + memb + inh sphere",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 250
+   },
+   "inputs": []
+  },
+  {
+   "id": 5,
+   "type": "scatter",
+   "x": 40,
+   "y": 75,
+   "on": true,
+   "name": "mema",
+   "params": {
+    "fill": 1,
+    "density": 36000,
+    "count": 2000,
+    "type": 10,
+    "tag": "mema",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 4
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "type": "scatter",
+   "x": 190,
+   "y": 75,
+   "on": true,
+   "name": "memb",
+   "params": {
+    "fill": 1,
+    "density": 36000,
+    "count": 2000,
+    "type": 10,
+    "tag": "memb",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 4
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "type": "scatter",
+   "x": 340,
+   "y": 75,
+   "on": true,
+   "name": "inh",
+   "params": {
+    "fill": 1,
+    "density": 18000,
+    "count": 2000,
+    "type": 13,
+    "tag": "inh",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 3
+   },
+   "inputs": [
+    {
+     "id": 4
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "type": "gather",
+   "x": 190,
+   "y": 155,
+   "on": true,
+   "name": "mema + memb + inh",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 5
+    },
+    {
+     "id": 6
+    },
+    {
+     "id": 7
+    },
+    null
+   ]
+  },
+  {
+   "id": 9,
+   "type": "connect",
+   "x": 190,
+   "y": 220,
+   "on": true,
+   "name": "local wiring",
+   "params": {
+    "radius": 300,
+    "sigma": 3000,
+    "prob": 0.1,
+    "wExc": 50,
+    "wInh": -600,
+    "wdist": 1,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "mema mema 1 8\nmemb memb 1 8\nmema memb 1 0.05\nmemb mema 1 0.05",
+    "velocity": 100,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 8
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "type": "stimulus",
+   "x": 190,
+   "y": 280,
+   "on": true,
+   "name": "noise on all cells",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 300,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 9
+    },
+    null
+   ]
+  },
+  {
+   "id": 11,
+   "type": "stimulus",
+   "x": 190,
+   "y": 335,
+   "on": true,
+   "name": "cue a",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 200,
+    "tag": "mema",
+    "mode": 1,
+    "period": 8000,
+    "width": 300,
+    "t0": 500,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 10
+    },
+    null
+   ]
+  },
+  {
+   "id": 12,
+   "type": "stimulus",
+   "x": 340,
+   "y": 335,
+   "on": true,
+   "name": "cue b",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 200,
+    "tag": "memb",
+    "mode": 1,
+    "period": 8000,
+    "width": 300,
+    "t0": 4500,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 11
+    },
+    null
+   ]
+  },
+  {
+   "id": 13,
+   "type": "stimulus",
+   "x": 190,
+   "y": 390,
+   "on": true,
+   "name": "read pulse",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 150,
+    "tag": "mem*",
+    "mode": 1,
+    "period": 4000,
+    "width": 60,
+    "t0": 2100,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 12
+    },
+    null
+   ]
+  },
+  {
+   "id": 14,
+   "type": "probe",
+   "x": 190,
+   "y": 445,
+   "on": true,
+   "name": "a probe",
+   "params": {
+    "label": "a",
+    "tag": "mema",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 13
+    },
+    null
+   ]
+  },
+  {
+   "id": 15,
+   "type": "probe",
+   "x": 190,
+   "y": 500,
+   "on": true,
+   "name": "b probe",
+   "params": {
+    "label": "b",
+    "tag": "memb",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 14
+    },
+    null
+   ]
+  },
+  {
+   "id": 16,
+   "type": "probe",
+   "x": 190,
+   "y": 555,
+   "on": true,
+   "name": "inh probe",
+   "params": {
+    "label": "inh",
+    "tag": "inh",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 15
+    },
+    null
+   ]
+  },
+  {
+   "id": 17,
+   "type": "checkpoint",
+   "x": 190,
+   "y": 610,
+   "on": true,
+   "name": "simulation",
+   "params": {
+    "steps": 2,
+    "engine": 0,
+    "liveHost": "ws://localhost:8801",
+    "syn": 1,
+    "tauE": 3,
+    "tauI": 8,
+    "eRevE": 0,
+    "eRevI": -70,
+    "psc": 1,
+    "refrac": 2,
+    "vmin": -90,
+    "plast": 0,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 16.8,
+    "tauM": 33.7,
+    "trip": 0,
+    "tauY": 114,
+    "tin": 0,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "het": 0,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "tauCons": 20,
+    "consStep": 1.2,
+    "commit": 0,
+    "stpPreset": 0,
+    "stp": 1,
+    "stpU": 0.2,
+    "stpNorm": 0,
+    "stpOrder": 0,
+    "stpTauD": 200,
+    "stpTauF": 1500,
+    "variants": [],
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trEngine": 0,
+    "trHost": "ws://localhost:8801",
+    "exportSecs": 2
+   },
+   "inputs": [
+    {
+     "id": 16
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "type": "chart",
+   "x": 190,
+   "y": 665,
+   "on": true,
+   "name": "raster of a",
+   "params": {
+    "plot": 8,
+    "pop": "a",
+    "window": 8,
+    "smooth": 0,
+    "which": 0,
+    "field": "decode",
+    "bins": 40,
+    "height": 130,
+    "source": "",
+    "title": "",
+    "xText": "",
+    "yText": "",
+    "yMin": "",
+    "yMax": "",
+    "grid": 1,
+    "legend": 1,
+    "cmap": 0,
+    "preview": 0,
+    "format": 0,
+    "sizePreset": 0,
+    "figW": 180,
+    "figH": 100,
+    "dpi": 300,
+    "theme": 0,
+    "figFont": 0,
+    "fontPt": 8,
+    "linePt": 1,
+    "caption": 0
+   },
+   "inputs": [
+    {
+     "id": 17
+    }
+   ]
+  }
+ ]
+}

@@ -6,9 +6,58 @@
   "type": "module",
   "main": "main.mjs",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "build.linen.desktop",
+    "productName": "linen",
+    "asar": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.mjs",
+      "serve.mjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "..",
+        "to": "linen",
+        "filter": [
+          "index.html",
+          "docs.html",
+          "LICENSE",
+          "src/**/*",
+          "!src/**/*.test.mjs",
+          "vendor/**/*",
+          "brand/**/*",
+          "examples/**/*",
+          "host/**/*",
+          "!host/*.test.mjs",
+          "!host/host.log",
+          "!host/runs/**",
+          "cuda/engine.exe",
+          "tools/brian_ref.py"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "dir",
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true
+    }
   },
   "devDependencies": {
-    "electron": "^44.7.2"
+    "electron": "^44.7.2",
+    "electron-builder": "^26.15.3"
   }
 }

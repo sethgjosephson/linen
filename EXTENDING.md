@@ -139,7 +139,10 @@ a node that goes into the repository itself.
    module, hash }`, the module's file name and a hash of its source.
 3. **The interface**: `registerNode`, the stream helpers `need` and
    `clonePts`, and from `src/rand.js` `h32`, `pairHash`, `pairGauss` and
-   `rng`.
+   `rng`. The object also carries `apiVersion`, 1 today, which counts the
+   shape of this interface and of what `registerNode` takes; a module
+   written against a later one can check it and throw a clear message
+   instead of failing on a missing helper.
 4. **Purity**: the rules of a built-in compute function. No DOM, no randomness except
    the draws handed in (a module whose text names `Math.random` is refused),
    nothing read from below the node. A draw keyed on a cell's identity

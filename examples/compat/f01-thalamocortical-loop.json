@@ -1,0 +1,675 @@
+{
+ "v": 1,
+ "nextId": 22,
+ "view": {
+  "x": 0,
+  "y": 0,
+  "scale": 1
+ },
+ "viewSlots": {},
+ "activeView": null,
+ "scenarioName": "thalamocortical loop",
+ "groups": [
+  {
+   "label": "cortical patch  RS + FS/LTS",
+   "members": [
+    3,
+    4,
+    5,
+    6
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "fibre tract",
+   "members": [
+    7,
+    8
+   ],
+   "hue": 280,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "thalamic relay  TC",
+   "members": [
+    9,
+    10
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "reticular shell  RZ",
+   "members": [
+    11,
+    12
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "merge: every population into one stream",
+   "members": [
+    13,
+    14
+   ],
+   "hue": 280,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "local wiring",
+   "members": [
+    15
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "background and sensory pulses",
+   "members": [
+    16,
+    17,
+    18,
+    19,
+    20
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "checkpoint  the simulation",
+   "members": [
+    21
+   ],
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": 1,
+   "type": "note",
+   "x": -380,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "THALAMOCORTICAL LOOP. A relay nucleus and a cortical patch wired in both directions through a fibre tract drawn as a cylinder. Every synapse is local, so the latency around the loop is the tract crossed in hops rather than one long axon: the connect radius is 240 um against a 1150 um separation, and no single synapse spans it. That is how the tract length reaches the timing, and it is worth being exact about, because the note here used to claim the delays came from one axon over a real distance and they never did.",
+    "width": 340
+   },
+   "inputs": []
+  },
+  {
+   "id": 2,
+   "type": "note",
+   "x": -380,
+   "y": 170,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Thalamocortical relay cells use the TC preset, which sits just above its own resting fixed point: with no input it fires on its own. That is how the published model uses it, since a rebound burst has to rebound from somewhere, so a holding current keeps it below threshold until something drives it.",
+    "width": 340
+   },
+   "inputs": []
+  },
+  {
+   "id": 3,
+   "type": "box",
+   "x": 40,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     550,
+     0
+    ],
+    "size": [
+     1000,
+     250,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 4,
+   "type": "scatter",
+   "x": 40,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 5200,
+    "type": 0,
+    "tag": "ce",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 3
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "type": "scatter",
+   "x": 190,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 1300,
+    "type": 3,
+    "tag": "ci",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 3
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "type": "ntype",
+   "x": 190,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 4,
+    "frac": 0.3
+   },
+   "inputs": [
+    {
+     "id": 5
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "type": "cylinder",
+   "x": 340,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 80,
+    "height": 900,
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 8,
+   "type": "scatter",
+   "x": 340,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 700,
+    "type": 0,
+    "tag": "",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 3
+   },
+   "inputs": [
+    {
+     "id": 7
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "type": "sphere",
+   "x": 490,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     -600,
+     0
+    ],
+    "radius": 220
+   },
+   "inputs": []
+  },
+  {
+   "id": 10,
+   "type": "scatter",
+   "x": 490,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 600,
+    "type": 5,
+    "tag": "tc",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 4
+   },
+   "inputs": [
+    {
+     "id": 9
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "type": "torus",
+   "x": 640,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     -600,
+     0
+    ],
+    "radius": 300,
+    "thickness": 80,
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 12,
+   "type": "scatter",
+   "x": 640,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 500,
+    "type": 6,
+    "tag": "",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 5
+   },
+   "inputs": [
+    {
+     "id": 11
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "type": "merge",
+   "x": 190,
+   "y": 210,
+   "on": true,
+   "name": "",
+   "params": {},
+   "inputs": [
+    {
+     "id": 4
+    },
+    {
+     "id": 6
+    },
+    {
+     "id": 8
+    },
+    {
+     "id": 10
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "type": "merge",
+   "x": 490,
+   "y": 265,
+   "on": true,
+   "name": "",
+   "params": {},
+   "inputs": [
+    {
+     "id": 13
+    },
+    {
+     "id": 12
+    },
+    null,
+    null
+   ]
+  },
+  {
+   "id": 15,
+   "type": "connect",
+   "x": 490,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "radius": 240,
+    "sigma": 120,
+    "prob": 0.25,
+    "wExc": 2.2,
+    "wInh": -10.3,
+    "wdist": 0,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "",
+    "velocity": 120,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 14
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "type": "stimulus",
+   "x": 340,
+   "y": 390,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 1.5,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 15
+    },
+    null
+   ]
+  },
+  {
+   "id": 17,
+   "type": "stimulus",
+   "x": 40,
+   "y": 390,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 3,
+    "tag": "ce",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 16
+    },
+    {
+     "id": 3
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "type": "stimulus",
+   "x": 190,
+   "y": 390,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 1.2,
+    "tag": "ci",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 17
+    },
+    {
+     "id": 3
+    }
+   ]
+  },
+  {
+   "id": 19,
+   "type": "stimulus",
+   "x": 490,
+   "y": 390,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": -6,
+    "tag": "tc",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 18
+    },
+    {
+     "id": 9
+    }
+   ]
+  },
+  {
+   "id": 20,
+   "type": "stimulus",
+   "x": 490,
+   "y": 450,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 6,
+    "tag": "",
+    "mode": 1,
+    "period": 120,
+    "width": 15,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 19
+    },
+    {
+     "id": 9
+    }
+   ]
+  },
+  {
+   "id": 21,
+   "type": "output",
+   "x": 490,
+   "y": 510,
+   "on": true,
+   "name": "",
+   "params": {
+    "steps": 2,
+    "engine": 0,
+    "syn": 1,
+    "tauE": 3,
+    "tauI": 8,
+    "plast": 0,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 20,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "trip": 0,
+    "tauY": 114,
+    "stp": 0,
+    "stpU": 0.2,
+    "stpTauD": 200,
+    "stpTauF": 600,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "het": 0,
+    "tin": 0,
+    "refrac": 2,
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trEngine": 0
+   },
+   "inputs": [
+    {
+     "id": 20
+    }
+   ]
+  }
+ ]
+}

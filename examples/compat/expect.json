@@ -1,0 +1,807 @@
+{
+ "f01-alphabet-school-2": {
+  "cells": 10631,
+  "synapses": 2170656,
+  "hash": "760f28db"
+ },
+ "f01-balanced-random-net": {
+  "cells": 4712,
+  "synapses": 199602,
+  "hash": "99288cf7"
+ },
+ "f01-ca3-pattern-completion": {
+  "cells": 752,
+  "synapses": 14164,
+  "hash": "7c2b3b85"
+ },
+ "f01-guided-tour": {
+  "cells": 14327,
+  "synapses": 628457,
+  "hash": "0433daca"
+ },
+ "f01-learning-lab": {
+  "cells": 1006,
+  "synapses": 135860,
+  "hash": "660c6c2a"
+ },
+ "f01-mouse-cortical-column": {
+  "cells": 1584,
+  "synapses": 138490,
+  "hash": "9369380a"
+ },
+ "f01-thalamocortical-loop": {
+  "cells": 2703,
+  "synapses": 65083,
+  "hash": "a82a375c"
+ },
+ "f01-visual-pathway": {
+  "cells": 1749,
+  "synapses": 141256,
+  "hash": "56d34e09"
+ },
+ "f02-alphabet-school-2": {
+  "cells": 10631,
+  "synapses": 2170656,
+  "hash": "d77e5f1b"
+ },
+ "f02-balanced-random-net": {
+  "cells": 4712,
+  "synapses": 199602,
+  "hash": "99288cf7"
+ },
+ "f02-binding-bench": {
+  "cells": 1611,
+  "synapses": 122528,
+  "hash": "e98c8aaa"
+ },
+ "f02-ca3-pattern-completion": {
+  "cells": 752,
+  "synapses": 14164,
+  "hash": "3a93d373"
+ },
+ "f02-guided-tour": {
+  "cells": 14327,
+  "synapses": 628457,
+  "hash": "e3340f3b"
+ },
+ "f02-learning-lab": {
+  "cells": 1006,
+  "synapses": 135860,
+  "hash": "298aa57f"
+ },
+ "f02-mouse-cortical-column": {
+  "cells": 1584,
+  "synapses": 138168,
+  "hash": "106e9f23"
+ },
+ "f02-thalamocortical-loop": {
+  "cells": 2703,
+  "synapses": 65083,
+  "hash": "41fa94b6"
+ },
+ "f02-visual-pathway": {
+  "cells": 1749,
+  "synapses": 141256,
+  "hash": "4506cc47"
+ },
+ "f03-alphabet-school-2": {
+  "cells": 10631,
+  "synapses": 2170656,
+  "hash": "d77e5f1b"
+ },
+ "f03-balanced-random-net": {
+  "cells": 4712,
+  "synapses": 199602,
+  "hash": "99288cf7"
+ },
+ "f03-binding-bench": {
+  "cells": 1611,
+  "synapses": 122528,
+  "hash": "e98c8aaa"
+ },
+ "f03-ca3-pattern-completion": {
+  "cells": 752,
+  "synapses": 14164,
+  "hash": "3a93d373"
+ },
+ "f03-guided-tour": {
+  "cells": 14327,
+  "synapses": 628457,
+  "hash": "e3340f3b"
+ },
+ "f03-learning-lab": {
+  "cells": 1006,
+  "synapses": 135860,
+  "hash": "298aa57f"
+ },
+ "f03-mouse-cortical-column": {
+  "cells": 1584,
+  "synapses": 138168,
+  "hash": "106e9f23"
+ },
+ "f03-thalamocortical-loop": {
+  "cells": 2703,
+  "synapses": 65083,
+  "hash": "41fa94b6"
+ },
+ "f03-the-weave-letters": {
+  "cells": 9216,
+  "synapses": 36307339,
+  "hash": "576b9b8d"
+ },
+ "f03-the-weave": {
+  "cells": 4666,
+  "synapses": 9324120,
+  "hash": "8d817c5d"
+ },
+ "f03-visual-pathway": {
+  "cells": 1749,
+  "synapses": 141256,
+  "hash": "4506cc47"
+ },
+ "f04-alphabet-school-2": {
+  "cells": 10631,
+  "synapses": 2170656,
+  "hash": "d77e5f1b"
+ },
+ "f04-balanced-random-net": {
+  "cells": 4712,
+  "synapses": 199602,
+  "hash": "99288cf7"
+ },
+ "f04-binding-bench": {
+  "cells": 1611,
+  "synapses": 122528,
+  "hash": "e98c8aaa"
+ },
+ "f04-ca3-pattern-completion": {
+  "cells": 752,
+  "synapses": 14164,
+  "hash": "3a93d373"
+ },
+ "f04-guided-tour": {
+  "cells": 14327,
+  "synapses": 628457,
+  "hash": "e3340f3b"
+ },
+ "f04-learning-lab": {
+  "cells": 1006,
+  "synapses": 135860,
+  "hash": "298aa57f"
+ },
+ "f04-mouse-cortical-column": {
+  "cells": 1584,
+  "synapses": 138168,
+  "hash": "106e9f23"
+ },
+ "f04-thalamocortical-loop": {
+  "cells": 2703,
+  "synapses": 65083,
+  "hash": "41fa94b6"
+ },
+ "f04-the-weave-letters": {
+  "cells": 9216,
+  "synapses": 36307339,
+  "hash": "576b9b8d"
+ },
+ "f04-the-weave": {
+  "cells": 4666,
+  "synapses": 9324120,
+  "hash": "8d817c5d"
+ },
+ "f04-visual-pathway": {
+  "cells": 1749,
+  "synapses": 141256,
+  "hash": "4506cc47"
+ },
+ "f05-alphabet-school-2": {
+  "cells": 10631,
+  "synapses": 2170656,
+  "hash": "d77e5f1b"
+ },
+ "f05-balanced-random-net": {
+  "cells": 4712,
+  "synapses": 199602,
+  "hash": "99288cf7"
+ },
+ "f05-binding-bench": {
+  "cells": 1611,
+  "synapses": 122528,
+  "hash": "e98c8aaa"
+ },
+ "f05-ca3-pattern-completion": {
+  "cells": 752,
+  "synapses": 14164,
+  "hash": "3a93d373"
+ },
+ "f05-guided-tour": {
+  "cells": 14327,
+  "synapses": 628457,
+  "hash": "e3340f3b"
+ },
+ "f05-learning-lab": {
+  "cells": 1006,
+  "synapses": 135860,
+  "hash": "298aa57f"
+ },
+ "f05-mouse-cortical-column": {
+  "cells": 1584,
+  "synapses": 138168,
+  "hash": "106e9f23"
+ },
+ "f05-thalamocortical-loop": {
+  "cells": 2703,
+  "synapses": 65083,
+  "hash": "41fa94b6"
+ },
+ "f05-the-weave-letters": {
+  "cells": 9216,
+  "synapses": 36307339,
+  "hash": "576b9b8d"
+ },
+ "f05-the-weave": {
+  "cells": 4666,
+  "synapses": 9324120,
+  "hash": "8d817c5d"
+ },
+ "f05-visual-pathway": {
+  "cells": 1749,
+  "synapses": 141256,
+  "hash": "4506cc47"
+ },
+ "f06-alphabet-school-2": {
+  "cells": 10631,
+  "synapses": 2170656,
+  "hash": "d77e5f1b"
+ },
+ "f06-balanced-random-net": {
+  "cells": 4712,
+  "synapses": 199602,
+  "hash": "99288cf7"
+ },
+ "f06-binding-bench": {
+  "cells": 1611,
+  "synapses": 122528,
+  "hash": "e98c8aaa"
+ },
+ "f06-ca3-pattern-completion": {
+  "cells": 752,
+  "synapses": 14164,
+  "hash": "3a93d373"
+ },
+ "f06-guided-tour": {
+  "cells": 14327,
+  "synapses": 628457,
+  "hash": "e3340f3b"
+ },
+ "f06-learning-lab": {
+  "cells": 1006,
+  "synapses": 135860,
+  "hash": "298aa57f"
+ },
+ "f06-mandelbulb": {
+  "cells": 46034,
+  "synapses": 2399168,
+  "hash": "b786a7f2"
+ },
+ "f06-mouse-cortical-column": {
+  "cells": 1584,
+  "synapses": 138168,
+  "hash": "106e9f23"
+ },
+ "f06-thalamocortical-loop": {
+  "cells": 2703,
+  "synapses": 65083,
+  "hash": "41fa94b6"
+ },
+ "f06-the-weave-letters": {
+  "cells": 9216,
+  "synapses": 36307339,
+  "hash": "576b9b8d"
+ },
+ "f06-the-weave": {
+  "cells": 4666,
+  "synapses": 9324120,
+  "hash": "8d817c5d"
+ },
+ "f06-visual-pathway": {
+  "cells": 1749,
+  "synapses": 141256,
+  "hash": "4506cc47"
+ },
+ "f07-alphabet-school-2": {
+  "cells": 10631,
+  "synapses": 2170656,
+  "hash": "d77e5f1b"
+ },
+ "f07-balanced-random-net": {
+  "cells": 4712,
+  "synapses": 199602,
+  "hash": "99288cf7"
+ },
+ "f07-binding-bench": {
+  "cells": 1611,
+  "synapses": 122528,
+  "hash": "e98c8aaa"
+ },
+ "f07-ca3-pattern-completion": {
+  "cells": 752,
+  "synapses": 14164,
+  "hash": "3a93d373"
+ },
+ "f07-guided-tour": {
+  "cells": 14327,
+  "synapses": 628457,
+  "hash": "e3340f3b"
+ },
+ "f07-learning-lab": {
+  "cells": 1006,
+  "synapses": 135860,
+  "hash": "298aa57f"
+ },
+ "f07-mandelbulb": {
+  "cells": 46034,
+  "synapses": 2399168,
+  "hash": "b786a7f2"
+ },
+ "f07-mouse-cortical-column": {
+  "cells": 1584,
+  "synapses": 138168,
+  "hash": "106e9f23"
+ },
+ "f07-thalamocortical-loop": {
+  "cells": 2703,
+  "synapses": 65083,
+  "hash": "41fa94b6"
+ },
+ "f07-the-weave-letters": {
+  "cells": 9216,
+  "synapses": 36307339,
+  "hash": "576b9b8d"
+ },
+ "f07-the-weave": {
+  "cells": 4666,
+  "synapses": 9324120,
+  "hash": "8d817c5d"
+ },
+ "f07-visual-pathway": {
+  "cells": 1749,
+  "synapses": 141256,
+  "hash": "4506cc47"
+ },
+ "f08-alphabet-school-2": {
+  "cells": 10631,
+  "synapses": 2170656,
+  "hash": "d77e5f1b"
+ },
+ "f08-balanced-random-net": {
+  "cells": 4712,
+  "synapses": 199602,
+  "hash": "99288cf7"
+ },
+ "f08-binding-bench": {
+  "cells": 1611,
+  "synapses": 122528,
+  "hash": "e98c8aaa"
+ },
+ "f08-ca3-pattern-completion": {
+  "cells": 752,
+  "synapses": 14164,
+  "hash": "3a93d373"
+ },
+ "f08-guided-tour": {
+  "cells": 14327,
+  "synapses": 628457,
+  "hash": "e3340f3b"
+ },
+ "f08-learning-lab": {
+  "cells": 1006,
+  "synapses": 135860,
+  "hash": "298aa57f"
+ },
+ "f08-mandelbulb": {
+  "cells": 46034,
+  "synapses": 2399168,
+  "hash": "b786a7f2"
+ },
+ "f08-mouse-cortical-column": {
+  "cells": 1584,
+  "synapses": 138168,
+  "hash": "106e9f23"
+ },
+ "f08-thalamocortical-loop": {
+  "cells": 2703,
+  "synapses": 65083,
+  "hash": "41fa94b6"
+ },
+ "f08-the-weave-letters": {
+  "cells": 9216,
+  "synapses": 36307339,
+  "hash": "576b9b8d"
+ },
+ "f08-the-weave": {
+  "cells": 4666,
+  "synapses": 9324120,
+  "hash": "8d817c5d"
+ },
+ "f08-visual-pathway": {
+  "cells": 1749,
+  "synapses": 141256,
+  "hash": "4506cc47"
+ },
+ "f09-alphabet-school-2": {
+  "cells": 5132,
+  "synapses": 371764,
+  "hash": "9923a41e"
+ },
+ "f09-balanced-random-net": {
+  "cells": 1206,
+  "synapses": 36607,
+  "hash": "babe3d0f"
+ },
+ "f09-binding-bench": {
+  "cells": 70,
+  "synapses": 132,
+  "hash": "a548c27b"
+ },
+ "f09-ca3-pattern-completion": {
+  "cells": 376,
+  "synapses": 4613,
+  "hash": "58f0281e"
+ },
+ "f09-gamma-from-inhibition": {
+  "cells": 151,
+  "synapses": 3483,
+  "hash": "156de6f5"
+ },
+ "f09-guided-tour": {
+  "cells": 2008,
+  "synapses": 67616,
+  "hash": "ccc75e68"
+ },
+ "f09-learning-lab": {
+  "cells": 37,
+  "synapses": 101,
+  "hash": "92205e17"
+ },
+ "f09-mandelbulb": {
+  "cells": 1393,
+  "synapses": 31473,
+  "hash": "f253a13c"
+ },
+ "f09-mouse-cortical-column": {
+  "cells": 703,
+  "synapses": 23268,
+  "hash": "8ddced44"
+ },
+ "f09-seizure-and-control": {
+  "cells": 1206,
+  "synapses": 36679,
+  "hash": "cb8a6e5d"
+ },
+ "f09-sound-localization": {
+  "cells": 8,
+  "synapses": 12,
+  "hash": "1a4387c5"
+ },
+ "f09-thalamocortical-loop": {
+  "cells": 1578,
+  "synapses": 39879,
+  "hash": "f77a07ac"
+ },
+ "f09-the-weave-letters": {
+  "cells": 100,
+  "synapses": 4554,
+  "hash": "23311faf"
+ },
+ "f09-the-weave": {
+  "cells": 50,
+  "synapses": 1097,
+  "hash": "070279c4"
+ },
+ "f09-virtual-patch-rig": {
+  "cells": 7,
+  "synapses": 0,
+  "hash": "811c9dc5"
+ },
+ "f09-visual-pathway": {
+  "cells": 894,
+  "synapses": 26215,
+  "hash": "369d0fd6"
+ },
+ "f10-alphabet-school-2": {
+  "cells": 5132,
+  "synapses": 371764,
+  "hash": "9923a41e"
+ },
+ "f10-balanced-random-net": {
+  "cells": 1206,
+  "synapses": 36607,
+  "hash": "babe3d0f"
+ },
+ "f10-binding-bench": {
+  "cells": 70,
+  "synapses": 132,
+  "hash": "a548c27b"
+ },
+ "f10-ca3-pattern-completion": {
+  "cells": 376,
+  "synapses": 4613,
+  "hash": "58f0281e"
+ },
+ "f10-every-node": {
+  "cells": 402,
+  "synapses": 10601,
+  "hash": "29964795"
+ },
+ "f10-gamma-from-inhibition": {
+  "cells": 151,
+  "synapses": 3483,
+  "hash": "156de6f5"
+ },
+ "f10-guided-tour": {
+  "cells": 2008,
+  "synapses": 67616,
+  "hash": "ccc75e68"
+ },
+ "f10-learning-lab": {
+  "cells": 37,
+  "synapses": 101,
+  "hash": "92205e17"
+ },
+ "f10-mandelbulb": {
+  "cells": 1393,
+  "synapses": 31473,
+  "hash": "f253a13c"
+ },
+ "f10-mouse-cortical-column": {
+  "cells": 703,
+  "synapses": 23268,
+  "hash": "8ddced44"
+ },
+ "f10-seizure-and-control": {
+  "cells": 1206,
+  "synapses": 36679,
+  "hash": "cb8a6e5d"
+ },
+ "f10-sound-localization": {
+  "cells": 8,
+  "synapses": 12,
+  "hash": "1a4387c5"
+ },
+ "f10-thalamocortical-loop": {
+  "cells": 1578,
+  "synapses": 39879,
+  "hash": "f77a07ac"
+ },
+ "f10-the-weave-letters": {
+  "cells": 100,
+  "synapses": 4554,
+  "hash": "23311faf"
+ },
+ "f10-the-weave": {
+  "cells": 50,
+  "synapses": 1097,
+  "hash": "070279c4"
+ },
+ "f10-virtual-patch-rig": {
+  "cells": 7,
+  "synapses": 0,
+  "hash": "811c9dc5"
+ },
+ "f10-visual-pathway": {
+  "cells": 894,
+  "synapses": 26215,
+  "hash": "369d0fd6"
+ },
+ "f11-alphabet-school-2": {
+  "cells": 5132,
+  "synapses": 371764,
+  "hash": "9923a41e"
+ },
+ "f11-balanced-random-net": {
+  "cells": 1206,
+  "synapses": 36607,
+  "hash": "326a81af"
+ },
+ "f11-binding-bench": {
+  "cells": 70,
+  "synapses": 132,
+  "hash": "a548c27b"
+ },
+ "f11-ca3-pattern-completion": {
+  "cells": 376,
+  "synapses": 4613,
+  "hash": "b765822f"
+ },
+ "f11-every-node": {
+  "cells": 2131,
+  "synapses": 31742,
+  "hash": "76fff04d"
+ },
+ "f11-gamma-from-inhibition": {
+  "cells": 151,
+  "synapses": 3483,
+  "hash": "28a232d7"
+ },
+ "f11-guided-tour": {
+  "cells": 694,
+  "synapses": 19108,
+  "hash": "d0f591ab"
+ },
+ "f11-learning-lab": {
+  "cells": 37,
+  "synapses": 101,
+  "hash": "92205e17"
+ },
+ "f11-mandelbulb": {
+  "cells": 1393,
+  "synapses": 31473,
+  "hash": "f253a13c"
+ },
+ "f11-mouse-cortical-column": {
+  "cells": 703,
+  "synapses": 23268,
+  "hash": "50372073"
+ },
+ "f11-pd-microcircuit": {
+  "cells": 3859,
+  "synapses": 711673,
+  "hash": "fb5aa778"
+ },
+ "f11-polychrony": {
+  "cells": 20,
+  "synapses": 51,
+  "hash": "c6c88cb8"
+ },
+ "f11-seizure-and-control": {
+  "cells": 1206,
+  "synapses": 36679,
+  "hash": "f7939112"
+ },
+ "f11-sound-localization": {
+  "cells": 8,
+  "synapses": 12,
+  "hash": "0b4123a3"
+ },
+ "f11-thalamocortical-loop": {
+  "cells": 1578,
+  "synapses": 39879,
+  "hash": "36a2f00e"
+ },
+ "f11-the-weave-letters": {
+  "cells": 100,
+  "synapses": 4554,
+  "hash": "23311faf"
+ },
+ "f11-the-weave": {
+  "cells": 50,
+  "synapses": 1097,
+  "hash": "070279c4"
+ },
+ "f11-traveling-waves": {
+  "cells": 2008,
+  "synapses": 67146,
+  "hash": "034b85d7"
+ },
+ "f11-virtual-patch-rig": {
+  "cells": 7,
+  "synapses": 0,
+  "hash": "811c9dc5"
+ },
+ "f11-visual-pathway": {
+  "cells": 894,
+  "synapses": 26215,
+  "hash": "84734717"
+ },
+ "f11-working-memory": {
+  "cells": 295,
+  "synapses": 5580,
+  "hash": "7f50e367"
+ },
+ "f12-alphabet-school-2": {
+  "cells": 5132,
+  "synapses": 371764,
+  "hash": "9923a41e"
+ },
+ "f12-balanced-random-net": {
+  "cells": 1206,
+  "synapses": 36607,
+  "hash": "326a81af"
+ },
+ "f12-binding-bench": {
+  "cells": 70,
+  "synapses": 132,
+  "hash": "a548c27b"
+ },
+ "f12-ca3-pattern-completion": {
+  "cells": 376,
+  "synapses": 4613,
+  "hash": "b765822f"
+ },
+ "f12-every-node": {
+  "cells": 2131,
+  "synapses": 31742,
+  "hash": "76fff04d"
+ },
+ "f12-gamma-from-inhibition": {
+  "cells": 151,
+  "synapses": 3483,
+  "hash": "28a232d7"
+ },
+ "f12-guided-tour": {
+  "cells": 694,
+  "synapses": 19108,
+  "hash": "d0f591ab"
+ },
+ "f12-learning-lab": {
+  "cells": 37,
+  "synapses": 101,
+  "hash": "92205e17"
+ },
+ "f12-mandelbulb": {
+  "cells": 1393,
+  "synapses": 31473,
+  "hash": "f253a13c"
+ },
+ "f12-mouse-cortical-column": {
+  "cells": 703,
+  "synapses": 23268,
+  "hash": "50372073"
+ },
+ "f12-pd-microcircuit": {
+  "cells": 3859,
+  "synapses": 711673,
+  "hash": "fb5aa778"
+ },
+ "f12-polychrony": {
+  "cells": 20,
+  "synapses": 51,
+  "hash": "c6c88cb8"
+ },
+ "f12-seizure-and-control": {
+  "cells": 1206,
+  "synapses": 36679,
+  "hash": "f7939112"
+ },
+ "f12-sound-localization": {
+  "cells": 8,
+  "synapses": 12,
+  "hash": "0b4123a3"
+ },
+ "f12-thalamocortical-loop": {
+  "cells": 1578,
+  "synapses": 39879,
+  "hash": "36a2f00e"
+ },
+ "f12-the-weave-letters": {
+  "cells": 100,
+  "synapses": 4554,
+  "hash": "23311faf"
+ },
+ "f12-the-weave": {
+  "cells": 50,
+  "synapses": 1097,
+  "hash": "070279c4"
+ },
+ "f12-traveling-waves": {
+  "cells": 2008,
+  "synapses": 67146,
+  "hash": "034b85d7"
+ },
+ "f12-virtual-patch-rig": {
+  "cells": 7,
+  "synapses": 0,
+  "hash": "811c9dc5"
+ },
+ "f12-visual-pathway": {
+  "cells": 894,
+  "synapses": 26215,
+  "hash": "84734717"
+ },
+ "f12-working-memory": {
+  "cells": 295,
+  "synapses": 5580,
+  "hash": "7f50e367"
+ }
+}

@@ -8,7 +8,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer, looksLikeProject } from './serve.mjs';
 
-const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+// From source the app's files are the checkout above this folder; packaged, they are the linen folder electron-builder copies into resources (the build section of package.json says which).
+const ROOT = app.isPackaged ? path.join(process.resourcesPath, 'linen') : path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 // A tab's heap is capped near 4 GB; the wiring of a large network holds more than that (the synapse budget is derived from the machine's memory).
 app.commandLine.appendSwitch('js-flags', '--max-old-space-size=16384');
 
@@ -60,8 +61,9 @@ app.whenReady().then(async () => {
       const r = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow() || undefined, { title, defaultPath:start, properties:['openDirectory', 'createDirectory', 'promptToCreate'] });
       return r.canceled || !r.filePaths.length ? '' : r.filePaths[0];
     },
-    // the engine host on this binary as node, so the app needs no node install
+    // the engine host on this binary as node, so the app needs no node install; its log beside the settings, since a packaged app's files may not be writable
     hostLaunch:{ exe:process.execPath, env:{ ELECTRON_RUN_AS_NODE:'1' } },
+    logDir:app.getPath('userData'),
     log:m => console.log(m),
   });
   // the server's project folder is the one to remember, wherever the page moves it

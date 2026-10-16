@@ -1,0 +1,1190 @@
+{
+ "v": 1,
+ "format": 11,
+ "nextId": 41,
+ "view": {
+  "x": 0,
+  "y": 0,
+  "scale": 1
+ },
+ "viewSlots": {},
+ "activeView": null,
+ "scenarioName": "guided tour",
+ "groups": [
+  {
+   "label": "checkpoint 1  the wave sheet",
+   "members": [
+    5,
+    6,
+    7,
+    11,
+    8,
+    9,
+    10,
+    12,
+    13,
+    15,
+    16,
+    18,
+    19,
+    20,
+    22,
+    21
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "checkpoint 2  a sculpture of shapes",
+   "members": [
+    23,
+    24,
+    25,
+    26,
+    27,
+    28,
+    29,
+    30,
+    31,
+    32
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "checkpoint 3  thalamic rebound bursts",
+   "members": [
+    34,
+    35,
+    36,
+    37,
+    38,
+    39
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": 1,
+   "type": "note",
+   "x": 40,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Welcome to linen\n\nYou are looking at a living spiking neural network. A small pacemaker cluster fires in rhythmic bursts, and each burst travels as a wave across a sheet of about 14,000 neurons packed at the density of mouse cortex.\n\nDrag the 3D view to orbit, scroll to zoom, and click any neuron to see its connections and voltage. The graph below builds everything you see. A single click selects a node and a double click opens its settings. The DOCS button (top right) explains every tool, and its references page lists the papers behind each scene, along with other simulators that are worth trying when you want to go further.",
+    "width": 300,
+    "near": ""
+   },
+   "inputs": []
+  },
+  {
+   "id": 2,
+   "type": "note",
+   "x": 40,
+   "y": 220,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Networks flow from top to bottom. Shape nodes define volumes (in micrometers), neuron scatter fills them with neurons, gather combines groups, connect grows the synapses, stimulus injects current, and the checkpoint runs the simulation.",
+    "width": 300,
+    "near": ""
+   },
+   "inputs": []
+  },
+  {
+   "id": 3,
+   "type": "note",
+   "x": 40,
+   "y": 360,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Something to try: double click the sphere node that feeds the pacemaker neuron scatter (shape nodes are orange), then drag the arrows that appear in the 3D view. The source of the waves moves along with it while the network keeps running.\n\nThe waves need the sheet at full density. If you lower RES in the viewer bar the network rebuilds smaller and faster, but the fronts stop making it across. For a bigger sheet, where the fronts have room to travel and collide, open traveling waves from the Tab menu.",
+    "width": 300,
+    "near": ""
+   },
+   "inputs": []
+  },
+  {
+   "id": 4,
+   "type": "note",
+   "x": 40,
+   "y": 540,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "There are three checkpoint nodes in this graph, bound to the viewer keys 1, 2 and 3 (the digit shows on each node). Press a number to view that network. You can bind any node yourself by selecting it and pressing a digit. Checkpoint 2 is a sculpture of shapes, and checkpoint 3 shows thalamic rebound bursts.",
+    "width": 300,
+    "near": ""
+   },
+   "inputs": []
+  },
+  {
+   "id": 5,
+   "type": "box",
+   "x": 460,
+   "y": 20,
+   "on": true,
+   "name": "sheet box",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "size": [
+     700,
+     300,
+     700
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 6,
+   "type": "scatter",
+   "x": 460,
+   "y": 90,
+   "on": true,
+   "name": "sheet",
+   "params": {
+    "fill": 1,
+    "density": 72000,
+    "count": 2000,
+    "type": 10,
+    "tag": "sheet",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 5
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "type": "scatter",
+   "x": 610,
+   "y": 90,
+   "on": true,
+   "name": "sheeti",
+   "params": {
+    "fill": 1,
+    "density": 18000,
+    "count": 2000,
+    "type": 13,
+    "tag": "sheeti",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 5
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "type": "sphere",
+   "x": 760,
+   "y": 20,
+   "on": true,
+   "name": "pacemaker sphere",
+   "params": {
+    "center": [
+     -220,
+     0,
+     -170
+    ],
+    "radius": 120
+   },
+   "inputs": []
+  },
+  {
+   "id": 9,
+   "type": "scatter",
+   "x": 760,
+   "y": 90,
+   "on": true,
+   "name": "pacemaker",
+   "params": {
+    "fill": 1,
+    "density": 90000,
+    "count": 2000,
+    "type": 12,
+    "tag": "pacemaker",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 3
+   },
+   "inputs": [
+    {
+     "id": 8
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "type": "sphere",
+   "x": 910,
+   "y": 20,
+   "on": true,
+   "name": "second source region",
+   "params": {
+    "center": [
+     220,
+     0,
+     170
+    ],
+    "radius": 150
+   },
+   "inputs": []
+  },
+  {
+   "id": 11,
+   "type": "celltype",
+   "x": 460,
+   "y": 150,
+   "on": true,
+   "name": "the sheet row, adapting",
+   "params": {
+    "row": 0,
+    "tag": "sheet",
+    "frac": 1,
+    "name": "sheetcell",
+    "preset": 0,
+    "sign": 0,
+    "kind": 0,
+    "C": 100,
+    "k": 0.7,
+    "vr": -60,
+    "vt": -40,
+    "vpeak": 35,
+    "a": 0.03,
+    "b": -2,
+    "c": -50,
+    "d": 1600,
+    "thr": -55,
+    "slope": 10,
+    "hue": 20
+   },
+   "inputs": [
+    {
+     "id": 6
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "type": "gather",
+   "x": 535,
+   "y": 180,
+   "on": true,
+   "name": "sheet + sheeti + pacemaker",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 11
+    },
+    {
+     "id": 7
+    },
+    {
+     "id": 9
+    },
+    null
+   ]
+  },
+  {
+   "id": 13,
+   "type": "connect",
+   "x": 535,
+   "y": 260,
+   "on": true,
+   "name": "sheet wiring",
+   "params": {
+    "radius": 600,
+    "sigma": 200,
+    "prob": 0.15,
+    "wExc": 70,
+    "wInh": -150,
+    "wdist": 1,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "sheet sheeti 1 0.5\npacemaker sheeti 1 0.5",
+    "velocity": 250,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 12
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "type": "note",
+   "x": 700,
+   "y": 255,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Connect: nearby neurons wire up with a probability that falls off with distance. Try raising max dist and watch the synapse count in the top bar.",
+    "width": 200,
+    "near": "checkpoint 1"
+   },
+   "inputs": []
+  },
+  {
+   "id": 15,
+   "type": "stimulus",
+   "x": 535,
+   "y": 350,
+   "on": true,
+   "name": "pacemaker bias",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 500,
+    "tag": "",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 13
+    },
+    {
+     "id": 8
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "type": "stimulus",
+   "x": 535,
+   "y": 430,
+   "on": true,
+   "name": "second wave source",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 1000,
+    "tag": "",
+    "mode": 1,
+    "period": 900,
+    "width": 25,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 15
+    },
+    {
+     "id": 10
+    }
+   ]
+  },
+  {
+   "id": 17,
+   "type": "note",
+   "x": 700,
+   "y": 370,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Stimulus: each of these injects current into a region. The first biases the pacemaker so it keeps bursting, the second pulses a distant spot on its own rhythm, and the third adds background noise. Edits apply to the running network right away.",
+    "width": 210,
+    "near": "checkpoint 1"
+   },
+   "inputs": []
+  },
+  {
+   "id": 18,
+   "type": "stimulus",
+   "x": 535,
+   "y": 510,
+   "on": true,
+   "name": "background noise",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 1000000,
+    "current": 200,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 16
+    },
+    null
+   ]
+  },
+  {
+   "id": 19,
+   "type": "probe",
+   "x": 760,
+   "y": 520,
+   "on": true,
+   "name": "pacemaker probe",
+   "params": {
+    "label": "pacemaker",
+    "tag": "pacemaker",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 18
+    },
+    null
+   ]
+  },
+  {
+   "id": 20,
+   "type": "probe",
+   "x": 910,
+   "y": 520,
+   "on": true,
+   "name": "sheet probe",
+   "params": {
+    "label": "sheet",
+    "tag": "sheet",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 19
+    },
+    null
+   ]
+  },
+  {
+   "id": 21,
+   "type": "checkpoint",
+   "x": 535,
+   "y": 600,
+   "on": true,
+   "name": "waves",
+   "params": {
+    "steps": 2,
+    "engine": 0,
+    "syn": 1,
+    "tauE": 3,
+    "tauI": 8,
+    "eRevE": 0,
+    "eRevI": -70,
+    "psc": 1,
+    "refrac": 2,
+    "vmin": -90,
+    "plast": 0,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 16.8,
+    "tauM": 33.7,
+    "trip": 0,
+    "tauY": 114,
+    "tin": 0,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "het": 0,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "tauCons": 20,
+    "consStep": 1.2,
+    "commit": 0,
+    "stpPreset": 0,
+    "stp": 0,
+    "stpU": 0.5,
+    "stpNorm": 0,
+    "stpOrder": 0,
+    "stpTauD": 800,
+    "stpTauF": 1,
+    "variants": [],
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trEngine": 0,
+    "trHost": "ws://localhost:8801",
+    "exportSecs": 2
+   },
+   "inputs": [
+    {
+     "id": 20
+    }
+   ]
+  },
+  {
+   "id": 22,
+   "type": "chart",
+   "x": 760,
+   "y": 660,
+   "on": true,
+   "name": "rate of sheet",
+   "params": {
+    "plot": 7,
+    "pop": "sheet",
+    "window": 5,
+    "smooth": 0,
+    "which": 0,
+    "field": "decode",
+    "bins": 40,
+    "height": 120,
+    "source": "",
+    "title": "",
+    "xText": "",
+    "yText": "",
+    "yMin": "",
+    "yMax": "",
+    "grid": 1,
+    "legend": 1,
+    "cmap": 0,
+    "preview": 0,
+    "format": 0,
+    "sizePreset": 0,
+    "figW": 180,
+    "figH": 100,
+    "dpi": 300,
+    "theme": 0,
+    "figFont": 0,
+    "fontPt": 8,
+    "linePt": 1,
+    "caption": 0
+   },
+   "inputs": [
+    {
+     "id": 21
+    }
+   ]
+  },
+  {
+   "id": 23,
+   "type": "spline",
+   "x": 1150,
+   "y": 20,
+   "on": true,
+   "name": "ribbon spline",
+   "params": {
+    "p0": [
+     -1500,
+     0,
+     -400
+    ],
+    "p1": [
+     -500,
+     0,
+     500
+    ],
+    "p2": [
+     500,
+     0,
+     -500
+    ],
+    "p3": [
+     1500,
+     0,
+     300
+    ],
+    "radius": 180
+   },
+   "inputs": []
+  },
+  {
+   "id": 24,
+   "type": "scatter",
+   "x": 1150,
+   "y": 90,
+   "on": true,
+   "name": "ribbon",
+   "params": {
+    "fill": 1,
+    "density": 18000,
+    "count": 2000,
+    "type": 0,
+    "tag": "ribbon",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 23
+    }
+   ]
+  },
+  {
+   "id": 25,
+   "type": "torus",
+   "x": 1300,
+   "y": 20,
+   "on": true,
+   "name": "ring torus",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 900,
+    "thickness": 200,
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 26,
+   "type": "scatter",
+   "x": 1300,
+   "y": 90,
+   "on": true,
+   "name": "ring",
+   "params": {
+    "fill": 1,
+    "density": 18000,
+    "count": 2000,
+    "type": 2,
+    "tag": "ring",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 25
+    }
+   ]
+  },
+  {
+   "id": 27,
+   "type": "cylinder",
+   "x": 1450,
+   "y": 20,
+   "on": true,
+   "name": "column cylinder",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 220,
+    "height": 1600,
+    "rotate": [
+     25,
+     0,
+     20
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 28,
+   "type": "scatter",
+   "x": 1450,
+   "y": 90,
+   "on": true,
+   "name": "column",
+   "params": {
+    "fill": 1,
+    "density": 18000,
+    "count": 2000,
+    "type": 3,
+    "tag": "column",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 3
+   },
+   "inputs": [
+    {
+     "id": 27
+    }
+   ]
+  },
+  {
+   "id": 29,
+   "type": "gather",
+   "x": 1225,
+   "y": 180,
+   "on": true,
+   "name": "ribbon + ring + column",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 24
+    },
+    {
+     "id": 26
+    },
+    {
+     "id": 28
+    },
+    null
+   ]
+  },
+  {
+   "id": 30,
+   "type": "connect",
+   "x": 1225,
+   "y": 260,
+   "on": true,
+   "name": "sculpture wiring",
+   "params": {
+    "radius": 600,
+    "sigma": 200,
+    "prob": 0.15,
+    "wExc": 0.5,
+    "wInh": -1.5,
+    "wdist": 1,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "",
+    "velocity": 200,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 29
+    }
+   ]
+  },
+  {
+   "id": 31,
+   "type": "stimulus",
+   "x": 1225,
+   "y": 350,
+   "on": true,
+   "name": "noise on all cells",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 1000000,
+    "current": 10,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 30
+    },
+    null
+   ]
+  },
+  {
+   "id": 32,
+   "type": "checkpoint",
+   "x": 1225,
+   "y": 600,
+   "on": true,
+   "name": "sculpture",
+   "params": {
+    "steps": 2,
+    "engine": 0,
+    "syn": 0,
+    "tauE": 3,
+    "tauI": 8,
+    "eRevE": 0,
+    "eRevI": -70,
+    "psc": 0,
+    "refrac": 2,
+    "vmin": -90,
+    "plast": 0,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 16.8,
+    "tauM": 33.7,
+    "trip": 0,
+    "tauY": 114,
+    "tin": 0,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "het": 0,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "tauCons": 20,
+    "consStep": 1.2,
+    "commit": 0,
+    "stpPreset": 0,
+    "stp": 0,
+    "stpU": 0.5,
+    "stpNorm": 0,
+    "stpOrder": 0,
+    "stpTauD": 800,
+    "stpTauF": 1,
+    "variants": [],
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trEngine": 0,
+    "trHost": "ws://localhost:8801",
+    "exportSecs": 2
+   },
+   "inputs": [
+    {
+     "id": 31
+    }
+   ]
+  },
+  {
+   "id": 33,
+   "type": "note",
+   "x": 1150,
+   "y": 440,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Press 2 for a sculpture of shapes: a tube spline, a ring and a tilted cylinder. Double click any orange shape node for a 3D gizmo, where w moves, e rotates and r scales. The first time you switch here the network has to bake, and a progress bar shows in the top bar while it does.",
+    "width": 280,
+    "near": "checkpoint 2"
+   },
+   "inputs": []
+  },
+  {
+   "id": 34,
+   "type": "sphere",
+   "x": 1750,
+   "y": 20,
+   "on": true,
+   "name": "relay sphere",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400
+   },
+   "inputs": []
+  },
+  {
+   "id": 35,
+   "type": "scatter",
+   "x": 1750,
+   "y": 90,
+   "on": true,
+   "name": "relay",
+   "params": {
+    "fill": 1,
+    "density": 90000,
+    "count": 2000,
+    "type": 5,
+    "tag": "relay",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 34
+    }
+   ]
+  },
+  {
+   "id": 36,
+   "type": "connect",
+   "x": 1825,
+   "y": 260,
+   "on": true,
+   "name": "relay wiring",
+   "params": {
+    "radius": 600,
+    "sigma": 200,
+    "prob": 0.003,
+    "wExc": 0.5,
+    "wInh": -1.5,
+    "wdist": 1,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "",
+    "velocity": 200,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 35
+    }
+   ]
+  },
+  {
+   "id": 37,
+   "type": "stimulus",
+   "x": 1825,
+   "y": 350,
+   "on": true,
+   "name": "inhibitory pulse on relay",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 1000000,
+    "current": -15,
+    "tag": "",
+    "mode": 1,
+    "period": 3000,
+    "width": 200,
+    "t0": 500,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 36
+    },
+    null
+   ]
+  },
+  {
+   "id": 38,
+   "type": "stimulus",
+   "x": 1825,
+   "y": 430,
+   "on": true,
+   "name": "noise on relay",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 1000000,
+    "current": 1.45,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 37
+    },
+    null
+   ]
+  },
+  {
+   "id": 39,
+   "type": "checkpoint",
+   "x": 1825,
+   "y": 600,
+   "on": true,
+   "name": "rebound",
+   "params": {
+    "steps": 2,
+    "engine": 0,
+    "syn": 0,
+    "tauE": 3,
+    "tauI": 8,
+    "eRevE": 0,
+    "eRevI": -70,
+    "psc": 0,
+    "refrac": 2,
+    "vmin": -90,
+    "plast": 0,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 16.8,
+    "tauM": 33.7,
+    "trip": 0,
+    "tauY": 114,
+    "tin": 0,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "het": 0,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "tauCons": 20,
+    "consStep": 1.2,
+    "commit": 0,
+    "stpPreset": 0,
+    "stp": 0,
+    "stpU": 0.5,
+    "stpNorm": 0,
+    "stpOrder": 0,
+    "stpTauD": 800,
+    "stpTauF": 1,
+    "variants": [],
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trEngine": 0,
+    "trHost": "ws://localhost:8801",
+    "exportSecs": 2
+   },
+   "inputs": [
+    {
+     "id": 38
+    }
+   ]
+  },
+  {
+   "id": 40,
+   "type": "note",
+   "x": 1750,
+   "y": 500,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Press 3 for thalamic rebound. These are thalamocortical (TC) relay cells. Every 3 seconds an inhibitory pulse silences them, and the moment it lets go they fire a synchronized rebound burst. Post-inhibitory rebound is a documented thalamic behavior, and the TC preset models it. Click a neuron and watch its voltage dip and then overshoot.",
+    "width": 280,
+    "near": "checkpoint 3"
+   },
+   "inputs": []
+  }
+ ]
+}

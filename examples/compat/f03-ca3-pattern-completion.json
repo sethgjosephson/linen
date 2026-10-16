@@ -1,0 +1,597 @@
+{
+ "v": 1,
+ "format": 3,
+ "nextId": 20,
+ "view": {
+  "x": 0,
+  "y": 0,
+  "scale": 1
+ },
+ "viewSlots": {},
+ "activeView": null,
+ "scenarioName": "CA3 pattern completion",
+ "groups": [
+  {
+   "label": "CA3 band",
+   "members": [
+    4
+   ],
+   "hue": 280,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "pyramids  RS with a bursting fraction",
+   "members": [
+    5,
+    6
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "feedback inhibition  FS/LTS",
+   "members": [
+    7,
+    8
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "recurrent wiring",
+   "members": [
+    9,
+    10
+   ],
+   "hue": 280,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "spontaneous activity",
+   "members": [
+    11
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "cue and silence",
+   "members": [
+    12,
+    13
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "readout  cued against recruited",
+   "members": [
+    14,
+    15,
+    16,
+    17,
+    19
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "checkpoint  the simulation",
+   "members": [
+    18
+   ],
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": 1,
+   "type": "note",
+   "x": -380,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "CA3 PATTERN COMPLETION. A recurrent excitatory population with strong internal connectivity and global inhibition, the classic autoassociative memory circuit. A cue to one end of the band recruits the rest of the population through the recurrent collaterals.",
+    "width": 340
+   },
+   "inputs": []
+  },
+  {
+   "id": 2,
+   "type": "note",
+   "x": -380,
+   "y": 190,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Watch the raster: the cue drives a few hundred cells, and within about a hundred milliseconds the rest of the band joins them, then the whole thing settles back to its spontaneous rate. Baseline is 0.3 Hz, cued cells 31 Hz and recruited cells 32 Hz during the event, mean 0.58 Hz over 15 s. CA3 pyramidal cells fire under 1 Hz median in an awake animal (Mizuseki and Buzsaki 2013) and reach tens of Hz inside a place field, so those are the right numbers.",
+    "width": 340
+   },
+   "inputs": []
+  },
+  {
+   "id": 3,
+   "type": "note",
+   "x": -380,
+   "y": 430,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Three things make the recall an event rather than a runaway: an absolute refractory period, short-term depression, and enough inhibition. Depression is what makes it robust rather than tuned: with it the response moves 14 percent while the recurrent weight moves 64.",
+    "width": 340
+   },
+   "inputs": []
+  },
+  {
+   "id": 4,
+   "type": "spline",
+   "x": 40,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "p0": [
+     -600,
+     0,
+     -200
+    ],
+    "p1": [
+     -200,
+     0,
+     300
+    ],
+    "p2": [
+     300,
+     0,
+     300
+    ],
+    "p3": [
+     600,
+     0,
+     -300
+    ],
+    "radius": 120
+   },
+   "inputs": []
+  },
+  {
+   "id": 5,
+   "type": "scatter",
+   "x": 40,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 4200,
+    "type": 0,
+    "tag": "ca3",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 4
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "type": "ntype",
+   "x": 40,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 1,
+    "frac": 0.15
+   },
+   "inputs": [
+    {
+     "id": 5
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "type": "scatter",
+   "x": 190,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 900,
+    "type": 3,
+    "tag": "ca3i",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 4
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "type": "ntype",
+   "x": 190,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 4,
+    "frac": 0.3
+   },
+   "inputs": [
+    {
+     "id": 7
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "type": "merge",
+   "x": 115,
+   "y": 210,
+   "on": true,
+   "name": "",
+   "params": {},
+   "inputs": [
+    {
+     "id": 6
+    },
+    {
+     "id": 8
+    },
+    null,
+    null
+   ]
+  },
+  {
+   "id": 10,
+   "type": "connect",
+   "x": 115,
+   "y": 275,
+   "on": true,
+   "name": "",
+   "params": {
+    "radius": 180,
+    "sigma": 120,
+    "prob": 0.3,
+    "wExc": 14.110905892628516,
+    "wInh": -26.595043609380763,
+    "wdist": 0,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "",
+    "velocity": 100,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 9
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "type": "stimulus",
+   "x": 115,
+   "y": 320,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 3,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 10
+    },
+    null
+   ]
+  },
+  {
+   "id": 12,
+   "type": "stimulus",
+   "x": 40,
+   "y": 340,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -600,
+     0,
+     -200
+    ],
+    "radius": 200,
+    "current": 5,
+    "tag": "",
+    "mode": 1,
+    "period": 5000,
+    "width": 40,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 11
+    },
+    null
+   ]
+  },
+  {
+   "id": 13,
+   "type": "stimulus",
+   "x": 190,
+   "y": 400,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": -25,
+    "tag": "",
+    "mode": 1,
+    "period": 5000,
+    "width": 60,
+    "t0": 2500,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 12
+    },
+    null
+   ]
+  },
+  {
+   "id": 14,
+   "type": "sphere",
+   "x": 40,
+   "y": 400,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -600,
+     0,
+     -200
+    ],
+    "radius": 200
+   },
+   "inputs": []
+  },
+  {
+   "id": 15,
+   "type": "probe",
+   "x": 40,
+   "y": 455,
+   "on": true,
+   "name": "",
+   "params": {
+    "label": "cued end",
+    "tag": "ca3",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 13
+    },
+    {
+     "id": 14
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "type": "sphere",
+   "x": 250,
+   "y": 400,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     600,
+     0,
+     -300
+    ],
+    "radius": 200
+   },
+   "inputs": []
+  },
+  {
+   "id": 17,
+   "type": "probe",
+   "x": 250,
+   "y": 455,
+   "on": true,
+   "name": "",
+   "params": {
+    "label": "far end",
+    "tag": "ca3",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 15
+    },
+    {
+     "id": 16
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "type": "output",
+   "x": 115,
+   "y": 510,
+   "on": true,
+   "name": "",
+   "params": {
+    "steps": 2,
+    "engine": 0,
+    "syn": 1,
+    "tauE": 3,
+    "tauI": 8,
+    "psc": 1,
+    "refrac": 2,
+    "plast": 0,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 16.8,
+    "tauM": 33.7,
+    "trip": 0,
+    "tauY": 114,
+    "tin": 0,
+    "wmax": 40,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "het": 0,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "tauCons": 20,
+    "consStep": 1.2,
+    "commit": 0,
+    "stp": 1,
+    "stpU": 0.2,
+    "stpNorm": 1,
+    "stpTauD": 200,
+    "stpTauF": 600,
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trEngine": 0
+   },
+   "inputs": [
+    {
+     "id": 17
+    }
+   ]
+  },
+  {
+   "id": 19,
+   "type": "chart",
+   "x": 115,
+   "y": 570,
+   "on": true,
+   "name": "",
+   "params": {
+    "plot": 0,
+    "pop": "cued end",
+    "which": 0,
+    "field": "hz",
+    "bins": 40,
+    "height": 130,
+    "source": ""
+   },
+   "inputs": [
+    {
+     "id": 18
+    }
+   ]
+  }
+ ]
+}

@@ -107,6 +107,7 @@ struct Net {
   float *ring, *ring2, *gE, *gI, *Kpre, *Kpost, *w;
   int *pre, *post, *inStart, *revSyn, *revPre;
   unsigned char *delay, *pmask, *fired;
+  unsigned char *revMask = nullptr;         // pmask in reverse-index order, so the incoming passes read the rule byte in step with revSyn instead of through it
   unsigned int *counts;
   unsigned int *spk = nullptr, *nSpk = nullptr;   // the neurons that fired this step, as a list with its count, for the learning passes
   unsigned int *dlv = nullptr, *nDlv = nullptr; float *dlvAmp = nullptr;   // the cells delivering this step (spiking, or graded with a release) with their amplitudes, for the delivery pass
@@ -191,6 +192,14 @@ int main(){
       CK(cudaMemcpy(N.inStart, inStart.data(), (n+1)*4, cudaMemcpyHostToDevice));
       CK(cudaMemcpy(N.revSyn, revSyn.data(), (size_t)m*4, cudaMemcpyHostToDevice));
       CK(cudaMemcpy(N.revPre, revPre.data(), (size_t)m*4, cudaMemcpyHostToDevice));
+      // the rule byte of each synapse in reverse order, fixed at init like pmask itself (a tune changes the rule table, never which rule a synapse carries)
+      {
+        std::vector<unsigned char> maskH(m), revMask(m);
+        CK(cudaMemcpy(maskH.data(), N.pmask, m, cudaMemcpyDeviceToHost));
+        for(unsigned int k = 0; k < m; k++) revMask[k] = maskH[revSyn[k]];
+        CK(cudaMalloc((void**)&N.revMask, m));
+        CK(cudaMemcpy(N.revMask, revMask.data(), m, cudaMemcpyHostToDevice));
+      }
       // Initial membrane state and the noise seed come from the host, the same bytes every engine starts from (ENGINE.md section 2).
       up((void**)&N.v, n*4); up((void**)&N.u, n*4);
       memcpy(&N.seed, p, 4); p += 4;
@@ -503,7 +512,7 @@ int main(){
           PK(2, plastOut<<<gridW, block>>>(N.spk, N.nSpk, N.pre, N.post, N.w, N.pmask,
             N.Kpost, iAlpha, N.alphaI, N.wRef, N.commit));
           PK(3, plastIn<<<gridW, block>>>(N.spk, N.nSpk, N.inStart, N.revSyn, N.revPre,
-            N.w, N.pmask, N.Kpre, N.Kslow, N.wRef,
+            N.w, N.revMask, N.Kpre, N.Kslow, N.wRef,
             N.tauY*(N.iRho > 0 ? N.iRho : 5.0f)*0.001f, N.commit));
           }
           PK(4, traceStep<<<grid, block>>>(n, N.fired, N.Kpre, N.Kpost, decS, decM,
@@ -523,7 +532,7 @@ int main(){
             N.scaleAcc += 1.0f;
             if(N.scaleAcc >= 1000.0f){
               N.scaleAcc = 0;
-              PK(5, scaleK<<<grid, block>>>(n, N.inStart, N.revSyn, N.w, N.pmask,
+              PK(5, scaleK<<<grid, block>>>(n, N.inStart, N.revSyn, N.w, N.revMask,
                 N.spkAcc, N.iRho > 0 ? N.iRho : 5.0f, N.sEta, N.rhoI, N.wRef, N.commit));
             }
           }

@@ -1,0 +1,855 @@
+{
+ "v": 1,
+ "format": 11,
+ "nextId": 26,
+ "view": {
+  "x": 0,
+  "y": 0,
+  "scale": 1
+ },
+ "viewSlots": {},
+ "activeView": null,
+ "scenarioName": "polychrony",
+ "groups": [
+  {
+   "label": "source a",
+   "members": [
+    3,
+    8
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "source b",
+   "members": [
+    4,
+    9
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "source c",
+   "members": [
+    5,
+    10
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "reader beside a",
+   "members": [
+    6,
+    11
+   ],
+   "hue": 190,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "reader beside c",
+   "members": [
+    7,
+    12
+   ],
+   "hue": 190,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "delay lines  every source to both readers",
+   "members": [
+    13,
+    14
+   ],
+   "hue": 140,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "order one  c, b, a",
+   "members": [
+    15,
+    16,
+    17
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "order two  a, b, c",
+   "members": [
+    18,
+    19,
+    20
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "readout",
+   "members": [
+    21,
+    22,
+    23,
+    25
+   ],
+   "hue": 175,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "checkpoint",
+   "members": [
+    24
+   ],
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": 1,
+   "type": "note",
+   "x": -380,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Polychrony\n\nThree sources, a, b and c, sit on a line with a reader beyond each end, and every source reaches both readers. Axons conduct at 100 um per ms, so a spike from a takes 4 ms to reach the reader beside it and 16 ms to reach the far one, and for c it is the other way round. Twice a second the sources fire in the order c, b, a, six milliseconds apart. Their spikes arrive at the reader beside a in the same millisecond and it fires, while at the other reader they arrive spread over 24 ms and it stays silent. In between, the order a, b, c does the opposite. Which cells fire together is set by timing (Izhikevich 2006).",
+    "width": 340,
+    "near": ""
+   },
+   "inputs": []
+  },
+  {
+   "id": 2,
+   "type": "note",
+   "x": -380,
+   "y": 200,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Something to try: change the axon velocity on the connect node. At 200 um per ms the delays halve, the six millisecond steps no longer line the spikes up, and neither reader fires. You can also change one onset (in ms) on a stimulus node and watch its reader drop out. In the paper these groups are not wired by hand. They emerge through spike-timing plasticity in a random network with delays, and there are far more of them than there are cells.",
+    "width": 340,
+    "near": "order one"
+   },
+   "inputs": []
+  },
+  {
+   "id": 3,
+   "type": "sphere",
+   "x": 40,
+   "y": 20,
+   "on": true,
+   "name": "srca sphere",
+   "params": {
+    "center": [
+     -600,
+     0,
+     0
+    ],
+    "radius": 60
+   },
+   "inputs": []
+  },
+  {
+   "id": 4,
+   "type": "sphere",
+   "x": 190,
+   "y": 20,
+   "on": true,
+   "name": "srcb sphere",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 60
+   },
+   "inputs": []
+  },
+  {
+   "id": 5,
+   "type": "sphere",
+   "x": 340,
+   "y": 20,
+   "on": true,
+   "name": "srcc sphere",
+   "params": {
+    "center": [
+     600,
+     0,
+     0
+    ],
+    "radius": 60
+   },
+   "inputs": []
+  },
+  {
+   "id": 6,
+   "type": "sphere",
+   "x": 490,
+   "y": 20,
+   "on": true,
+   "name": "readx sphere",
+   "params": {
+    "center": [
+     -1000,
+     0,
+     0
+    ],
+    "radius": 60
+   },
+   "inputs": []
+  },
+  {
+   "id": 7,
+   "type": "sphere",
+   "x": 640,
+   "y": 20,
+   "on": true,
+   "name": "ready sphere",
+   "params": {
+    "center": [
+     1000,
+     0,
+     0
+    ],
+    "radius": 60
+   },
+   "inputs": []
+  },
+  {
+   "id": 8,
+   "type": "scatter",
+   "x": 40,
+   "y": 75,
+   "on": true,
+   "name": "srca",
+   "params": {
+    "fill": 1,
+    "density": 90000,
+    "count": 2000,
+    "type": 10,
+    "tag": "srca",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 3
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "type": "scatter",
+   "x": 190,
+   "y": 75,
+   "on": true,
+   "name": "srcb",
+   "params": {
+    "fill": 1,
+    "density": 90000,
+    "count": 2000,
+    "type": 10,
+    "tag": "srcb",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 4
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "type": "scatter",
+   "x": 340,
+   "y": 75,
+   "on": true,
+   "name": "srcc",
+   "params": {
+    "fill": 1,
+    "density": 90000,
+    "count": 2000,
+    "type": 10,
+    "tag": "srcc",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 3
+   },
+   "inputs": [
+    {
+     "id": 5
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "type": "scatter",
+   "x": 490,
+   "y": 75,
+   "on": true,
+   "name": "readx",
+   "params": {
+    "fill": 1,
+    "density": 90000,
+    "count": 2000,
+    "type": 10,
+    "tag": "readx",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 4
+   },
+   "inputs": [
+    {
+     "id": 6
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "type": "scatter",
+   "x": 640,
+   "y": 75,
+   "on": true,
+   "name": "ready",
+   "params": {
+    "fill": 1,
+    "density": 90000,
+    "count": 2000,
+    "type": 10,
+    "tag": "ready",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 5
+   },
+   "inputs": [
+    {
+     "id": 7
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "type": "gather",
+   "x": 340,
+   "y": 155,
+   "on": true,
+   "name": "all cells",
+   "params": {
+    "ports": 6
+   },
+   "inputs": [
+    {
+     "id": 8
+    },
+    {
+     "id": 9
+    },
+    {
+     "id": 10
+    },
+    {
+     "id": 11
+    },
+    {
+     "id": 12
+    },
+    null
+   ]
+  },
+  {
+   "id": 14,
+   "type": "connect",
+   "x": 340,
+   "y": 220,
+   "on": true,
+   "name": "local wiring",
+   "params": {
+    "radius": 1800,
+    "sigma": 100000,
+    "prob": 0.5,
+    "wExc": 20,
+    "wInh": 0,
+    "wdist": 0,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "* * 0\nsrc* read* 1",
+    "velocity": 100,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 13
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "type": "stimulus",
+   "x": 190,
+   "y": 300,
+   "on": true,
+   "name": "pulse on srcc at 0 ms",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2500,
+    "tag": "srcc",
+    "mode": 1,
+    "period": 400,
+    "width": 2,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 14
+    },
+    {
+     "id": 5
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "type": "stimulus",
+   "x": 190,
+   "y": 355,
+   "on": true,
+   "name": "pulse on srcb at 6 ms",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2500,
+    "tag": "srcb",
+    "mode": 1,
+    "period": 400,
+    "width": 2,
+    "t0": 6,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 15
+    },
+    {
+     "id": 4
+    }
+   ]
+  },
+  {
+   "id": 17,
+   "type": "stimulus",
+   "x": 190,
+   "y": 410,
+   "on": true,
+   "name": "pulse on srca at 12 ms",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2500,
+    "tag": "srca",
+    "mode": 1,
+    "period": 400,
+    "width": 2,
+    "t0": 12,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 16
+    },
+    {
+     "id": 3
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "type": "stimulus",
+   "x": 490,
+   "y": 300,
+   "on": true,
+   "name": "pulse on srca at 200 ms",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2500,
+    "tag": "srca",
+    "mode": 1,
+    "period": 400,
+    "width": 2,
+    "t0": 200,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 17
+    },
+    {
+     "id": 3
+    }
+   ]
+  },
+  {
+   "id": 19,
+   "type": "stimulus",
+   "x": 490,
+   "y": 355,
+   "on": true,
+   "name": "pulse on srcb at 206 ms",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2500,
+    "tag": "srcb",
+    "mode": 1,
+    "period": 400,
+    "width": 2,
+    "t0": 206,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 18
+    },
+    {
+     "id": 4
+    }
+   ]
+  },
+  {
+   "id": 20,
+   "type": "stimulus",
+   "x": 490,
+   "y": 410,
+   "on": true,
+   "name": "pulse on srcc at 212 ms",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2500,
+    "tag": "srcc",
+    "mode": 1,
+    "period": 400,
+    "width": 2,
+    "t0": 212,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 19
+    },
+    {
+     "id": 5
+    }
+   ]
+  },
+  {
+   "id": 21,
+   "type": "probe",
+   "x": 340,
+   "y": 480,
+   "on": true,
+   "name": "reader beside a probe",
+   "params": {
+    "label": "reader beside a",
+    "tag": "readx",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 20
+    },
+    null
+   ]
+  },
+  {
+   "id": 22,
+   "type": "probe",
+   "x": 340,
+   "y": 535,
+   "on": true,
+   "name": "reader beside c probe",
+   "params": {
+    "label": "reader beside c",
+    "tag": "ready",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 21
+    },
+    null
+   ]
+  },
+  {
+   "id": 23,
+   "type": "probe",
+   "x": 340,
+   "y": 590,
+   "on": true,
+   "name": "sources probe",
+   "params": {
+    "label": "sources",
+    "tag": "src*",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 22
+    },
+    null
+   ]
+  },
+  {
+   "id": 24,
+   "type": "checkpoint",
+   "x": 340,
+   "y": 645,
+   "on": true,
+   "name": "simulation",
+   "params": {
+    "steps": 1,
+    "engine": 0,
+    "syn": 0,
+    "tauE": 3,
+    "tauI": 8,
+    "eRevE": 0,
+    "eRevI": -70,
+    "psc": 0,
+    "refrac": 2,
+    "vmin": -90,
+    "plast": 0,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 16.8,
+    "tauM": 33.7,
+    "trip": 0,
+    "tauY": 114,
+    "tin": 0,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "het": 0,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "tauCons": 20,
+    "consStep": 1.2,
+    "commit": 0,
+    "stpPreset": 0,
+    "stp": 0,
+    "stpU": 0.5,
+    "stpNorm": 0,
+    "stpOrder": 0,
+    "stpTauD": 800,
+    "stpTauF": 1,
+    "variants": [],
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trEngine": 0,
+    "trHost": "ws://localhost:8801",
+    "exportSecs": 2
+   },
+   "inputs": [
+    {
+     "id": 23
+    }
+   ]
+  },
+  {
+   "id": 25,
+   "type": "chart",
+   "x": 340,
+   "y": 700,
+   "on": true,
+   "name": "raster of reader beside a",
+   "params": {
+    "plot": 8,
+    "pop": "reader beside a",
+    "window": 2,
+    "smooth": 0,
+    "which": 0,
+    "field": "decode",
+    "bins": 40,
+    "height": 130,
+    "source": "",
+    "title": "",
+    "xText": "",
+    "yText": "",
+    "yMin": "",
+    "yMax": "",
+    "grid": 1,
+    "legend": 1,
+    "cmap": 0,
+    "preview": 0,
+    "format": 0,
+    "sizePreset": 0,
+    "figW": 180,
+    "figH": 100,
+    "dpi": 300,
+    "theme": 0,
+    "figFont": 0,
+    "fontPt": 8,
+    "linePt": 1,
+    "caption": 0
+   },
+   "inputs": [
+    {
+     "id": 24
+    }
+   ]
+  }
+ ]
+}

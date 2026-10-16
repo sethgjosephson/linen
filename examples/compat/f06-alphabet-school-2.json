@@ -1,0 +1,5099 @@
+{
+ "v": 1,
+ "format": 6,
+ "nextId": 173,
+ "view": {
+  "x": 0,
+  "y": 0,
+  "scale": 1
+ },
+ "viewSlots": {},
+ "activeView": null,
+ "scenarioName": "alphabet school 2",
+ "groups": [
+  {
+   "label": "v.L2/3",
+   "members": [
+    5,
+    6,
+    7,
+    8,
+    9
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "v.L4",
+   "members": [
+    10,
+    11,
+    12,
+    13
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "v.L5",
+   "members": [
+    14,
+    15,
+    16,
+    17,
+    18
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "v.L6",
+   "members": [
+    19,
+    20,
+    21,
+    22
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "x.L2/3",
+   "members": [
+    23,
+    24,
+    25,
+    26,
+    27
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "x.L4",
+   "members": [
+    28,
+    29,
+    30,
+    31
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "x.L5",
+   "members": [
+    32,
+    33,
+    34,
+    35,
+    36
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "x.L6",
+   "members": [
+    37,
+    38,
+    39,
+    40
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "a.L2/3",
+   "members": [
+    41,
+    42,
+    43,
+    44,
+    45
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "a.L4",
+   "members": [
+    46,
+    47,
+    48,
+    49
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "a.L5",
+   "members": [
+    50,
+    51,
+    52,
+    53,
+    54
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "a.L6",
+   "members": [
+    55,
+    56,
+    57,
+    58
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "visual thalamus  LGN + TRN",
+   "members": [
+    59,
+    60,
+    61,
+    62
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "auditory thalamus  MGB + TRN",
+   "members": [
+    63,
+    64,
+    65,
+    66
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "retina",
+   "members": [
+    67,
+    68
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "cochlea",
+   "members": [
+    69,
+    70
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "merge: every population into one stream",
+   "members": [
+    71,
+    72,
+    73,
+    74,
+    75,
+    76,
+    77,
+    78,
+    79,
+    80
+   ],
+   "hue": 280,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "sensory and feedback tracts  frozen",
+   "members": [
+    81,
+    82,
+    83,
+    84,
+    85,
+    86,
+    87,
+    88,
+    89,
+    90,
+    93,
+    94
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "convergence into the association territory  learns",
+   "members": [
+    91,
+    92
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "local wiring  Potjans-Diesmann per territory",
+   "members": [
+    95
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "curriculum and encoders  one clock, two senses",
+   "members": [
+    96,
+    99,
+    97,
+    98
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "L2/3 drive  constant and noise, per territory",
+   "members": [
+    100,
+    101,
+    102,
+    103,
+    104,
+    105,
+    106,
+    107,
+    108,
+    109,
+    110,
+    111
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "L4 drive  constant and noise, per territory",
+   "members": [
+    112,
+    113,
+    114,
+    115,
+    116,
+    117,
+    118,
+    119,
+    120,
+    121,
+    122,
+    123
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "L5 drive  constant and noise, per territory",
+   "members": [
+    124,
+    125,
+    126,
+    127,
+    128,
+    129,
+    130,
+    131,
+    132,
+    133,
+    134,
+    135
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "L6 drive  constant and noise, per territory",
+   "members": [
+    136,
+    137,
+    138,
+    139,
+    140,
+    141,
+    142,
+    143,
+    144,
+    145,
+    146,
+    147
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "thalamic hold  keeps the relays below threshold",
+   "members": [
+    148,
+    149,
+    150,
+    151,
+    152,
+    153
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "readout  what the observer measures",
+   "members": [
+    154,
+    155,
+    156,
+    157,
+    158,
+    159,
+    160,
+    161,
+    162,
+    163,
+    164,
+    165,
+    166,
+    167,
+    168,
+    169
+   ],
+   "hue": 280,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "checkpoint  the simulation and its plasticity",
+   "members": [
+    170
+   ],
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": 1,
+   "type": "note",
+   "x": -380,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "ALPHABET SCHOOL 2. One block of cortex at mouse density, parcellated in-plane into three territories: visual on the left, association in the middle, auditory on the right, each carrying the verified Potjans and Diesmann layer structure. Areal borders in the plane and layers in depth is how the tissue itself is organised; the hairline gaps exist so the borders read in the viewer.",
+    "width": 340
+   },
+   "inputs": []
+  },
+  {
+   "id": 2,
+   "type": "note",
+   "x": -380,
+   "y": 240,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "The senses stay segregated until the association territory, which is where multisensory neurons are found in cortex (Bruce, Desimone and Gross 1981). Sound leads sight by 15 ms through a deliberately weaker projection, the conditioning arrangement: the association cell fires from sight, the tone arrives just inside the plasticity window before the spike, and the tone gains the ability to evoke what it could not evoke alone.",
+    "width": 340
+   },
+   "inputs": []
+  },
+  {
+   "id": 3,
+   "type": "note",
+   "x": -380,
+   "y": 500,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Plasticity is gated. The within-territory microcircuit and the sensory tracts are frozen; what learns is the two convergent projections into the association territory and the layer 2/3 inhibition of the association territory itself, held toward a low fixed target so its code stays sparse.",
+    "width": 340
+   },
+   "inputs": []
+  },
+  {
+   "id": 4,
+   "type": "note",
+   "x": -380,
+   "y": 760,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Runs on the alphabet, image and sound together on one clock, with the retina in ON/OFF contrast so two letters differ by their edges rather than by their filled area. Presentation is 1 s with a 2 s gap: at 200 ms nothing learned at all, and this is the timing the first controlled positive came from. Drive uses the per-layer currents tuned on the earlier single-territory build, kept here as numbers rather than as a scenario, and is scaled with blockdrive on the training page; the background-drive experiments say expression, not structure, is what too much drive costs.",
+    "width": 340
+   },
+   "inputs": []
+  },
+  {
+   "id": 5,
+   "type": "box",
+   "x": 40,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     900,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 6,
+   "type": "scatter",
+   "x": 40,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 7756,
+    "type": 0,
+    "tag": "v.L2/3e",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 100
+   },
+   "inputs": [
+    {
+     "id": 5
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "type": "ntype",
+   "x": 40,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 2,
+    "frac": 0.1
+   },
+   "inputs": [
+    {
+     "id": 6
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "type": "scatter",
+   "x": 115,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 2188,
+    "type": 3,
+    "tag": "v.L2/3i",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 200
+   },
+   "inputs": [
+    {
+     "id": 5
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "type": "ntype",
+   "x": 115,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 4,
+    "frac": 0.35
+   },
+   "inputs": [
+    {
+     "id": 8
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "type": "box",
+   "x": 200,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     650,
+     0
+    ],
+    "size": [
+     360,
+     200,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 11,
+   "type": "scatter",
+   "x": 200,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 8218,
+    "type": 0,
+    "tag": "v.L4e",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 110
+   },
+   "inputs": [
+    {
+     "id": 10
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "type": "scatter",
+   "x": 275,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 2055,
+    "type": 3,
+    "tag": "v.L4i",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 210
+   },
+   "inputs": [
+    {
+     "id": 10
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "type": "ntype",
+   "x": 275,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 4,
+    "frac": 0.2
+   },
+   "inputs": [
+    {
+     "id": 12
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "type": "box",
+   "x": 360,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     400,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 15,
+   "type": "scatter",
+   "x": 360,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 1819,
+    "type": 0,
+    "tag": "v.L5e",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 120
+   },
+   "inputs": [
+    {
+     "id": 14
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "type": "ntype",
+   "x": 360,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 1,
+    "frac": 0.22
+   },
+   "inputs": [
+    {
+     "id": 15
+    }
+   ]
+  },
+  {
+   "id": 17,
+   "type": "scatter",
+   "x": 435,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 399,
+    "type": 3,
+    "tag": "v.L5i",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 220
+   },
+   "inputs": [
+    {
+     "id": 14
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "type": "ntype",
+   "x": 435,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 4,
+    "frac": 0.45
+   },
+   "inputs": [
+    {
+     "id": 17
+    }
+   ]
+  },
+  {
+   "id": 19,
+   "type": "box",
+   "x": 520,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     100,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 20,
+   "type": "scatter",
+   "x": 520,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 5398,
+    "type": 0,
+    "tag": "v.L6e",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 130
+   },
+   "inputs": [
+    {
+     "id": 19
+    }
+   ]
+  },
+  {
+   "id": 21,
+   "type": "scatter",
+   "x": 595,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 1106,
+    "type": 3,
+    "tag": "v.L6i",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 230
+   },
+   "inputs": [
+    {
+     "id": 19
+    }
+   ]
+  },
+  {
+   "id": 22,
+   "type": "ntype",
+   "x": 595,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 4,
+    "frac": 0.35
+   },
+   "inputs": [
+    {
+     "id": 21
+    }
+   ]
+  },
+  {
+   "id": 23,
+   "type": "box",
+   "x": 680,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     900,
+     0
+    ],
+    "size": [
+     220,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 24,
+   "type": "scatter",
+   "x": 680,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 5171,
+    "type": 0,
+    "tag": "x.L2/3e",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 101
+   },
+   "inputs": [
+    {
+     "id": 23
+    }
+   ]
+  },
+  {
+   "id": 25,
+   "type": "ntype",
+   "x": 680,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 2,
+    "frac": 0.1
+   },
+   "inputs": [
+    {
+     "id": 24
+    }
+   ]
+  },
+  {
+   "id": 26,
+   "type": "scatter",
+   "x": 755,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 1459,
+    "type": 3,
+    "tag": "x.L2/3i",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 201
+   },
+   "inputs": [
+    {
+     "id": 23
+    }
+   ]
+  },
+  {
+   "id": 27,
+   "type": "ntype",
+   "x": 755,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 4,
+    "frac": 0.35
+   },
+   "inputs": [
+    {
+     "id": 26
+    }
+   ]
+  },
+  {
+   "id": 28,
+   "type": "box",
+   "x": 840,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     650,
+     0
+    ],
+    "size": [
+     220,
+     200,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 29,
+   "type": "scatter",
+   "x": 840,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 5479,
+    "type": 0,
+    "tag": "x.L4e",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 111
+   },
+   "inputs": [
+    {
+     "id": 28
+    }
+   ]
+  },
+  {
+   "id": 30,
+   "type": "scatter",
+   "x": 915,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 1370,
+    "type": 3,
+    "tag": "x.L4i",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 211
+   },
+   "inputs": [
+    {
+     "id": 28
+    }
+   ]
+  },
+  {
+   "id": 31,
+   "type": "ntype",
+   "x": 915,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 4,
+    "frac": 0.2
+   },
+   "inputs": [
+    {
+     "id": 30
+    }
+   ]
+  },
+  {
+   "id": 32,
+   "type": "box",
+   "x": 1000,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     400,
+     0
+    ],
+    "size": [
+     220,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 33,
+   "type": "scatter",
+   "x": 1000,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 1213,
+    "type": 0,
+    "tag": "x.L5e",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 121
+   },
+   "inputs": [
+    {
+     "id": 32
+    }
+   ]
+  },
+  {
+   "id": 34,
+   "type": "ntype",
+   "x": 1000,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 1,
+    "frac": 0.22
+   },
+   "inputs": [
+    {
+     "id": 33
+    }
+   ]
+  },
+  {
+   "id": 35,
+   "type": "scatter",
+   "x": 1075,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 266,
+    "type": 3,
+    "tag": "x.L5i",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 221
+   },
+   "inputs": [
+    {
+     "id": 32
+    }
+   ]
+  },
+  {
+   "id": 36,
+   "type": "ntype",
+   "x": 1075,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 4,
+    "frac": 0.45
+   },
+   "inputs": [
+    {
+     "id": 35
+    }
+   ]
+  },
+  {
+   "id": 37,
+   "type": "box",
+   "x": 1160,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     100,
+     0
+    ],
+    "size": [
+     220,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 38,
+   "type": "scatter",
+   "x": 1160,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 3599,
+    "type": 0,
+    "tag": "x.L6e",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 131
+   },
+   "inputs": [
+    {
+     "id": 37
+    }
+   ]
+  },
+  {
+   "id": 39,
+   "type": "scatter",
+   "x": 1235,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 737,
+    "type": 3,
+    "tag": "x.L6i",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 231
+   },
+   "inputs": [
+    {
+     "id": 37
+    }
+   ]
+  },
+  {
+   "id": 40,
+   "type": "ntype",
+   "x": 1235,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 4,
+    "frac": 0.35
+   },
+   "inputs": [
+    {
+     "id": 39
+    }
+   ]
+  },
+  {
+   "id": 41,
+   "type": "box",
+   "x": 1320,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     900,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 42,
+   "type": "scatter",
+   "x": 1320,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 7756,
+    "type": 0,
+    "tag": "a.L2/3e",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 102
+   },
+   "inputs": [
+    {
+     "id": 41
+    }
+   ]
+  },
+  {
+   "id": 43,
+   "type": "ntype",
+   "x": 1320,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 2,
+    "frac": 0.1
+   },
+   "inputs": [
+    {
+     "id": 42
+    }
+   ]
+  },
+  {
+   "id": 44,
+   "type": "scatter",
+   "x": 1395,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 2188,
+    "type": 3,
+    "tag": "a.L2/3i",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 202
+   },
+   "inputs": [
+    {
+     "id": 41
+    }
+   ]
+  },
+  {
+   "id": 45,
+   "type": "ntype",
+   "x": 1395,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 4,
+    "frac": 0.35
+   },
+   "inputs": [
+    {
+     "id": 44
+    }
+   ]
+  },
+  {
+   "id": 46,
+   "type": "box",
+   "x": 1480,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     650,
+     0
+    ],
+    "size": [
+     360,
+     200,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 47,
+   "type": "scatter",
+   "x": 1480,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 8218,
+    "type": 0,
+    "tag": "a.L4e",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 112
+   },
+   "inputs": [
+    {
+     "id": 46
+    }
+   ]
+  },
+  {
+   "id": 48,
+   "type": "scatter",
+   "x": 1555,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 2055,
+    "type": 3,
+    "tag": "a.L4i",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 212
+   },
+   "inputs": [
+    {
+     "id": 46
+    }
+   ]
+  },
+  {
+   "id": 49,
+   "type": "ntype",
+   "x": 1555,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 4,
+    "frac": 0.2
+   },
+   "inputs": [
+    {
+     "id": 48
+    }
+   ]
+  },
+  {
+   "id": 50,
+   "type": "box",
+   "x": 1640,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     400,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 51,
+   "type": "scatter",
+   "x": 1640,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 1819,
+    "type": 0,
+    "tag": "a.L5e",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 122
+   },
+   "inputs": [
+    {
+     "id": 50
+    }
+   ]
+  },
+  {
+   "id": 52,
+   "type": "ntype",
+   "x": 1640,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 1,
+    "frac": 0.22
+   },
+   "inputs": [
+    {
+     "id": 51
+    }
+   ]
+  },
+  {
+   "id": 53,
+   "type": "scatter",
+   "x": 1715,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 399,
+    "type": 3,
+    "tag": "a.L5i",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 222
+   },
+   "inputs": [
+    {
+     "id": 50
+    }
+   ]
+  },
+  {
+   "id": 54,
+   "type": "ntype",
+   "x": 1715,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 4,
+    "frac": 0.45
+   },
+   "inputs": [
+    {
+     "id": 53
+    }
+   ]
+  },
+  {
+   "id": 55,
+   "type": "box",
+   "x": 1800,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     100,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 56,
+   "type": "scatter",
+   "x": 1800,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 5398,
+    "type": 0,
+    "tag": "a.L6e",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 132
+   },
+   "inputs": [
+    {
+     "id": 55
+    }
+   ]
+  },
+  {
+   "id": 57,
+   "type": "scatter",
+   "x": 1875,
+   "y": 75,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 1106,
+    "type": 3,
+    "tag": "a.L6i",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 232
+   },
+   "inputs": [
+    {
+     "id": 55
+    }
+   ]
+  },
+  {
+   "id": 58,
+   "type": "ntype",
+   "x": 1875,
+   "y": 130,
+   "on": true,
+   "name": "",
+   "params": {
+    "type": 4,
+    "frac": 0.35
+   },
+   "inputs": [
+    {
+     "id": 57
+    }
+   ]
+  },
+  {
+   "id": 59,
+   "type": "sphere",
+   "x": 40,
+   "y": 200,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     -350,
+     0
+    ],
+    "radius": 220
+   },
+   "inputs": []
+  },
+  {
+   "id": 60,
+   "type": "scatter",
+   "x": 40,
+   "y": 255,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 2750,
+    "type": 5,
+    "tag": "lgn",
+    "spacing": 10,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 13
+   },
+   "inputs": [
+    {
+     "id": 59
+    }
+   ]
+  },
+  {
+   "id": 61,
+   "type": "torus",
+   "x": 190,
+   "y": 200,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     -350,
+     0
+    ],
+    "radius": 300,
+    "thickness": 80,
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 62,
+   "type": "scatter",
+   "x": 190,
+   "y": 255,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 1375,
+    "type": 6,
+    "tag": "trn",
+    "spacing": 10,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 14
+   },
+   "inputs": [
+    {
+     "id": 61
+    }
+   ]
+  },
+  {
+   "id": 63,
+   "type": "sphere",
+   "x": 340,
+   "y": 200,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     -350,
+     0
+    ],
+    "radius": 220
+   },
+   "inputs": []
+  },
+  {
+   "id": 64,
+   "type": "scatter",
+   "x": 340,
+   "y": 255,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 2200,
+    "type": 5,
+    "tag": "mgb",
+    "spacing": 10,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 15
+   },
+   "inputs": [
+    {
+     "id": 63
+    }
+   ]
+  },
+  {
+   "id": 65,
+   "type": "torus",
+   "x": 490,
+   "y": 200,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     -350,
+     0
+    ],
+    "radius": 300,
+    "thickness": 80,
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 66,
+   "type": "scatter",
+   "x": 490,
+   "y": 255,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 1100,
+    "type": 6,
+    "tag": "trna",
+    "spacing": 10,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 16
+   },
+   "inputs": [
+    {
+     "id": 65
+    }
+   ]
+  },
+  {
+   "id": 67,
+   "type": "box",
+   "x": 640,
+   "y": 200,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     -900,
+     0
+    ],
+    "size": [
+     2000,
+     30,
+     2000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 68,
+   "type": "scatter",
+   "x": 640,
+   "y": 255,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 12000,
+    "type": 0,
+    "tag": "rgc",
+    "spacing": 8,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 11
+   },
+   "inputs": [
+    {
+     "id": 67
+    }
+   ]
+  },
+  {
+   "id": 69,
+   "type": "box",
+   "x": 790,
+   "y": 200,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     -1080,
+     0
+    ],
+    "size": [
+     100,
+     30,
+     3000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 70,
+   "type": "scatter",
+   "x": 790,
+   "y": 255,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 6000,
+    "type": 0,
+    "tag": "coch",
+    "spacing": 5,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 12
+   },
+   "inputs": [
+    {
+     "id": 69
+    }
+   ]
+  },
+  {
+   "id": 71,
+   "type": "merge",
+   "x": 40,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 7
+    },
+    {
+     "id": 9
+    },
+    {
+     "id": 11
+    },
+    {
+     "id": 13
+    }
+   ]
+  },
+  {
+   "id": 72,
+   "type": "merge",
+   "x": 130,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 71
+    },
+    {
+     "id": 16
+    },
+    {
+     "id": 18
+    },
+    {
+     "id": 20
+    }
+   ]
+  },
+  {
+   "id": 73,
+   "type": "merge",
+   "x": 220,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 72
+    },
+    {
+     "id": 22
+    },
+    {
+     "id": 25
+    },
+    {
+     "id": 27
+    }
+   ]
+  },
+  {
+   "id": 74,
+   "type": "merge",
+   "x": 310,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 73
+    },
+    {
+     "id": 29
+    },
+    {
+     "id": 31
+    },
+    {
+     "id": 34
+    }
+   ]
+  },
+  {
+   "id": 75,
+   "type": "merge",
+   "x": 400,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 74
+    },
+    {
+     "id": 36
+    },
+    {
+     "id": 38
+    },
+    {
+     "id": 40
+    }
+   ]
+  },
+  {
+   "id": 76,
+   "type": "merge",
+   "x": 490,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 75
+    },
+    {
+     "id": 43
+    },
+    {
+     "id": 45
+    },
+    {
+     "id": 47
+    }
+   ]
+  },
+  {
+   "id": 77,
+   "type": "merge",
+   "x": 580,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 76
+    },
+    {
+     "id": 49
+    },
+    {
+     "id": 52
+    },
+    {
+     "id": 54
+    }
+   ]
+  },
+  {
+   "id": 78,
+   "type": "merge",
+   "x": 670,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 77
+    },
+    {
+     "id": 56
+    },
+    {
+     "id": 58
+    },
+    {
+     "id": 60
+    }
+   ]
+  },
+  {
+   "id": 79,
+   "type": "merge",
+   "x": 760,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 78
+    },
+    {
+     "id": 62
+    },
+    {
+     "id": 64
+    },
+    {
+     "id": 66
+    }
+   ]
+  },
+  {
+   "id": 80,
+   "type": "merge",
+   "x": 850,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 79
+    },
+    {
+     "id": 68
+    },
+    {
+     "id": 70
+    },
+    null
+   ]
+  },
+  {
+   "id": 81,
+   "type": "project",
+   "x": 940,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "from": "rgc",
+    "to": "lgn",
+    "axisFrom": 1,
+    "axisTo": 1,
+    "dispersed": 0,
+    "flipU": 1,
+    "flipV": 0,
+    "sigma": 25,
+    "prob": 0.35,
+    "fanout": 50,
+    "offset": 0,
+    "across": "",
+    "weight": 9.407270595085677,
+    "velocity": 190,
+    "tract": 0,
+    "frozen": 1,
+    "rule": "",
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 80
+    },
+    null
+   ]
+  },
+  {
+   "id": 82,
+   "type": "project",
+   "x": 1030,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "from": "coch",
+    "to": "mgb",
+    "axisFrom": 1,
+    "axisTo": 1,
+    "dispersed": 0,
+    "flipU": 0,
+    "flipV": 0,
+    "sigma": 30,
+    "prob": 0.35,
+    "fanout": 50,
+    "offset": 0,
+    "across": "",
+    "weight": 10.583179419471387,
+    "velocity": 225,
+    "tract": 0,
+    "frozen": 1,
+    "rule": "",
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 81
+    },
+    null
+   ]
+  },
+  {
+   "id": 83,
+   "type": "project",
+   "x": 1120,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "from": "lgn",
+    "to": "v.L4e",
+    "axisFrom": 1,
+    "axisTo": 1,
+    "dispersed": 0,
+    "flipU": 0,
+    "flipV": 0,
+    "sigma": 150,
+    "prob": 0.8,
+    "fanout": 50,
+    "offset": 0,
+    "across": "",
+    "weight": 1.1759088243857097,
+    "velocity": 400,
+    "tract": 0,
+    "frozen": 1,
+    "rule": "",
+    "seed": 3
+   },
+   "inputs": [
+    {
+     "id": 82
+    },
+    null
+   ]
+  },
+  {
+   "id": 84,
+   "type": "project",
+   "x": 1210,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "from": "mgb",
+    "to": "a.L4e",
+    "axisFrom": 1,
+    "axisTo": 1,
+    "dispersed": 0,
+    "flipU": 0,
+    "flipV": 0,
+    "sigma": 150,
+    "prob": 0.8,
+    "fanout": 50,
+    "offset": 0,
+    "across": "",
+    "weight": 1.1759088243857097,
+    "velocity": 400,
+    "tract": 0,
+    "frozen": 1,
+    "rule": "",
+    "seed": 4
+   },
+   "inputs": [
+    {
+     "id": 83
+    },
+    null
+   ]
+  },
+  {
+   "id": 85,
+   "type": "project",
+   "x": 1300,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "from": "lgn",
+    "to": "v.L4i",
+    "axisFrom": 1,
+    "axisTo": 1,
+    "dispersed": 0,
+    "flipU": 0,
+    "flipV": 0,
+    "sigma": 180,
+    "prob": 0.8,
+    "fanout": 50,
+    "offset": 0,
+    "across": "",
+    "weight": 1.5286814717014225,
+    "velocity": 400,
+    "tract": 0,
+    "frozen": 1,
+    "rule": "",
+    "seed": 19
+   },
+   "inputs": [
+    {
+     "id": 84
+    },
+    null
+   ]
+  },
+  {
+   "id": 86,
+   "type": "project",
+   "x": 1390,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "from": "mgb",
+    "to": "a.L4i",
+    "axisFrom": 1,
+    "axisTo": 1,
+    "dispersed": 0,
+    "flipU": 0,
+    "flipV": 0,
+    "sigma": 180,
+    "prob": 0.8,
+    "fanout": 50,
+    "offset": 0,
+    "across": "",
+    "weight": 1.5286814717014225,
+    "velocity": 400,
+    "tract": 0,
+    "frozen": 1,
+    "rule": "",
+    "seed": 20
+   },
+   "inputs": [
+    {
+     "id": 85
+    },
+    null
+   ]
+  },
+  {
+   "id": 87,
+   "type": "project",
+   "x": 1480,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "from": "lgn",
+    "to": "v.L6e",
+    "axisFrom": 1,
+    "axisTo": 1,
+    "dispersed": 0,
+    "flipU": 0,
+    "flipV": 0,
+    "sigma": 220,
+    "prob": 0.15,
+    "fanout": 50,
+    "offset": 0,
+    "across": "",
+    "weight": 0.47036352975428386,
+    "velocity": 195,
+    "tract": 0,
+    "frozen": 1,
+    "rule": "",
+    "seed": 5
+   },
+   "inputs": [
+    {
+     "id": 86
+    },
+    null
+   ]
+  },
+  {
+   "id": 88,
+   "type": "project",
+   "x": 1570,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "from": "mgb",
+    "to": "a.L6e",
+    "axisFrom": 1,
+    "axisTo": 1,
+    "dispersed": 0,
+    "flipU": 0,
+    "flipV": 0,
+    "sigma": 220,
+    "prob": 0.15,
+    "fanout": 50,
+    "offset": 0,
+    "across": "",
+    "weight": 0.47036352975428386,
+    "velocity": 190,
+    "tract": 0,
+    "frozen": 1,
+    "rule": "",
+    "seed": 6
+   },
+   "inputs": [
+    {
+     "id": 87
+    },
+    null
+   ]
+  },
+  {
+   "id": 89,
+   "type": "project",
+   "x": 1660,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "from": "v.L6e",
+    "to": "lgn",
+    "axisFrom": 1,
+    "axisTo": 1,
+    "dispersed": 0,
+    "flipU": 0,
+    "flipV": 0,
+    "sigma": 150,
+    "prob": 0.1,
+    "fanout": 50,
+    "offset": 0,
+    "across": "",
+    "weight": 0.2939772060964274,
+    "velocity": 85,
+    "tract": 0,
+    "frozen": 1,
+    "rule": "",
+    "seed": 7
+   },
+   "inputs": [
+    {
+     "id": 88
+    },
+    null
+   ]
+  },
+  {
+   "id": 90,
+   "type": "project",
+   "x": 1750,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "from": "a.L6e",
+    "to": "mgb",
+    "axisFrom": 1,
+    "axisTo": 1,
+    "dispersed": 0,
+    "flipU": 0,
+    "flipV": 0,
+    "sigma": 150,
+    "prob": 0.1,
+    "fanout": 50,
+    "offset": 0,
+    "across": "",
+    "weight": 0.2939772060964274,
+    "velocity": 85,
+    "tract": 0,
+    "frozen": 1,
+    "rule": "",
+    "seed": 8
+   },
+   "inputs": [
+    {
+     "id": 89
+    },
+    null
+   ]
+  },
+  {
+   "id": 91,
+   "type": "project",
+   "x": 1840,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "from": "v.L2/3e",
+    "to": "x.L4e",
+    "axisFrom": 1,
+    "axisTo": 1,
+    "dispersed": 0,
+    "flipU": 0,
+    "flipV": 0,
+    "sigma": 200,
+    "prob": 0.3,
+    "fanout": 50,
+    "offset": 0,
+    "across": "",
+    "weight": 1.176,
+    "velocity": 75,
+    "tract": 0,
+    "frozen": 0,
+    "rule": "",
+    "seed": 9
+   },
+   "inputs": [
+    {
+     "id": 90
+    },
+    null
+   ]
+  },
+  {
+   "id": 92,
+   "type": "project",
+   "x": 1930,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "from": "a.L2/3e",
+    "to": "x.L4e",
+    "axisFrom": 1,
+    "axisTo": 1,
+    "dispersed": 0,
+    "flipU": 0,
+    "flipV": 0,
+    "sigma": 200,
+    "prob": 0.3,
+    "fanout": 50,
+    "offset": 0,
+    "across": "",
+    "weight": 0.388,
+    "velocity": 75,
+    "tract": 0,
+    "frozen": 0,
+    "rule": "",
+    "seed": 10
+   },
+   "inputs": [
+    {
+     "id": 91
+    },
+    null
+   ]
+  },
+  {
+   "id": 93,
+   "type": "project",
+   "x": 2020,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "from": "x.L5e",
+    "to": "v.L2/3e",
+    "axisFrom": 1,
+    "axisTo": 1,
+    "dispersed": 0,
+    "flipU": 0,
+    "flipV": 0,
+    "sigma": 220,
+    "prob": 0.1,
+    "fanout": 50,
+    "offset": 0,
+    "across": "",
+    "weight": 0.2939772060964274,
+    "velocity": 70,
+    "tract": 0,
+    "frozen": 1,
+    "rule": "",
+    "seed": 17
+   },
+   "inputs": [
+    {
+     "id": 92
+    },
+    null
+   ]
+  },
+  {
+   "id": 94,
+   "type": "project",
+   "x": 2110,
+   "y": 330,
+   "on": true,
+   "name": "",
+   "params": {
+    "from": "x.L5e",
+    "to": "a.L2/3e",
+    "axisFrom": 1,
+    "axisTo": 1,
+    "dispersed": 0,
+    "flipU": 0,
+    "flipV": 0,
+    "sigma": 220,
+    "prob": 0.1,
+    "fanout": 50,
+    "offset": 0,
+    "across": "",
+    "weight": 0.2939772060964274,
+    "velocity": 70,
+    "tract": 0,
+    "frozen": 1,
+    "rule": "",
+    "seed": 18
+   },
+   "inputs": [
+    {
+     "id": 93
+    },
+    null
+   ]
+  },
+  {
+   "id": 95,
+   "type": "connect",
+   "x": 40,
+   "y": 420,
+   "on": true,
+   "name": "",
+   "params": {
+    "radius": 2200,
+    "sigma": 9000,
+    "prob": 0.05,
+    "wExc": 0.17638632365785645,
+    "wInh": -0.745193121934849,
+    "wdist": 1,
+    "wsigma": 1,
+    "cluster": 0.2,
+    "table": "v.L2/3e v.L2/3e 2.018 1 0\nv.L2/3i v.L2/3e 3.378 1 0\nv.L4e v.L2/3e 0.874 2 0\nv.L4i v.L2/3e 1.636 1 0\nv.L5e v.L2/3e 0.646 1 0\nv.L5i v.L2/3e 0.000 1 0\nv.L6e v.L2/3e 0.152 1 0\nv.L6i v.L2/3e 0.000 1 0\nv.L2/3e v.L2/3i 2.692 1 0\nv.L2/3i v.L2/3i 2.742 1 0\nv.L4e v.L2/3i 0.632 1 0\nv.L4i v.L2/3i 1.030 1 0\nv.L5e v.L2/3i 1.510 1 0\nv.L5i v.L2/3i 0.000 1 0\nv.L6e v.L2/3i 0.084 1 0\nv.L6i v.L2/3i 0.000 1 0\nv.L2/3e v.L4e 0.154 1 0\nv.L2/3i v.L4e 0.118 1 0\nv.L4e v.L4e 0.994 1 0\nv.L4i v.L4e 2.700 1 0\nv.L5e v.L4e 0.134 1 0\nv.L5i v.L4e 0.006 1 0\nv.L6e v.L4e 0.906 1 0\nv.L6i v.L4e 0.000 1 0\nv.L2/3e v.L4i 1.382 1 0\nv.L2/3i v.L4i 0.058 1 0\nv.L4e v.L4i 1.588 1 0\nv.L4i v.L4i 3.194 1 0\nv.L5e v.L4i 0.066 1 0\nv.L5i v.L4i 0.000 1 0\nv.L6e v.L4i 2.114 1 0\nv.L6i v.L4i 0.000 1 0\nv.L2/3e v.L5e 2.008 1 0\nv.L2/3i v.L5e 1.244 1 0\nv.L4e v.L5e 1.010 1 0\nv.L4i v.L5e 0.114 1 0\nv.L5e v.L5e 1.662 1 0\nv.L5i v.L5e 7.452 1 0\nv.L6e v.L5e 0.408 1 0\nv.L6i v.L5e 0.000 1 0\nv.L2/3e v.L5i 1.096 1 0\nv.L2/3i v.L5i 0.538 1 0\nv.L4e v.L5i 0.514 1 0\nv.L4i v.L5i 0.044 1 0\nv.L5e v.L5i 1.200 1 0\nv.L5i v.L5i 6.316 1 0\nv.L6e v.L5i 0.172 1 0\nv.L6i v.L5i 0.000 1 0\nv.L2/3e v.L6e 0.312 1 0\nv.L2/3i v.L6e 0.132 1 0\nv.L4e v.L6e 0.422 1 0\nv.L4i v.L6e 0.332 1 0\nv.L5e v.L6e 1.144 1 0\nv.L5i v.L6e 0.394 1 0\nv.L6e v.L6e 0.792 1 0\nv.L6i v.L6e 4.504 1 0\nv.L2/3e v.L6i 0.728 1 0\nv.L2/3i v.L6i 0.020 1 0\nv.L4e v.L6i 0.068 1 0\nv.L4i v.L6i 0.010 1 0\nv.L5e v.L6i 0.554 1 0\nv.L5i v.L6i 0.160 1 0\nv.L6e v.L6i 1.316 1 0\nv.L6i v.L6i 2.886 1 0\nx.L2/3e x.L2/3e 2.018 1 1\nx.L2/3i x.L2/3e 3.378 1 1\nx.L4e x.L2/3e 0.874 2 1\nx.L4i x.L2/3e 1.636 1 0\nx.L5e x.L2/3e 0.646 1 0\nx.L5i x.L2/3e 0.000 1 0\nx.L6e x.L2/3e 0.152 1 0\nx.L6i x.L2/3e 0.000 1 0\nx.L2/3e x.L2/3i 2.692 1 1\nx.L2/3i x.L2/3i 2.742 1 0\nx.L4e x.L2/3i 0.632 1 0\nx.L4i x.L2/3i 1.030 1 0\nx.L5e x.L2/3i 1.510 1 0\nx.L5i x.L2/3i 0.000 1 0\nx.L6e x.L2/3i 0.084 1 0\nx.L6i x.L2/3i 0.000 1 0\nx.L2/3e x.L4e 0.154 1 0\nx.L2/3i x.L4e 0.118 1 0\nx.L4e x.L4e 0.994 1 0\nx.L4i x.L4e 2.700 1 0\nx.L5e x.L4e 0.134 1 0\nx.L5i x.L4e 0.006 1 0\nx.L6e x.L4e 0.906 1 0\nx.L6i x.L4e 0.000 1 0\nx.L2/3e x.L4i 1.382 1 0\nx.L2/3i x.L4i 0.058 1 0\nx.L4e x.L4i 1.588 1 0\nx.L4i x.L4i 3.194 1 0\nx.L5e x.L4i 0.066 1 0\nx.L5i x.L4i 0.000 1 0\nx.L6e x.L4i 2.114 1 0\nx.L6i x.L4i 0.000 1 0\nx.L2/3e x.L5e 2.008 1 0\nx.L2/3i x.L5e 1.244 1 0\nx.L4e x.L5e 1.010 1 0\nx.L4i x.L5e 0.114 1 0\nx.L5e x.L5e 1.662 1 0\nx.L5i x.L5e 7.452 1 0\nx.L6e x.L5e 0.408 1 0\nx.L6i x.L5e 0.000 1 0\nx.L2/3e x.L5i 1.096 1 0\nx.L2/3i x.L5i 0.538 1 0\nx.L4e x.L5i 0.514 1 0\nx.L4i x.L5i 0.044 1 0\nx.L5e x.L5i 1.200 1 0\nx.L5i x.L5i 6.316 1 0\nx.L6e x.L5i 0.172 1 0\nx.L6i x.L5i 0.000 1 0\nx.L2/3e x.L6e 0.312 1 0\nx.L2/3i x.L6e 0.132 1 0\nx.L4e x.L6e 0.422 1 0\nx.L4i x.L6e 0.332 1 0\nx.L5e x.L6e 1.144 1 0\nx.L5i x.L6e 0.394 1 0\nx.L6e x.L6e 0.792 1 0\nx.L6i x.L6e 4.504 1 0\nx.L2/3e x.L6i 0.728 1 0\nx.L2/3i x.L6i 0.020 1 0\nx.L4e x.L6i 0.068 1 0\nx.L4i x.L6i 0.010 1 0\nx.L5e x.L6i 0.554 1 0\nx.L5i x.L6i 0.160 1 0\nx.L6e x.L6i 1.316 1 0\nx.L6i x.L6i 2.886 1 0\na.L2/3e a.L2/3e 2.018 1 0\na.L2/3i a.L2/3e 3.378 1 0\na.L4e a.L2/3e 0.874 2 0\na.L4i a.L2/3e 1.636 1 0\na.L5e a.L2/3e 0.646 1 0\na.L5i a.L2/3e 0.000 1 0\na.L6e a.L2/3e 0.152 1 0\na.L6i a.L2/3e 0.000 1 0\na.L2/3e a.L2/3i 2.692 1 0\na.L2/3i a.L2/3i 2.742 1 0\na.L4e a.L2/3i 0.632 1 0\na.L4i a.L2/3i 1.030 1 0\na.L5e a.L2/3i 1.510 1 0\na.L5i a.L2/3i 0.000 1 0\na.L6e a.L2/3i 0.084 1 0\na.L6i a.L2/3i 0.000 1 0\na.L2/3e a.L4e 0.154 1 0\na.L2/3i a.L4e 0.118 1 0\na.L4e a.L4e 0.994 1 0\na.L4i a.L4e 2.700 1 0\na.L5e a.L4e 0.134 1 0\na.L5i a.L4e 0.006 1 0\na.L6e a.L4e 0.906 1 0\na.L6i a.L4e 0.000 1 0\na.L2/3e a.L4i 1.382 1 0\na.L2/3i a.L4i 0.058 1 0\na.L4e a.L4i 1.588 1 0\na.L4i a.L4i 3.194 1 0\na.L5e a.L4i 0.066 1 0\na.L5i a.L4i 0.000 1 0\na.L6e a.L4i 2.114 1 0\na.L6i a.L4i 0.000 1 0\na.L2/3e a.L5e 2.008 1 0\na.L2/3i a.L5e 1.244 1 0\na.L4e a.L5e 1.010 1 0\na.L4i a.L5e 0.114 1 0\na.L5e a.L5e 1.662 1 0\na.L5i a.L5e 7.452 1 0\na.L6e a.L5e 0.408 1 0\na.L6i a.L5e 0.000 1 0\na.L2/3e a.L5i 1.096 1 0\na.L2/3i a.L5i 0.538 1 0\na.L4e a.L5i 0.514 1 0\na.L4i a.L5i 0.044 1 0\na.L5e a.L5i 1.200 1 0\na.L5i a.L5i 6.316 1 0\na.L6e a.L5i 0.172 1 0\na.L6i a.L5i 0.000 1 0\na.L2/3e a.L6e 0.312 1 0\na.L2/3i a.L6e 0.132 1 0\na.L4e a.L6e 0.422 1 0\na.L4i a.L6e 0.332 1 0\na.L5e a.L6e 1.144 1 0\na.L5i a.L6e 0.394 1 0\na.L6e a.L6e 0.792 1 0\na.L6i a.L6e 4.504 1 0\na.L2/3e a.L6i 0.728 1 0\na.L2/3i a.L6i 0.020 1 0\na.L4e a.L6i 0.068 1 0\na.L4i a.L6i 0.010 1 0\na.L5e a.L6i 0.554 1 0\na.L5i a.L6i 0.160 1 0\na.L6e a.L6i 1.316 1 0\na.L6i a.L6i 2.886 1 0\nlgn trn 3 1 0\ntrn lgn 3 1 0\nmgb trna 3 1 0\ntrna mgb 3 1 0\n* * 0 1 0",
+    "velocity": 300,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 94
+    }
+   ]
+  },
+  {
+   "id": 96,
+   "type": "curriculum",
+   "x": 640,
+   "y": 420,
+   "on": true,
+   "name": "",
+   "params": {
+    "sense": 0,
+    "acuity": 1,
+    "jitter": 0,
+    "scaleVar": 0,
+    "rotVar": 0,
+    "voice": 0,
+    "offset": 0,
+    "set": 0,
+    "order": 1,
+    "onMs": 1000,
+    "offMs": 1000,
+    "phases": "",
+    "scramble": 0,
+    "place": 0,
+    "placeOrder": 0,
+    "seed": 1,
+    "probeEvery": 5,
+    "condNames": "both, sight, sound",
+    "calCycles": 3,
+    "reSweepEvery": 2400
+   },
+   "inputs": [
+    null
+   ]
+  },
+  {
+   "id": 97,
+   "type": "input",
+   "x": 190,
+   "y": 420,
+   "on": true,
+   "name": "",
+   "params": {
+    "tag": "",
+    "map": 0,
+    "code": 1,
+    "axis": 1,
+    "cols": 64,
+    "rows": 64,
+    "arbor": 0.7,
+    "fanin": 8,
+    "seed": 1,
+    "transient": 0.2,
+    "lagMs": 15,
+    "jitter": 0,
+    "amp": 30
+   },
+   "inputs": [
+    {
+     "id": 95
+    },
+    {
+     "id": 67
+    },
+    {
+     "id": 96
+    }
+   ]
+  },
+  {
+   "id": 98,
+   "type": "input",
+   "x": 340,
+   "y": 420,
+   "on": true,
+   "name": "",
+   "params": {
+    "tag": "",
+    "map": 1,
+    "code": 1,
+    "axis": 2,
+    "cols": 48,
+    "rows": 16,
+    "arbor": 0.7,
+    "fanin": 8,
+    "seed": 1,
+    "transient": 0.2,
+    "lagMs": 0,
+    "jitter": 0,
+    "amp": 30
+   },
+   "inputs": [
+    {
+     "id": 97
+    },
+    {
+     "id": 69
+    },
+    {
+     "id": 99
+    }
+   ]
+  },
+  {
+   "id": 99,
+   "type": "curriculum",
+   "x": 640,
+   "y": 476,
+   "on": true,
+   "name": "",
+   "params": {
+    "sense": 1,
+    "acuity": 1,
+    "jitter": 0.18,
+    "scaleVar": 0.25,
+    "rotVar": 12,
+    "voice": 0,
+    "offset": 0,
+    "set": 0,
+    "order": 1,
+    "onMs": 400,
+    "offMs": 350,
+    "phases": "",
+    "scramble": 0,
+    "place": 0,
+    "placeOrder": 0,
+    "seed": 1,
+    "probeEvery": 0,
+    "condNames": "both, sight, sound",
+    "calCycles": 0,
+    "reSweepEvery": 0
+   },
+   "inputs": [
+    {
+     "id": 96
+    }
+   ]
+  },
+  {
+   "id": 100,
+   "type": "box",
+   "x": 440,
+   "y": 500,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     900,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 101,
+   "type": "stimulus",
+   "x": 440,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2.33,
+    "tag": "",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 40
+   },
+   "inputs": [
+    {
+     "id": 98
+    },
+    {
+     "id": 100
+    }
+   ]
+  },
+  {
+   "id": 102,
+   "type": "box",
+   "x": 476,
+   "y": 500,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     900,
+     0
+    ],
+    "size": [
+     220,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 103,
+   "type": "stimulus",
+   "x": 476,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2.33,
+    "tag": "",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 41
+   },
+   "inputs": [
+    {
+     "id": 101
+    },
+    {
+     "id": 102
+    }
+   ]
+  },
+  {
+   "id": 104,
+   "type": "box",
+   "x": 512,
+   "y": 500,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     900,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 105,
+   "type": "stimulus",
+   "x": 512,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2.33,
+    "tag": "",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 42
+   },
+   "inputs": [
+    {
+     "id": 103
+    },
+    {
+     "id": 104
+    }
+   ]
+  },
+  {
+   "id": 106,
+   "type": "box",
+   "x": 440,
+   "y": 615,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     900,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 107,
+   "type": "stimulus",
+   "x": 440,
+   "y": 650,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2.29,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 105
+    },
+    {
+     "id": 106
+    }
+   ]
+  },
+  {
+   "id": 108,
+   "type": "box",
+   "x": 476,
+   "y": 615,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     900,
+     0
+    ],
+    "size": [
+     220,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 109,
+   "type": "stimulus",
+   "x": 476,
+   "y": 650,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2.29,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 107
+    },
+    {
+     "id": 108
+    }
+   ]
+  },
+  {
+   "id": 110,
+   "type": "box",
+   "x": 512,
+   "y": 615,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     900,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 111,
+   "type": "stimulus",
+   "x": 512,
+   "y": 650,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2.29,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 109
+    },
+    {
+     "id": 110
+    }
+   ]
+  },
+  {
+   "id": 112,
+   "type": "box",
+   "x": 590,
+   "y": 500,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     650,
+     0
+    ],
+    "size": [
+     360,
+     200,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 113,
+   "type": "stimulus",
+   "x": 590,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2.67,
+    "tag": "",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 43
+   },
+   "inputs": [
+    {
+     "id": 111
+    },
+    {
+     "id": 112
+    }
+   ]
+  },
+  {
+   "id": 114,
+   "type": "box",
+   "x": 626,
+   "y": 500,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     650,
+     0
+    ],
+    "size": [
+     220,
+     200,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 115,
+   "type": "stimulus",
+   "x": 626,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2.67,
+    "tag": "",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 44
+   },
+   "inputs": [
+    {
+     "id": 113
+    },
+    {
+     "id": 114
+    }
+   ]
+  },
+  {
+   "id": 116,
+   "type": "box",
+   "x": 662,
+   "y": 500,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     650,
+     0
+    ],
+    "size": [
+     360,
+     200,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 117,
+   "type": "stimulus",
+   "x": 662,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2.67,
+    "tag": "",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 45
+   },
+   "inputs": [
+    {
+     "id": 115
+    },
+    {
+     "id": 116
+    }
+   ]
+  },
+  {
+   "id": 118,
+   "type": "box",
+   "x": 590,
+   "y": 615,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     650,
+     0
+    ],
+    "size": [
+     360,
+     200,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 119,
+   "type": "stimulus",
+   "x": 590,
+   "y": 650,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 3,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 117
+    },
+    {
+     "id": 118
+    }
+   ]
+  },
+  {
+   "id": 120,
+   "type": "box",
+   "x": 626,
+   "y": 615,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     650,
+     0
+    ],
+    "size": [
+     220,
+     200,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 121,
+   "type": "stimulus",
+   "x": 626,
+   "y": 650,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 3,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 119
+    },
+    {
+     "id": 120
+    }
+   ]
+  },
+  {
+   "id": 122,
+   "type": "box",
+   "x": 662,
+   "y": 615,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     650,
+     0
+    ],
+    "size": [
+     360,
+     200,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 123,
+   "type": "stimulus",
+   "x": 662,
+   "y": 650,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 3,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 121
+    },
+    {
+     "id": 122
+    }
+   ]
+  },
+  {
+   "id": 124,
+   "type": "box",
+   "x": 740,
+   "y": 500,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     400,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 125,
+   "type": "stimulus",
+   "x": 740,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 3.47,
+    "tag": "",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 46
+   },
+   "inputs": [
+    {
+     "id": 123
+    },
+    {
+     "id": 124
+    }
+   ]
+  },
+  {
+   "id": 126,
+   "type": "box",
+   "x": 776,
+   "y": 500,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     400,
+     0
+    ],
+    "size": [
+     220,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 127,
+   "type": "stimulus",
+   "x": 776,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 3.47,
+    "tag": "",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 47
+   },
+   "inputs": [
+    {
+     "id": 125
+    },
+    {
+     "id": 126
+    }
+   ]
+  },
+  {
+   "id": 128,
+   "type": "box",
+   "x": 812,
+   "y": 500,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     400,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 129,
+   "type": "stimulus",
+   "x": 812,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 3.47,
+    "tag": "",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 48
+   },
+   "inputs": [
+    {
+     "id": 127
+    },
+    {
+     "id": 128
+    }
+   ]
+  },
+  {
+   "id": 130,
+   "type": "box",
+   "x": 740,
+   "y": 615,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     400,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 131,
+   "type": "stimulus",
+   "x": 740,
+   "y": 650,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2.86,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 129
+    },
+    {
+     "id": 130
+    }
+   ]
+  },
+  {
+   "id": 132,
+   "type": "box",
+   "x": 776,
+   "y": 615,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     400,
+     0
+    ],
+    "size": [
+     220,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 133,
+   "type": "stimulus",
+   "x": 776,
+   "y": 650,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2.86,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 131
+    },
+    {
+     "id": 132
+    }
+   ]
+  },
+  {
+   "id": 134,
+   "type": "box",
+   "x": 812,
+   "y": 615,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     400,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 135,
+   "type": "stimulus",
+   "x": 812,
+   "y": 650,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2.86,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 133
+    },
+    {
+     "id": 134
+    }
+   ]
+  },
+  {
+   "id": 136,
+   "type": "box",
+   "x": 890,
+   "y": 500,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     100,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 137,
+   "type": "stimulus",
+   "x": 890,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2.75,
+    "tag": "",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 49
+   },
+   "inputs": [
+    {
+     "id": 135
+    },
+    {
+     "id": 136
+    }
+   ]
+  },
+  {
+   "id": 138,
+   "type": "box",
+   "x": 926,
+   "y": 500,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     100,
+     0
+    ],
+    "size": [
+     220,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 139,
+   "type": "stimulus",
+   "x": 926,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2.75,
+    "tag": "",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 50
+   },
+   "inputs": [
+    {
+     "id": 137
+    },
+    {
+     "id": 138
+    }
+   ]
+  },
+  {
+   "id": 140,
+   "type": "box",
+   "x": 962,
+   "y": 500,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     100,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 141,
+   "type": "stimulus",
+   "x": 962,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2.75,
+    "tag": "",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 51
+   },
+   "inputs": [
+    {
+     "id": 139
+    },
+    {
+     "id": 140
+    }
+   ]
+  },
+  {
+   "id": 142,
+   "type": "box",
+   "x": 890,
+   "y": 615,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     100,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 143,
+   "type": "stimulus",
+   "x": 890,
+   "y": 650,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 4.14,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 141
+    },
+    {
+     "id": 142
+    }
+   ]
+  },
+  {
+   "id": 144,
+   "type": "box",
+   "x": 926,
+   "y": 615,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     100,
+     0
+    ],
+    "size": [
+     220,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 145,
+   "type": "stimulus",
+   "x": 926,
+   "y": 650,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 4.14,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 143
+    },
+    {
+     "id": 144
+    }
+   ]
+  },
+  {
+   "id": 146,
+   "type": "box",
+   "x": 962,
+   "y": 615,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     100,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 147,
+   "type": "stimulus",
+   "x": 962,
+   "y": 650,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 4.14,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 145
+    },
+    {
+     "id": 146
+    }
+   ]
+  },
+  {
+   "id": 148,
+   "type": "stimulus",
+   "x": 190,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": -6,
+    "tag": "lgn",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 147
+    },
+    {
+     "id": 59
+    }
+   ]
+  },
+  {
+   "id": 149,
+   "type": "stimulus",
+   "x": 330,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": -6,
+    "tag": "trn",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 148
+    },
+    {
+     "id": 61
+    }
+   ]
+  },
+  {
+   "id": 150,
+   "type": "stimulus",
+   "x": 470,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": -6,
+    "tag": "mgb",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 149
+    },
+    {
+     "id": 63
+    }
+   ]
+  },
+  {
+   "id": 151,
+   "type": "stimulus",
+   "x": 610,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": -6,
+    "tag": "trna",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 150
+    },
+    {
+     "id": 65
+    }
+   ]
+  },
+  {
+   "id": 152,
+   "type": "stimulus",
+   "x": 760,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 1.2,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 151
+    },
+    {
+     "id": 59
+    }
+   ]
+  },
+  {
+   "id": 153,
+   "type": "stimulus",
+   "x": 900,
+   "y": 560,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 1.2,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 152
+    },
+    {
+     "id": 63
+    }
+   ]
+  },
+  {
+   "id": 154,
+   "type": "probe",
+   "x": 40,
+   "y": 690,
+   "on": true,
+   "name": "",
+   "params": {
+    "label": "retina",
+    "tag": "",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 153
+    },
+    {
+     "id": 67
+    }
+   ]
+  },
+  {
+   "id": 155,
+   "type": "probe",
+   "x": 180,
+   "y": 690,
+   "on": true,
+   "name": "",
+   "params": {
+    "label": "cochlea",
+    "tag": "",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 154
+    },
+    {
+     "id": 69
+    }
+   ]
+  },
+  {
+   "id": 156,
+   "type": "probe",
+   "x": 320,
+   "y": 690,
+   "on": true,
+   "name": "",
+   "params": {
+    "label": "LGN",
+    "tag": "",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 155
+    },
+    {
+     "id": 59
+    }
+   ]
+  },
+  {
+   "id": 157,
+   "type": "probe",
+   "x": 460,
+   "y": 690,
+   "on": true,
+   "name": "",
+   "params": {
+    "label": "MGB",
+    "tag": "",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 156
+    },
+    {
+     "id": 63
+    }
+   ]
+  },
+  {
+   "id": 158,
+   "type": "box",
+   "x": 600,
+   "y": 660,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     650,
+     0
+    ],
+    "size": [
+     360,
+     200,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 159,
+   "type": "probe",
+   "x": 600,
+   "y": 720,
+   "on": true,
+   "name": "",
+   "params": {
+    "label": "v.L4",
+    "tag": "",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 157
+    },
+    {
+     "id": 158
+    }
+   ]
+  },
+  {
+   "id": 160,
+   "type": "box",
+   "x": 740,
+   "y": 660,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -320,
+     900,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 161,
+   "type": "probe",
+   "x": 740,
+   "y": 720,
+   "on": true,
+   "name": "",
+   "params": {
+    "label": "v.L2/3",
+    "tag": "",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 159
+    },
+    {
+     "id": 160
+    }
+   ]
+  },
+  {
+   "id": 162,
+   "type": "box",
+   "x": 880,
+   "y": 660,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     650,
+     0
+    ],
+    "size": [
+     360,
+     200,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 163,
+   "type": "probe",
+   "x": 880,
+   "y": 720,
+   "on": true,
+   "name": "",
+   "params": {
+    "label": "a.L4",
+    "tag": "",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 161
+    },
+    {
+     "id": 162
+    }
+   ]
+  },
+  {
+   "id": 164,
+   "type": "box",
+   "x": 1020,
+   "y": 660,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     320,
+     900,
+     0
+    ],
+    "size": [
+     360,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 165,
+   "type": "probe",
+   "x": 1020,
+   "y": 720,
+   "on": true,
+   "name": "",
+   "params": {
+    "label": "a.L2/3",
+    "tag": "",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 163
+    },
+    {
+     "id": 164
+    }
+   ]
+  },
+  {
+   "id": 166,
+   "type": "box",
+   "x": 1160,
+   "y": 660,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     650,
+     0
+    ],
+    "size": [
+     220,
+     200,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 167,
+   "type": "probe",
+   "x": 1160,
+   "y": 720,
+   "on": true,
+   "name": "",
+   "params": {
+    "label": "x.L4",
+    "tag": "",
+    "record": 1,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 165
+    },
+    {
+     "id": 166
+    }
+   ]
+  },
+  {
+   "id": 168,
+   "type": "box",
+   "x": 1300,
+   "y": 660,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     900,
+     0
+    ],
+    "size": [
+     220,
+     300,
+     1000
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 169,
+   "type": "probe",
+   "x": 1300,
+   "y": 720,
+   "on": true,
+   "name": "",
+   "params": {
+    "label": "x.L2/3",
+    "tag": "",
+    "record": 1,
+    "view": 1,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 167
+    },
+    {
+     "id": 168
+    }
+   ]
+  },
+  {
+   "id": 170,
+   "type": "output",
+   "x": 1300,
+   "y": 780,
+   "on": true,
+   "name": "",
+   "params": {
+    "steps": 2,
+    "engine": 0,
+    "syn": 1,
+    "tauE": 3,
+    "tauI": 8,
+    "psc": 1,
+    "refrac": 2,
+    "vmin": -90,
+    "plast": 0,
+    "aP": 0.010583179419471386,
+    "aM": 0.001,
+    "tauS": 20,
+    "tauM": 20,
+    "trip": 0.007055452946314258,
+    "tauY": 114,
+    "tin": 0.00005879544121928549,
+    "wmax": 70.55452946314259,
+    "wdep": 1,
+    "iEta": 0.010638017443752305,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 2,
+    "scale": 0,
+    "sEta": 0.03,
+    "het": 0.001,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "tauCons": 20,
+    "consStep": 1.2,
+    "commit": 0,
+    "stp": 0,
+    "stpU": 0.2,
+    "stpNorm": 0,
+    "stpTauD": 200,
+    "stpTauF": 600,
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trVariants": "",
+    "trEngine": 0,
+    "trHost": "ws://localhost:8801"
+   },
+   "inputs": [
+    {
+     "id": 171
+    }
+   ]
+  },
+  {
+   "id": 171,
+   "type": "analysis",
+   "x": 880,
+   "y": 545,
+   "on": true,
+   "name": "",
+   "params": {
+    "cap": 8192,
+    "topQ": 0.1,
+    "setExpr": "both and not sight and not sound",
+    "probeWith": "sight, sound",
+    "margin": 0.15,
+    "minCells": 4,
+    "minTrials": 2,
+    "nPerm": 40,
+    "doDecode": 1,
+    "doBind": 1,
+    "doTiming": 1,
+    "doLike": 1,
+    "exportTrials": 0
+   },
+   "inputs": [
+    {
+     "id": 169
+    }
+   ]
+  },
+  {
+   "id": 172,
+   "type": "chart",
+   "x": 1120,
+   "y": 780,
+   "on": true,
+   "name": "",
+   "params": {
+    "plot": 0,
+    "pop": "x.L4",
+    "which": 0,
+    "field": "decode",
+    "bins": 40,
+    "height": 150,
+    "source": ""
+   },
+   "inputs": [
+    {
+     "id": 170
+    }
+   ]
+  }
+ ]
+}

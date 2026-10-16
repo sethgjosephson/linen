@@ -1,0 +1,882 @@
+{
+ "v": 1,
+ "format": 12,
+ "nextId": 29,
+ "view": {
+  "x": 0,
+  "y": 0,
+  "scale": 1
+ },
+ "viewSlots": {},
+ "activeView": null,
+ "scenarioName": "virtual patch rig",
+ "plugins": [],
+ "groups": [
+  {
+   "label": "RS  regular spiking",
+   "members": [
+    3,
+    4
+   ],
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "IB  intrinsic burst",
+   "members": [
+    5,
+    6
+   ],
+   "hue": 50,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "CH  chattering",
+   "members": [
+    7,
+    8
+   ],
+   "hue": 100,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "FS  fast spiking",
+   "members": [
+    9,
+    10
+   ],
+   "hue": 150,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "LTS  low threshold",
+   "members": [
+    11,
+    12
+   ],
+   "hue": 200,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "TC  thalamocortical",
+   "members": [
+    13,
+    14
+   ],
+   "hue": 250,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "RZ  resonator",
+   "members": [
+    15,
+    16
+   ],
+   "hue": 300,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "readout  a probe per cell",
+   "members": [
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "the electrode  a ramp to 12 over 3 s, then held",
+   "members": [
+    17,
+    18,
+    19
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "checkpoint",
+   "members": [
+    27,
+    28
+   ],
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": 1,
+   "type": "note",
+   "x": -380,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Virtual patch rig\n\nSeven cells, one of each type, each alone in its own dish with an electrode in it. The current ramps from zero to 12 over the first three seconds and then holds. If you read each probe's rate over those seconds from left to right, you are reading that cell's current to rate curve.\n\nThis scene is a reproduction and stays on the classic rows: the seven cells are the presets of Izhikevich (2003) and the current is in the unit that model uses, so the curves are the ones figure 2 shows. The other scenes build their networks from the measured rows of the 2007 book, where a cell carries a capacitance in picofarads and a current is in picoamps.",
+    "width": 340,
+    "near": ""
+   },
+   "inputs": []
+  },
+  {
+   "id": 2,
+   "type": "note",
+   "x": -380,
+   "y": 200,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Something to try: click a cell in the viewer to see its membrane potential. The current where a cell starts firing is its rheobase. TC and LTS start almost at once, RS needs about 4, and FS needs about the same but fires far faster once it goes. RZ is a resonator and fires only in a narrow band. Change the ramp's current to see how far each curve goes.",
+    "width": 340,
+    "near": "the electrode"
+   },
+   "inputs": []
+  },
+  {
+   "id": 3,
+   "type": "sphere",
+   "x": 40,
+   "y": 20,
+   "on": true,
+   "name": "rs sphere",
+   "params": {
+    "center": [
+     -600,
+     0,
+     0
+    ],
+    "radius": 30
+   },
+   "inputs": []
+  },
+  {
+   "id": 4,
+   "type": "scatter",
+   "x": 40,
+   "y": 75,
+   "on": true,
+   "name": "rs",
+   "params": {
+    "fill": 0,
+    "density": 90000,
+    "count": 1,
+    "type": 0,
+    "tag": "rs",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 3
+    }
+   ]
+  },
+  {
+   "id": 5,
+   "type": "sphere",
+   "x": 190,
+   "y": 20,
+   "on": true,
+   "name": "ib sphere",
+   "params": {
+    "center": [
+     -400,
+     0,
+     0
+    ],
+    "radius": 30
+   },
+   "inputs": []
+  },
+  {
+   "id": 6,
+   "type": "scatter",
+   "x": 190,
+   "y": 75,
+   "on": true,
+   "name": "ib",
+   "params": {
+    "fill": 0,
+    "density": 90000,
+    "count": 1,
+    "type": 1,
+    "tag": "ib",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 5
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "type": "sphere",
+   "x": 340,
+   "y": 20,
+   "on": true,
+   "name": "ch sphere",
+   "params": {
+    "center": [
+     -200,
+     0,
+     0
+    ],
+    "radius": 30
+   },
+   "inputs": []
+  },
+  {
+   "id": 8,
+   "type": "scatter",
+   "x": 340,
+   "y": 75,
+   "on": true,
+   "name": "ch",
+   "params": {
+    "fill": 0,
+    "density": 90000,
+    "count": 1,
+    "type": 2,
+    "tag": "ch",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 3
+   },
+   "inputs": [
+    {
+     "id": 7
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "type": "sphere",
+   "x": 490,
+   "y": 20,
+   "on": true,
+   "name": "fs sphere",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 30
+   },
+   "inputs": []
+  },
+  {
+   "id": 10,
+   "type": "scatter",
+   "x": 490,
+   "y": 75,
+   "on": true,
+   "name": "fs",
+   "params": {
+    "fill": 0,
+    "density": 90000,
+    "count": 1,
+    "type": 3,
+    "tag": "fs",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 4
+   },
+   "inputs": [
+    {
+     "id": 9
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "type": "sphere",
+   "x": 640,
+   "y": 20,
+   "on": true,
+   "name": "lts sphere",
+   "params": {
+    "center": [
+     200,
+     0,
+     0
+    ],
+    "radius": 30
+   },
+   "inputs": []
+  },
+  {
+   "id": 12,
+   "type": "scatter",
+   "x": 640,
+   "y": 75,
+   "on": true,
+   "name": "lts",
+   "params": {
+    "fill": 0,
+    "density": 90000,
+    "count": 1,
+    "type": 4,
+    "tag": "lts",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 5
+   },
+   "inputs": [
+    {
+     "id": 11
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "type": "sphere",
+   "x": 790,
+   "y": 20,
+   "on": true,
+   "name": "tc sphere",
+   "params": {
+    "center": [
+     400,
+     0,
+     0
+    ],
+    "radius": 30
+   },
+   "inputs": []
+  },
+  {
+   "id": 14,
+   "type": "scatter",
+   "x": 790,
+   "y": 75,
+   "on": true,
+   "name": "tc",
+   "params": {
+    "fill": 0,
+    "density": 90000,
+    "count": 1,
+    "type": 5,
+    "tag": "tc",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 6
+   },
+   "inputs": [
+    {
+     "id": 13
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "type": "sphere",
+   "x": 940,
+   "y": 20,
+   "on": true,
+   "name": "rz sphere",
+   "params": {
+    "center": [
+     600,
+     0,
+     0
+    ],
+    "radius": 30
+   },
+   "inputs": []
+  },
+  {
+   "id": 16,
+   "type": "scatter",
+   "x": 940,
+   "y": 75,
+   "on": true,
+   "name": "rz",
+   "params": {
+    "fill": 0,
+    "density": 90000,
+    "count": 1,
+    "type": 6,
+    "tag": "rz",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 7
+   },
+   "inputs": [
+    {
+     "id": 15
+    }
+   ]
+  },
+  {
+   "id": 17,
+   "type": "gather",
+   "x": 490,
+   "y": 160,
+   "on": true,
+   "name": "all cells",
+   "params": {
+    "ports": 7
+   },
+   "inputs": [
+    {
+     "id": 4
+    },
+    {
+     "id": 6
+    },
+    {
+     "id": 8
+    },
+    {
+     "id": 10
+    },
+    {
+     "id": 12
+    },
+    {
+     "id": 14
+    },
+    {
+     "id": 16
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "type": "connect",
+   "x": 490,
+   "y": 230,
+   "on": true,
+   "name": "local wiring",
+   "params": {
+    "radius": 1,
+    "sigma": 1,
+    "prob": 0,
+    "wExc": 0,
+    "wInh": 0,
+    "wdist": 1,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "",
+    "velocity": 200,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 17
+    }
+   ]
+  },
+  {
+   "id": 19,
+   "type": "stimulus",
+   "x": 490,
+   "y": 300,
+   "on": true,
+   "name": "current ramp",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 12,
+    "tag": "",
+    "mode": 2,
+    "period": 3000,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 18
+    },
+    null
+   ]
+  },
+  {
+   "id": 20,
+   "type": "probe",
+   "x": 40,
+   "y": 380,
+   "on": true,
+   "name": "RS probe",
+   "params": {
+    "label": "RS",
+    "tag": "rs",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 19
+    },
+    null
+   ]
+  },
+  {
+   "id": 21,
+   "type": "probe",
+   "x": 190,
+   "y": 380,
+   "on": true,
+   "name": "IB probe",
+   "params": {
+    "label": "IB",
+    "tag": "ib",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 20
+    },
+    null
+   ]
+  },
+  {
+   "id": 22,
+   "type": "probe",
+   "x": 340,
+   "y": 380,
+   "on": true,
+   "name": "CH probe",
+   "params": {
+    "label": "CH",
+    "tag": "ch",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 21
+    },
+    null
+   ]
+  },
+  {
+   "id": 23,
+   "type": "probe",
+   "x": 490,
+   "y": 380,
+   "on": true,
+   "name": "FS probe",
+   "params": {
+    "label": "FS",
+    "tag": "fs",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 22
+    },
+    null
+   ]
+  },
+  {
+   "id": 24,
+   "type": "probe",
+   "x": 640,
+   "y": 380,
+   "on": true,
+   "name": "LTS probe",
+   "params": {
+    "label": "LTS",
+    "tag": "lts",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 23
+    },
+    null
+   ]
+  },
+  {
+   "id": 25,
+   "type": "probe",
+   "x": 790,
+   "y": 380,
+   "on": true,
+   "name": "TC probe",
+   "params": {
+    "label": "TC",
+    "tag": "tc",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 24
+    },
+    null
+   ]
+  },
+  {
+   "id": 26,
+   "type": "probe",
+   "x": 940,
+   "y": 380,
+   "on": true,
+   "name": "RZ probe",
+   "params": {
+    "label": "RZ",
+    "tag": "rz",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 25
+    },
+    null
+   ]
+  },
+  {
+   "id": 27,
+   "type": "checkpoint",
+   "x": 490,
+   "y": 460,
+   "on": true,
+   "name": "simulation",
+   "params": {
+    "steps": 1,
+    "engine": 0,
+    "liveHost": "ws://localhost:8801",
+    "syn": 0,
+    "tauE": 3,
+    "tauI": 8,
+    "eRevE": 0,
+    "eRevI": -70,
+    "psc": 0,
+    "refrac": 2,
+    "vmin": -90,
+    "plast": 0,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 16.8,
+    "tauM": 33.7,
+    "trip": 0,
+    "tauY": 114,
+    "tin": 0,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "het": 0,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "tauCons": 20,
+    "consStep": 1.2,
+    "commit": 0,
+    "stpPreset": 0,
+    "stp": 0,
+    "stpU": 0.5,
+    "stpNorm": 0,
+    "stpOrder": 0,
+    "stpTauD": 800,
+    "stpTauF": 1,
+    "variants": [],
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trEngine": 0,
+    "trHost": "ws://localhost:8801",
+    "exportSecs": 2
+   },
+   "inputs": [
+    {
+     "id": 26
+    }
+   ]
+  },
+  {
+   "id": 28,
+   "type": "chart",
+   "x": 640,
+   "y": 520,
+   "on": true,
+   "name": "rate of RS",
+   "params": {
+    "plot": 7,
+    "pop": "RS",
+    "window": 3,
+    "smooth": 0,
+    "which": 0,
+    "field": "decode",
+    "bins": 40,
+    "height": 130,
+    "source": "",
+    "title": "",
+    "xText": "",
+    "yText": "",
+    "yMin": "",
+    "yMax": "",
+    "grid": 1,
+    "legend": 1,
+    "cmap": 0,
+    "preview": 0,
+    "format": 0,
+    "sizePreset": 0,
+    "figW": 180,
+    "figH": 100,
+    "dpi": 300,
+    "theme": 0,
+    "figFont": 0,
+    "fontPt": 8,
+    "linePt": 1,
+    "caption": 0
+   },
+   "inputs": [
+    {
+     "id": 27
+    }
+   ]
+  }
+ ]
+}

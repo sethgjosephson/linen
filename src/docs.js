@@ -857,7 +857,7 @@ title:'overview', html:`
 <h1>custom nodes and engines</h1>
 <p>linen takes nodes and engines you write.</p>
 <h2>a node</h2>
-<p>A JavaScript module in the project's <i>nodes</i> folder.</p>
+<p>A JavaScript module in the project's <i>nodes</i> folder. The object it receives carries <i>apiVersion</i>, 1 today, so a module written for a later interface can say so instead of failing partway.</p>
 <pre>export default function(linen){
   linen.registerNode('shiftx', {
     title:'shift x', cat:'arrange', color:'hsl(270,75%,65%)', inputs:1,

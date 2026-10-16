@@ -57,6 +57,8 @@ if(!quick){
   run('tools/servetest.py', py, [join(ROOT, 'tools', 'servetest.py')]);
   // the desktop app's server (desktop/serve.mjs) through the same test, so the two servers answer alike
   run('servetest.py (desktop)', py, [join(ROOT, 'tools', 'servetest.py')], { NPTEST_SERVER: `"${node}" desktop/serve.mjs` });
+  // every file of the compatibility corpus, not the one per format the quick run takes (src/compat.test.mjs); about a minute
+  run('compat.test.mjs --all', node, [join(ROOT, 'src', 'compat.test.mjs'), '--all']);
   // the headless runner end to end (tools/linentest.mjs): it computes a small scene twice and reads back what it wrote, a few seconds
   run('tools/linentest.mjs', node, [join(ROOT, 'tools', 'linentest.mjs')]);
   // an engine of one's own end to end (tools/remotetest.mjs): the Python template engine on a port, a scene run on it, a term it lacks refused; needs NumPy and websockets

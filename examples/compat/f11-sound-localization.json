@@ -1,0 +1,665 @@
+{
+ "v": 1,
+ "format": 11,
+ "nextId": 22,
+ "view": {
+  "x": 0,
+  "y": 0,
+  "scale": 1
+ },
+ "viewSlots": {},
+ "activeView": null,
+ "scenarioName": "sound localization",
+ "groups": [
+  {
+   "label": "coincidence detectors",
+   "members": [
+    4,
+    5
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "left ear",
+   "members": [
+    6,
+    7
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "right ear",
+   "members": [
+    8,
+    9
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "clicks  one volley per ear, the right one late",
+   "members": [
+    12,
+    13
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "delay lines  axons at 100 um per ms",
+   "members": [
+    10,
+    11
+   ],
+   "hue": 280,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "readout  three places along the row",
+   "members": [
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    21
+   ],
+   "hue": 280,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "checkpoint",
+   "members": [
+    20
+   ],
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": 1,
+   "type": "note",
+   "x": -380,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Sound localization\n\nA row of coincidence detectors sits between two ears, wired by axons whose conduction time is set by their length (Jeffress 1948). Each ear fires a volley at every click. A detector fires only where the two volleys arrive in the same millisecond, and that place moves with the time difference between the ears.",
+    "width": 340,
+    "near": ""
+   },
+   "inputs": []
+  },
+  {
+   "id": 2,
+   "type": "note",
+   "x": -380,
+   "y": 210,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Something to try: the right ear pulse has an onset of 2 ms. Set it to 0 and the middle detectors fire. Set it to 6 and the peak moves toward the right ear, since the left volley has to travel further to make up the lead. You can watch the three probes, or the cells in the viewer.",
+    "width": 340,
+    "near": "clicks"
+   },
+   "inputs": []
+  },
+  {
+   "id": 3,
+   "type": "note",
+   "x": -380,
+   "y": 430,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "The numbers: axons conduct at 100 um per ms, so a detector 200 um from the middle hears a 4 ms lead as simultaneous. Each ear alone lands under threshold (about 13 mV of the 20 between rest and threshold on these cells), and both together go over it. The barn owl does this with delays of a few hundred microseconds. The engine steps in milliseconds, so the clicks in this scene are further apart.",
+    "width": 340,
+    "near": "delay lines"
+   },
+   "inputs": []
+  },
+  {
+   "id": 4,
+   "type": "box",
+   "x": 40,
+   "y": 20,
+   "on": true,
+   "name": "detectors box",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "size": [
+     800,
+     40,
+     40
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 5,
+   "type": "scatter",
+   "x": 40,
+   "y": 75,
+   "on": true,
+   "name": "detectors",
+   "params": {
+    "fill": 1,
+    "density": 90000,
+    "count": 2000,
+    "type": 10,
+    "tag": "detectors",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 4
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "type": "sphere",
+   "x": 190,
+   "y": 20,
+   "on": true,
+   "name": "left sphere",
+   "params": {
+    "center": [
+     -600,
+     0,
+     0
+    ],
+    "radius": 40
+   },
+   "inputs": []
+  },
+  {
+   "id": 7,
+   "type": "scatter",
+   "x": 190,
+   "y": 75,
+   "on": true,
+   "name": "left",
+   "params": {
+    "fill": 1,
+    "density": 90000,
+    "count": 2000,
+    "type": 10,
+    "tag": "left",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 6
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "type": "sphere",
+   "x": 340,
+   "y": 20,
+   "on": true,
+   "name": "right sphere",
+   "params": {
+    "center": [
+     600,
+     0,
+     0
+    ],
+    "radius": 40
+   },
+   "inputs": []
+  },
+  {
+   "id": 9,
+   "type": "scatter",
+   "x": 340,
+   "y": 75,
+   "on": true,
+   "name": "right",
+   "params": {
+    "fill": 1,
+    "density": 90000,
+    "count": 2000,
+    "type": 10,
+    "tag": "right",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 3
+   },
+   "inputs": [
+    {
+     "id": 8
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "type": "gather",
+   "x": 190,
+   "y": 160,
+   "on": true,
+   "name": "detectors + left + right",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 5
+    },
+    {
+     "id": 7
+    },
+    {
+     "id": 9
+    },
+    null
+   ]
+  },
+  {
+   "id": 11,
+   "type": "connect",
+   "x": 190,
+   "y": 230,
+   "on": true,
+   "name": "local wiring",
+   "params": {
+    "radius": 1300,
+    "sigma": 5000,
+    "prob": 1,
+    "wExc": 42,
+    "wInh": -150,
+    "wdist": 0,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "left detectors 1 1 0\nright detectors 1 1 0\n* * 0",
+    "velocity": 100,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 10
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "type": "stimulus",
+   "x": 40,
+   "y": 300,
+   "on": true,
+   "name": "left ear clicks",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2500,
+    "tag": "left",
+    "mode": 1,
+    "period": 200,
+    "width": 2,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 11
+    },
+    {
+     "id": 6
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "type": "stimulus",
+   "x": 190,
+   "y": 300,
+   "on": true,
+   "name": "right ear clicks",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 2500,
+    "tag": "right",
+    "mode": 1,
+    "period": 200,
+    "width": 2,
+    "t0": 2,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 12
+    },
+    {
+     "id": 8
+    }
+   ]
+  },
+  {
+   "id": 14,
+   "type": "sphere",
+   "x": 40,
+   "y": 380,
+   "on": true,
+   "name": "left third probe region",
+   "params": {
+    "center": [
+     -260,
+     0,
+     0
+    ],
+    "radius": 130
+   },
+   "inputs": []
+  },
+  {
+   "id": 15,
+   "type": "probe",
+   "x": 40,
+   "y": 435,
+   "on": true,
+   "name": "left third probe",
+   "params": {
+    "label": "left third",
+    "tag": "detectors",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 13
+    },
+    {
+     "id": 14
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "type": "sphere",
+   "x": 190,
+   "y": 380,
+   "on": true,
+   "name": "middle probe region",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 130
+   },
+   "inputs": []
+  },
+  {
+   "id": 17,
+   "type": "probe",
+   "x": 190,
+   "y": 435,
+   "on": true,
+   "name": "middle probe",
+   "params": {
+    "label": "middle",
+    "tag": "detectors",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 15
+    },
+    {
+     "id": 16
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "type": "sphere",
+   "x": 340,
+   "y": 380,
+   "on": true,
+   "name": "right third probe region",
+   "params": {
+    "center": [
+     260,
+     0,
+     0
+    ],
+    "radius": 130
+   },
+   "inputs": []
+  },
+  {
+   "id": 19,
+   "type": "probe",
+   "x": 340,
+   "y": 435,
+   "on": true,
+   "name": "right third probe",
+   "params": {
+    "label": "right third",
+    "tag": "detectors",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 17
+    },
+    {
+     "id": 18
+    }
+   ]
+  },
+  {
+   "id": 20,
+   "type": "checkpoint",
+   "x": 190,
+   "y": 500,
+   "on": true,
+   "name": "simulation",
+   "params": {
+    "steps": 2,
+    "engine": 0,
+    "syn": 0,
+    "tauE": 3,
+    "tauI": 8,
+    "eRevE": 0,
+    "eRevI": -70,
+    "psc": 0,
+    "refrac": 2,
+    "vmin": -90,
+    "plast": 0,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 16.8,
+    "tauM": 33.7,
+    "trip": 0,
+    "tauY": 114,
+    "tin": 0,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "het": 0,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "tauCons": 20,
+    "consStep": 1.2,
+    "commit": 0,
+    "stpPreset": 0,
+    "stp": 0,
+    "stpU": 0.5,
+    "stpNorm": 0,
+    "stpOrder": 0,
+    "stpTauD": 800,
+    "stpTauF": 1,
+    "variants": [],
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trEngine": 0,
+    "trHost": "ws://localhost:8801",
+    "exportSecs": 2
+   },
+   "inputs": [
+    {
+     "id": 19
+    }
+   ]
+  },
+  {
+   "id": 21,
+   "type": "chart",
+   "x": 340,
+   "y": 560,
+   "on": true,
+   "name": "raster of middle",
+   "params": {
+    "plot": 8,
+    "pop": "middle",
+    "window": 2,
+    "smooth": 0,
+    "which": 0,
+    "field": "decode",
+    "bins": 40,
+    "height": 130,
+    "source": "",
+    "title": "",
+    "xText": "",
+    "yText": "",
+    "yMin": "",
+    "yMax": "",
+    "grid": 1,
+    "legend": 1,
+    "cmap": 0,
+    "preview": 0,
+    "format": 0,
+    "sizePreset": 0,
+    "figW": 180,
+    "figH": 100,
+    "dpi": 300,
+    "theme": 0,
+    "figFont": 0,
+    "fontPt": 8,
+    "linePt": 1,
+    "caption": 0
+   },
+   "inputs": [
+    {
+     "id": 20
+    }
+   ]
+  }
+ ]
+}

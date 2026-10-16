@@ -31,7 +31,7 @@ async function loadNodeFolder(dir, say){
   }
 }
 // This is what editor.load does, without a canvas under it.
-function editorFromScene(data){
+export function editorFromScene(data){
   data = migrateScene(data);
   try { checkScenePlugins(data); }
   catch(e){ throw new Error(e.message + '\n  (node modules load from --nodes DIR, and from the nodes folder beside the scenes folder the scene file is in)'); }

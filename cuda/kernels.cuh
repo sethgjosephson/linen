@@ -300,10 +300,10 @@ __global__ void plastOut(const unsigned int* spk, const unsigned int* nSpk,
 }
 
 // The triplet and heterosynaptic terms read the slow postsynaptic trace before this millisecond's spike is added, matching the reference: the triplet potentiates by postsynaptic history (Pfister and Gerstner 2006), and the cubed trace gates heterosynaptic regression toward the reference weight so only bursting engages it (Zenke et al. 2015).
-__device__ __forceinline__ void plastInSyn(int s, int pre, float* w,
-    const unsigned char* pmask, const float* Kpre,
+__device__ __forceinline__ void plastInSyn(int s, int pre, unsigned int mask, float* w,
+    const float* Kpre,
     const float* wRef, float z, float gate, int commit){
-  unsigned int rid = pmask ? (pmask[s] & 31u) : 1u;   // the rule is the low five bits; the channel the top three
+  unsigned int rid = mask & 31u;           // the rule is the low five bits; the channel the top three
   if(rid == 0u) return;
   const float* R = cRules + rid*RULE_STRIDE;
   if(isCommitted(commit, wRef, R, s)) return;
@@ -326,9 +326,10 @@ __device__ __forceinline__ void plastInSyn(int s, int pre, float* w,
     w[s] = nw > -wmax ? nw : -wmax;
   }
 }
+// revMask is the rule byte per entry of the reverse list (pmask in that order), read in step with revSyn: one scattered read fewer per weight.
 __global__ void plastIn(const unsigned int* spk, const unsigned int* nSpk,
     const int* inStart, const int* revSyn, const int* revPre, float* w,
-    const unsigned char* pmask, const float* Kpre,
+    const unsigned char* revMask, const float* Kpre,
     const float* Kslow, const float* wRef, float kRef, int commit){
   const unsigned int lane = threadIdx.x & 31u;
   const unsigned int warps = (gridDim.x*blockDim.x) >> 5;
@@ -340,7 +341,7 @@ __global__ void plastIn(const unsigned int* spk, const unsigned int* nSpk,
     float g = z/kRef;
     float gate = g*g*g;
     for(int kk = inStart[i] + (int)lane, ke = inStart[i+1]; kk < ke; kk += (int)WARP)
-      plastInSyn(revSyn[kk], revPre[kk], w, pmask, Kpre, wRef, z, gate, commit);
+      plastInSyn(revSyn[kk], revPre[kk], revMask ? revMask[kk] : 1u, w, Kpre, wRef, z, gate, commit);
   }
 }
 
@@ -382,8 +383,9 @@ __global__ void consolidateK(unsigned int m, const float* w, float* wRef,
 // Multiplicative synaptic scaling (Turrigiano 2008; van Rossum, Bi and Turrigiano 2000), matching applyScaling() in src/simworker.js: once per simulated second each neuron scales its incoming excitatory weights by its rate error against the target, and the accumulator resets.
 // Runs over the reverse index, which this engine already builds for plastIn, so the only new state is the per-neuron spike counter.
 // A committed synapse has left the plastic pool, and scaling is part of that pool: it is left where it is (MODEL.md 4, terms in combination), the same test the two weight-update halves make.
+// The revMask argument is the rule byte per entry of the reverse list, as plastIn reads it.
 __global__ void scaleK(int n, const int* inStart, const int* revSyn,
-    float* w, const unsigned char* pmask, unsigned int* spkAcc,
+    float* w, const unsigned char* revMask, unsigned int* spkAcc,
     float rho0, float sEta, const float* rhoI, const float* wRef, int commit){
   int i = blockIdx.x*blockDim.x + threadIdx.x;
   if(i >= n) return;
@@ -394,7 +396,7 @@ __global__ void scaleK(int n, const int* inStart, const int* revSyn,
     float f = 1.0f + sEta*err;
     for(int k = inStart[i], ke = inStart[i+1]; k < ke; k++){
       int s = revSyn[k];
-      unsigned int rid = pmask ? (pmask[s] & 31u) : 1u;   // the rule is the low five bits; the channel the top three
+      unsigned int rid = revMask ? (revMask[k] & 31u) : 1u;   // the rule is the low five bits; the channel the top three
       if(rid == 0u) continue;
       if(isCommitted(commit, wRef, &cRules[rid*RULE_STRIDE], s)) continue;
       const float wmax = cRules[rid*RULE_STRIDE + R_wmax];

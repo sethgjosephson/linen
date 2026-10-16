@@ -1,0 +1,995 @@
+{
+ "v": 1,
+ "format": 2,
+ "nextId": 37,
+ "view": {
+  "x": 0,
+  "y": 0,
+  "scale": 1
+ },
+ "viewSlots": {},
+ "activeView": null,
+ "scenarioName": "guided tour",
+ "groups": [
+  {
+   "label": "checkpoint 1  the wave sheet",
+   "members": [
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    14,
+    15,
+    17,
+    18
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "checkpoint 2  a sculpture of shapes",
+   "members": [
+    19,
+    20,
+    21,
+    22,
+    23,
+    24,
+    25,
+    26,
+    27,
+    28
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "checkpoint 3  thalamic rebound bursts",
+   "members": [
+    30,
+    31,
+    32,
+    33,
+    34,
+    35
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": 1,
+   "type": "note",
+   "x": 40,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "WELCOME. You are looking at a living spiking neural network: rhythmic bursts from a pacemaker cluster travel across a sheet of 15,000 neurons as waves.\n\nDrag the 3D view to orbit, scroll to zoom, click any neuron to see its connections and voltage. This graph below builds everything. Single click selects a node; double click opens its settings. The DOCS button (top right) explains every tool.",
+    "width": 300
+   },
+   "inputs": []
+  },
+  {
+   "id": 2,
+   "type": "note",
+   "x": 40,
+   "y": 220,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Networks flow top to bottom: shape nodes define volumes (in micrometers), scatter fills them with neurons, merge combines groups, connect grows the synapses, stimulus injects current, output runs the simulation.",
+    "width": 300
+   },
+   "inputs": []
+  },
+  {
+   "id": 3,
+   "type": "note",
+   "x": 40,
+   "y": 360,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "TRY THIS: double click the sphere feeding the pacemaker scatter (orange node to the right), then drag the arrows that appear in the 3D view. The wave source moves with it, live.\n\nThen try the RES slider in the top bar: the network rebuilds smaller but keeps the same behavior.",
+    "width": 300
+   },
+   "inputs": []
+  },
+  {
+   "id": 4,
+   "type": "note",
+   "x": 40,
+   "y": 540,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "There are three checkpoint nodes in this graph, bound to viewer keys 1, 2, and 3 (the digit shows on each node). Press a number to view that network. You can bind any node yourself: select it and press a digit. Checkpoint 2 is a sculpture of shapes; checkpoint 3 shows thalamic rebound bursts.",
+    "width": 300
+   },
+   "inputs": []
+  },
+  {
+   "id": 5,
+   "type": "box",
+   "x": 460,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "size": [
+     3600,
+     120,
+     3600
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 6,
+   "type": "scatter",
+   "x": 460,
+   "y": 90,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 12000,
+    "type": 0,
+    "tag": "",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 5
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "type": "scatter",
+   "x": 610,
+   "y": 90,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 3000,
+    "type": 3,
+    "tag": "",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 5
+    }
+   ]
+  },
+  {
+   "id": 8,
+   "type": "sphere",
+   "x": 760,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     -800,
+     0,
+     -500
+    ],
+    "radius": 260
+   },
+   "inputs": []
+  },
+  {
+   "id": 9,
+   "type": "scatter",
+   "x": 760,
+   "y": 90,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 350,
+    "type": 2,
+    "tag": "",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 3
+   },
+   "inputs": [
+    {
+     "id": 8
+    }
+   ]
+  },
+  {
+   "id": 10,
+   "type": "sphere",
+   "x": 910,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     1100,
+     0,
+     900
+    ],
+    "radius": 300
+   },
+   "inputs": []
+  },
+  {
+   "id": 11,
+   "type": "merge",
+   "x": 535,
+   "y": 180,
+   "on": true,
+   "name": "",
+   "params": {},
+   "inputs": [
+    {
+     "id": 6
+    },
+    {
+     "id": 7
+    },
+    {
+     "id": 9
+    },
+    null
+   ]
+  },
+  {
+   "id": 12,
+   "type": "connect",
+   "x": 535,
+   "y": 260,
+   "on": true,
+   "name": "",
+   "params": {
+    "radius": 220,
+    "sigma": 110,
+    "prob": 0.7,
+    "wExc": 5.644362357051406,
+    "wInh": -6.063669942938814,
+    "wdist": 0,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "",
+    "velocity": 250,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 11
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "type": "note",
+   "x": 700,
+   "y": 255,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "CONNECT: nearby neurons wire up with distance-dependent probability. Raise max dist and watch the synapse count in the top bar.",
+    "width": 200
+   },
+   "inputs": []
+  },
+  {
+   "id": 14,
+   "type": "stimulus",
+   "x": 535,
+   "y": 350,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 5,
+    "tag": "",
+    "mode": 0,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 12
+    },
+    {
+     "id": 8
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "type": "stimulus",
+   "x": 535,
+   "y": 430,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 10,
+    "tag": "",
+    "mode": 1,
+    "period": 900,
+    "width": 25,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 14
+    },
+    {
+     "id": 10
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "type": "note",
+   "x": 700,
+   "y": 370,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "STIMULUS: injects current into a region. The first biases the pacemaker so it keeps bursting; the second pulses a distant spot on its own rhythm; the third adds background noise. Edits apply to the running network instantly.",
+    "width": 210
+   },
+   "inputs": []
+  },
+  {
+   "id": 17,
+   "type": "stimulus",
+   "x": 535,
+   "y": 510,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 1000000,
+    "current": 2,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 15
+    },
+    null
+   ]
+  },
+  {
+   "id": 18,
+   "type": "output",
+   "x": 535,
+   "y": 600,
+   "on": true,
+   "name": "",
+   "params": {
+    "steps": 2,
+    "engine": 0,
+    "syn": 1,
+    "tauE": 3,
+    "tauI": 8,
+    "psc": 1,
+    "plast": 0,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 16.8,
+    "tauM": 33.7,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "trip": 0,
+    "tauY": 114,
+    "stp": 0,
+    "stpU": 0.2,
+    "stpNorm": 0,
+    "stpTauD": 200,
+    "stpTauF": 600,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "het": 0,
+    "tin": 0,
+    "refrac": 2,
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trEngine": 0
+   },
+   "inputs": [
+    {
+     "id": 17
+    }
+   ]
+  },
+  {
+   "id": 19,
+   "type": "spline",
+   "x": 1150,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "p0": [
+     -1500,
+     0,
+     -400
+    ],
+    "p1": [
+     -500,
+     0,
+     500
+    ],
+    "p2": [
+     500,
+     0,
+     -500
+    ],
+    "p3": [
+     1500,
+     0,
+     300
+    ],
+    "radius": 180
+   },
+   "inputs": []
+  },
+  {
+   "id": 20,
+   "type": "scatter",
+   "x": 1150,
+   "y": 90,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 2600,
+    "type": 0,
+    "tag": "",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 19
+    }
+   ]
+  },
+  {
+   "id": 21,
+   "type": "torus",
+   "x": 1300,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 900,
+    "thickness": 200,
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 22,
+   "type": "scatter",
+   "x": 1300,
+   "y": 90,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 1200,
+    "type": 2,
+    "tag": "",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 21
+    }
+   ]
+  },
+  {
+   "id": 23,
+   "type": "cylinder",
+   "x": 1450,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 220,
+    "height": 1600,
+    "rotate": [
+     25,
+     0,
+     20
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 24,
+   "type": "scatter",
+   "x": 1450,
+   "y": 90,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 900,
+    "type": 3,
+    "tag": "",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 3
+   },
+   "inputs": [
+    {
+     "id": 23
+    }
+   ]
+  },
+  {
+   "id": 25,
+   "type": "merge",
+   "x": 1225,
+   "y": 180,
+   "on": true,
+   "name": "",
+   "params": {},
+   "inputs": [
+    {
+     "id": 20
+    },
+    {
+     "id": 22
+    },
+    {
+     "id": 24
+    },
+    null
+   ]
+  },
+  {
+   "id": 26,
+   "type": "connect",
+   "x": 1225,
+   "y": 260,
+   "on": true,
+   "name": "",
+   "params": {
+    "radius": 200,
+    "sigma": 120,
+    "prob": 0.5,
+    "wExc": 5,
+    "wInh": -9,
+    "wdist": 0,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "",
+    "velocity": 200,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 25
+    }
+   ]
+  },
+  {
+   "id": 27,
+   "type": "stimulus",
+   "x": 1225,
+   "y": 350,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 1000000,
+    "current": 6,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 26
+    },
+    null
+   ]
+  },
+  {
+   "id": 28,
+   "type": "output",
+   "x": 1225,
+   "y": 600,
+   "on": true,
+   "name": "",
+   "params": {
+    "steps": 2,
+    "engine": 0,
+    "syn": 0,
+    "tauE": 3,
+    "tauI": 8,
+    "psc": 0,
+    "plast": 0,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 16.8,
+    "tauM": 33.7,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "trip": 0,
+    "tauY": 114,
+    "stp": 0,
+    "stpU": 0.2,
+    "stpNorm": 0,
+    "stpTauD": 200,
+    "stpTauF": 600,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "het": 0,
+    "tin": 0,
+    "refrac": 2,
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trEngine": 0
+   },
+   "inputs": [
+    {
+     "id": 27
+    }
+   ]
+  },
+  {
+   "id": 29,
+   "type": "note",
+   "x": 1150,
+   "y": 440,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "PRESS 2: a sculpture of shapes (a tube spline, a ring, a tilted cylinder). Double click any orange shape node for a 3D gizmo: w moves, e rotates, r scales. The first switch bakes the network; a progress bar shows in the top bar.",
+    "width": 280
+   },
+   "inputs": []
+  },
+  {
+   "id": 30,
+   "type": "sphere",
+   "x": 1750,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400
+   },
+   "inputs": []
+  },
+  {
+   "id": 31,
+   "type": "scatter",
+   "x": 1750,
+   "y": 90,
+   "on": true,
+   "name": "",
+   "params": {
+    "count": 3500,
+    "type": 5,
+    "tag": "",
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 30
+    }
+   ]
+  },
+  {
+   "id": 32,
+   "type": "connect",
+   "x": 1825,
+   "y": 260,
+   "on": true,
+   "name": "",
+   "params": {
+    "radius": 200,
+    "sigma": 120,
+    "prob": 0.3,
+    "wExc": 1,
+    "wInh": -10,
+    "wdist": 0,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "",
+    "velocity": 200,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 31
+    }
+   ]
+  },
+  {
+   "id": 33,
+   "type": "stimulus",
+   "x": 1825,
+   "y": 350,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 1000000,
+    "current": -15,
+    "tag": "",
+    "mode": 1,
+    "period": 3000,
+    "width": 200,
+    "t0": 500,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 32
+    },
+    null
+   ]
+  },
+  {
+   "id": 34,
+   "type": "stimulus",
+   "x": 1825,
+   "y": 430,
+   "on": true,
+   "name": "",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 1000000,
+    "current": 1.45,
+    "tag": "",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 33
+    },
+    null
+   ]
+  },
+  {
+   "id": 35,
+   "type": "output",
+   "x": 1825,
+   "y": 600,
+   "on": true,
+   "name": "",
+   "params": {
+    "steps": 2,
+    "engine": 0,
+    "syn": 0,
+    "tauE": 3,
+    "tauI": 8,
+    "psc": 0,
+    "plast": 0,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 16.8,
+    "tauM": 33.7,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "trip": 0,
+    "tauY": 114,
+    "stp": 0,
+    "stpU": 0.2,
+    "stpNorm": 0,
+    "stpTauD": 200,
+    "stpTauF": 600,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "het": 0,
+    "tin": 0,
+    "refrac": 2,
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trEngine": 0
+   },
+   "inputs": [
+    {
+     "id": 34
+    }
+   ]
+  },
+  {
+   "id": 36,
+   "type": "note",
+   "x": 1750,
+   "y": 500,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "PRESS 3: thalamic rebound. These are thalamocortical (TC) relay cells. Every 3 seconds an inhibitory pulse silences them; the moment it releases, they fire a synchronized rebound burst. Post-inhibitory rebound is a documented thalamic behavior that the TC preset models. Click a neuron and watch its voltage dip, then overshoot.",
+    "width": 280
+   },
+   "inputs": []
+  }
+ ]
+}

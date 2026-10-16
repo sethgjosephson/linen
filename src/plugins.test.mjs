@@ -7,7 +7,7 @@ import { ok, report, threw, inProcessWorker } from '../tools/harness.mjs';
 import { NODE_DEFS, registerNode, computeNode, memoKey, nodeDocProblems, isBuiltinNode,
   setResolution, wireConnect, assembleConnect } from './nodes.js';
 import { isDefaultName } from './nodenames.js';
-import { loadPlugin, importer, moduleName, sourceHash, pluginState, loadProjectPlugins, addPluginFromUrl,
+import { API_VERSION, loadPlugin, importer, moduleName, sourceHash, pluginState, loadProjectPlugins, addPluginFromUrl,
   scenePlugins, scenePluginsMissing } from './plugins.js';
 import { SCENE_FORMAT } from './migrate.js';
 const { NodeEditor } = await import('./editor.js');
@@ -278,6 +278,17 @@ function bareEditor(){
   const net = await computeNode(ed.nodes.find(n => n.type === 'checkpoint'), id => ed.byId(id));
   setResolution(1);
   ok('the example scene computes through jitter to a network', net && net.kind === 'net' && net.count > 500 && net.synCount > 0, net && net.count + ' cells, ' + net.synCount + ' synapses');
+}
+
+{
+  // the interface says its version, so a module written for a later one can refuse with a clear message instead of failing on a missing helper
+  ok('the interface is at version 1', API_VERSION === 1, API_VERSION);
+  const probe = shiftModule(1, 'api_probe').replace('linen.registerNode', "if(linen.apiVersion !== 1) throw new Error('written for api ' + linen.apiVersion); linen.registerNode");
+  const r = await loadPlugin('probe.js', probe, imp);
+  ok('a module sees apiVersion and loads', !r.error && r.keys.includes('api_probe'), r.error || r.keys.join(','));
+  const later = shiftModule(1, 'api_later').replace('linen.registerNode', "if(linen.apiVersion < 2) throw new Error('this module needs api 2, this linen has ' + linen.apiVersion); linen.registerNode");
+  const r2 = await loadPlugin('later.js', later, imp);
+  ok('a module written for a later interface is refused with its own message', /needs api 2, this linen has 1/.test(r2.error || ''), r2.error);
 }
 
 report('plugins');
