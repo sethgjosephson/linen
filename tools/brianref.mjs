@@ -61,7 +61,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ok, report } from './harness.mjs';
 import { PROTOCOL } from '../src/protocol.js';
-import { engineTypes, NEURON_TYPES, RULE_FIELDS, gradedArrays } from '../src/nodes.js';
+import { engineTypes, NEURON_TYPES, RULE_FIELDS, gradedArrays, stpClassTable } from '../src/nodes.js';
 import { initState, noiseDraw } from '../src/rand.js';
 import { caseFromInit, floorOf } from '../src/briancase.js';
 
@@ -115,7 +115,7 @@ function runEngine(c){
   const init = { cmd:'init', protocol:PROTOCOL, count:n, ntype:c.ntype, bias:c.bias,
     syn:c.syn || 0, psc:c.psc || 0, tauE:c.tauE || 3, tauI:c.tauI || 8,
     eRevE:c.eRevE ?? 0, eRevI:c.eRevI ?? -70,
-    ...(c.chanTau ? { chanTau:c.chanTau, chanErev:c.chanErev } : {}),
+    ...(c.chanTau ? { chanTau:c.chanTau, chanErev:c.chanErev, ...(c.chanMg ? { chanMg:c.chanMg } : {}) } : {}),
     protocols:c.protocols || [], inputs:c.inputs || [],
     ...(c.pools ? { pool:c.pools.pool, poolK:c.pools.poolK } : {}),
     plast:0, ...ruleFields,
@@ -284,6 +284,8 @@ const condNet = network({ we:0.003, wi:-0.05 });
 const chanExp = network({ we:0.17, wi:-0.25, pmaskOf:channelBits });
 const chanCond = network({ we:0.003, wi:-0.05, pmaskOf:channelBits });
 const CHANNELS = { chanTau:[20, 100], chanErev:[0, -90] };
+// the same two channels with the magnesium block on the first (1 mM), so the gate's arithmetic is compared on the current form and the conductance form
+const CHANNELS_MG = { ...CHANNELS, chanMg:[1, 0] };
 const PROTOCOLS = [
   { idx:range(0, 100), amp:3, mode:0, period:100, width:10, t0:500, duration:500 },
   { idx:range(100, 200), gain:Float32Array.from({ length:100 }, (_, q) => 0.5 + (q % 7)/7), amp:5,
@@ -312,6 +314,8 @@ const ALL = [
   { name:'kick+refrac', ms:2000, refrac:2, seed:3, ...kick },
   { name:'noise', ms:2000, refrac:0, seed:9, ...noiseGrid(ROWS3, [0, 0.5, 1], 4) },
   { name:'kick+noise', ms:2000, refrac:0, seed:3, protocols:noiseOn(400, 2), differsFrom:'kick', ...kick },
+  // the drive with a time constant and a shared part: the two filter states and the stimulus-keyed draw, compared on the same net
+  { name:'noise colored', ms:2000, refrac:0, seed:3, protocols:noiseOn(400, 2).map(p => ({ ...p, tau:20, common:0.5 })), differsFrom:'kick+noise', ...kick },
   { name:'protocols', ms:2000, refrac:0, seed:3, protocols:PROTOCOLS, differsFrom:'kick', ...kick },
   { name:'input frames', ms:2000, refrac:0, seed:3, inputs:MAPS, frames:FRAMES, differsFrom:'kick', ...kick },
   { name:'pools', ms:2000, refrac:0, seed:3, pools:POOLS, differsFrom:'kick', ...kick },
@@ -322,6 +326,8 @@ const ALL = [
   { name:'conductance', ms:2000, refrac:0, seed:3, syn:2, ...condNet },
   { name:'channels', ms:2000, refrac:0, seed:3, syn:1, psc:0, ...CHANNELS, differsFrom:'exp peak', ...chanExp },
   { name:'channels cond', ms:2000, refrac:0, seed:3, syn:2, ...CHANNELS, differsFrom:'conductance', ...chanCond },
+  { name:'channels mg', ms:2000, refrac:0, seed:3, syn:1, psc:0, ...CHANNELS_MG, differsFrom:'channels', ...chanExp },
+  { name:'channels mg cond', ms:2000, refrac:0, seed:3, syn:2, ...CHANNELS_MG, differsFrom:'channels cond', ...chanCond },
   { name:'everything', ms:2000, refrac:2, seed:3, syn:2, ...CHANNELS, protocols:noiseOn(400, 2),
     differsFrom:'channels cond', ...chanCond },
   { name:'graded off', ms:2000, refrac:0, seed:5, graded:true, ...gradedNet({ wg:0 }) },
@@ -335,7 +341,14 @@ const ALL = [
   { name:'stp norm', ...P2, rule:{ ...STP, stpNorm:1 }, differsFrom:'stp', ...pnet },
   { name:'stp order', ...P2, rule:{ ...STP, stpOrder:1 }, differsFrom:'stp', ...pnet },
   { name:'stp order norm', ...P2, rule:{ ...STP, stpOrder:1, stpNorm:1 }, differsFrom:'stp order', ...pnet },
+  { name:'stp scope', ...P2, rule:{ ...STP, stpScope:1 }, differsFrom:'stp', ...pnet },
+  // short-term plasticity per rule: rule row 2 a depressing class of its own beside the checkpoint's, so one axon's synapses release by two classes
+  { name:'stp rules', ...P2, rule:{ ...STP, ...stpClassTable(STP, [{ stpOwn:2, stpU:0.5, stpTauD:800, stpTauF:1 }]) }, differsFrom:'stp', ...pnet2 },
   { name:'stdp+stp exp', ...P2, syn:1, psc:1, rule:{ ...STDP, ...STP }, ...pnet },
+  // the pair rule timed at the synapse (stdpAt 1): the pre trace read d steps back at a post spike, depression at the arrival
+  { name:'stdp at synapse', ...P2, rule:{ ...STDP, stdpAt:1 }, coincide:true, weightsDifferFrom:'stdp soft', ...pnet },
+  { name:'triplet+het at synapse', ...P2, rule:{ ...TRIPHET, stdpAt:1 }, weightsDifferFrom:'triplet+het', ...pnet },
+  { name:'stdp+stp at synapse', ...P2, syn:1, psc:1, rule:{ ...STDP, ...STP, stdpAt:1 }, weightsDifferFrom:'stdp+stp exp', ...pnet },
   { name:'scaling', ...P2, rule:{ ...STDP, scale:1, sEta:0.05 }, weightsDifferFrom:'stdp soft', ...pnet },
   { name:'set points', ...P2, rule:{ ...STDP, scale:1, sEta:0.05, rhoMode:1, calS:0.5 },
     weightsDifferFrom:'scaling', ...pnet },

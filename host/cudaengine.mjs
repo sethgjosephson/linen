@@ -4,6 +4,7 @@
 import { spawn } from 'node:child_process';
 import { checkProtocol, helloReply, TERM_NAMES, OPTIONAL } from '../src/protocol.js';
 import { gradedArrays, freezeGraded } from '../src/nodes.js';
+import { foldNoise } from '../src/noisefold.js';
 import { EventEmitter } from 'node:events';
 
 const CMD = { INIT:1, TUNE:2, EXT:3, NAMP:4, TICK:5, GETW:6,
@@ -42,7 +43,8 @@ export class CudaEngine extends EventEmitter {
   constructor(exePath, log){
     super();
     this.log = log || (() => {});
-    this.proc = spawn(exePath, [], { stdio:['pipe', 'pipe', 'pipe'] });
+    // windowsHide: a host started without a console (serve.py detaches it) would otherwise give the child a visible console window of its own, and closing that window ends the engine with a console-close exit
+    this.proc = spawn(exePath, [], { stdio:['pipe', 'pipe', 'pipe'], windowsHide:true });
     this.proc.stderr.on('data', d => {
       const t = String(d).trim();
       this.log('cuda: ' + t);
@@ -151,9 +153,12 @@ export class CudaEngine extends EventEmitter {
     const RS = 11, RMAX = 16;
     const rows = (msg.ruleTable && msg.ruleCount >= 2)
       ? Math.min(RMAX, msg.ruleCount) : 0;
-    // receptor channels at 120 (u32 count, six f32 taus), the rule table from 184
+    // receptor channels at 120 (u32 count, six f32 taus), their magnesium block at 184 (six f32, mM), the rule table from 208
     const chan = Array.isArray(msg.chanTau) || ArrayBuffer.isView(msg.chanTau) ? Array.from(msg.chanTau).slice(0, 6) : [];
-    const b = Buffer.alloc(rows ? 188 + rows*RS*4 : 184);
+    // short-term plasticity per rule after the rule table: a u32 class count, the class of each of the 16 rule rows, then on, U, tauD, tauF per class
+    const C = rows && msg.stpTable && msg.stpClasses >= 1 ? Math.min(16, msg.stpClasses|0) : 0;
+    const stpAt = rows ? 212 + rows*RS*4 : 0;
+    const b = Buffer.alloc(rows ? stpAt + (C ? 20 + C*16 : 0) : 208);
     b.writeUInt32LE(chan.length, 120);
     chan.forEach((t, x) => b.writeFloatLE(t > 0 ? +t : 3, 124 + 4*x));
     // conductance mode's reversals at 148 (E), 152 (I), 156 (six channels)
@@ -161,6 +166,8 @@ export class CudaEngine extends EventEmitter {
     b.writeFloatLE(Number.isFinite(+msg.eRevI) ? +msg.eRevI : -70, 152);
     const erev = Array.isArray(msg.chanErev) || ArrayBuffer.isView(msg.chanErev) ? Array.from(msg.chanErev).slice(0, 6) : [];
     erev.forEach((v, x) => b.writeFloatLE(+v || 0, 156 + 4*x));
+    const mg = Array.isArray(msg.chanMg) || ArrayBuffer.isView(msg.chanMg) ? Array.from(msg.chanMg).slice(0, 6) : [];
+    mg.forEach((v, x) => b.writeFloatLE(v > 0 ? +v : 0, 184 + 4*x));
     b.writeUInt32LE((msg.plast|0) === 1 ? 1 : 0, 0);
     b.writeUInt32LE((msg.wdep|0) === 1 ? 1 : 0, 4);
     b.writeFloatLE(msg.aP !== undefined ? +msg.aP : 0.008, 8);
@@ -190,17 +197,22 @@ export class CudaEngine extends EventEmitter {
     b.writeFloatLE((msg.rhoMode|0) === 1 ? 1 : 0, 88);
     b.writeFloatLE(msg.calS > 0 ? +msg.calS : 10, 92);
     b.writeFloatLE(msg.tauM > 0 ? +msg.tauM : (msg.tauS > 0 ? +msg.tauS : 16.8), 96);
-    // byte 100 carries two switches: 1 is stpNorm, 2 is stpOrder (facilitation before release)
-    b.writeFloatLE(((msg.stpNorm|0) === 1 ? 1 : 0) + ((msg.stpOrder|0) === 1 ? 2 : 0), 100);
+    // byte 100 carries the switches: 1 is stpNorm, 2 is stpOrder (facilitation before release), 4 and 8 the scope (4 excitatory only, 8 inhibitory only), 16 is stdpAt (the pair rule timed at the synapse)
+    b.writeFloatLE(((msg.stpNorm|0) === 1 ? 1 : 0) + ((msg.stpOrder|0) === 1 ? 2 : 0) + (((msg.stpScope|0) & 3) << 2) + ((msg.stdpAt|0) === 1 ? 16 : 0), 100);
     b.writeFloatLE((msg.commit|0) === 1 ? 1 : 0, 104);
     b.writeFloatLE(msg.tauCons > 0 ? +msg.tauCons : 1200000, 108);
     b.writeFloatLE(msg.consStep > 0 ? +msg.consStep : 1200, 112);
     b.writeFloatLE(msg.vmin === undefined ? -90 : +msg.vmin, 116);
     if(rows){
-      b.writeUInt32LE(rows, 184);
+      b.writeUInt32LE(rows, 208);
       for(let r = 0; r < rows; r++)
         for(let k = 0; k < RS; k++)
-          b.writeFloatLE(msg.ruleTable[r*RS + k] || 0, 188 + (r*RS + k)*4);
+          b.writeFloatLE(msg.ruleTable[r*RS + k] || 0, 212 + (r*RS + k)*4);
+      if(C){
+        b.writeUInt32LE(C, stpAt);
+        for(let r = 0; r < 16; r++) b.writeUInt8((msg.stpCls && msg.stpCls[r]) | 0, stpAt + 4 + r);
+        for(let x = 0; x < C*4; x++) b.writeFloatLE(+msg.stpTable[x] || 0, stpAt + 20 + x*4);
+      }
     }
     return b;
   }
@@ -221,7 +233,17 @@ export class CudaEngine extends EventEmitter {
           ' (only constant and noise are ported)');
       }
     }
-    this._send(CMD.NAMP, namp);
+    // the amplitude, then a noise stimulus's decay, its complement, its shared fraction and its id per cell (src/noisefold.js): five arrays of n in one frame
+    const F = foldNoise(msg.protocols, n);
+    const frame = Buffer.alloc(n*4*5);
+    Buffer.from(namp.buffer).copy(frame, 0);
+    if(F){
+      Buffer.from(F.a.buffer).copy(frame, n*4);
+      Buffer.from(F.k.buffer).copy(frame, n*8);
+      Buffer.from(F.c.buffer).copy(frame, n*12);
+      Buffer.from(F.id.buffer).copy(frame, n*16);
+    }
+    this._send(CMD.NAMP, frame);
     this._pushExt();
   }
   _pushExt(){

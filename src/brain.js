@@ -22,7 +22,7 @@
 // A gated scenario freezes most of its synapses, and a frozen weight is a pure function of the graph and the seed: the wiring reproduces it exactly, which is the same determinism weights-only files already depend on to restore by index.
 // Storing it is storing the same number the wiring is about to compute anyway.
 //
-// Alphabet school 2 at full density has 151.7M synapses of which 12.9M are plastic, so a checkpoint falls from 579 MB to 49, and the write from about thirteen wall-minutes to under one.
+// A network of 151.7M synapses of which 12.9M are plastic goes from a 579 MB checkpoint to 49, and the write from about thirteen wall-minutes to under one.
 // At the authored cadence of a brain file every five simulated minutes, the old size meant a sixteen-hour run spent roughly forty hours writing files and could never finish; this is what makes an overnight run possible rather than merely smaller on disk.
 //
 // Layout: u32 magic 'NPB3', u32 version, u32 graphLen, graph JSON,

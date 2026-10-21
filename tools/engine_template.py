@@ -16,7 +16,7 @@ import asyncio, json, struct, sys
 import numpy as np
 from websockets.asyncio.server import serve
 
-PROTOCOL = 3
+PROTOCOL = 7
 # the terms beyond the baseline this engine implements (TERMS in src/protocol.js), and the optional queries it answers
 TERMS = ['syn:1', 'psc:1', 'psc:2', 'refrac', 'vmin', 'protocols:0', 'protocols:1', 'protocols:2', 'protocols:3', 'custom']
 OPTIONAL = ['watch', 'sendV']

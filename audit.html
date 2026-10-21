@@ -22,7 +22,7 @@ pre{white-space:pre}</style>
 //   window.audit(null, 6)     longer window
 import { NODE_DEFS, NEURON_TYPES, computeNode, setResolution, engineConfig } from './src/nodes.js';
 import { initState } from './src/rand.js';
-import { ALL_SCENARIOS as SCENARIOS, setFootprint } from './src/experiments.js';
+import { ALL_SCENARIOS as SCENARIOS, applyScenarioQuery } from './src/scenelist.js';
 
 // net.ntype is an index into NEURON_TYPES, not a sign: FS is 3, TC is 5.
 // Reading it as a boolean puts every interneuron in the excitatory column.
@@ -161,10 +161,9 @@ function wiring(net){
     overPct:100*over/Math.max(1, tot), overPlasticPct:100*overPlastic/Math.max(1, tot) };
 }
 
-async function one(sc, seconds, res, footprint){
+async function one(sc, seconds, res){
   say('');
   say('=== ' + sc.name + ' ===');
-  setFootprint(footprint === undefined ? 1 : footprint);
   setResolution(res/100);
   const ed = fakeEditor();
   sc.build(ed);
@@ -263,15 +262,15 @@ async function one(sc, seconds, res, footprint){
 }
 window.auditOne = one;
 
+// the page's own address-bar parameters reach any scenes a checkout adds (scenelist.js)
+applyScenarioQuery(new URLSearchParams(location.search));
 window.audit = async (match, seconds = 4, res = 100) => {
   out.textContent = 'auditing';
   const list = SCENARIOS.filter(s => !match || s.name.toLowerCase().includes(String(match).toLowerCase()));
   const all = [];
   for(const sc of list){
-    // the two alphabet schools are authored at real cortical density and compute for minutes at full size; they are audited at a small footprint, which keeps density, distances and delays and only shrinks the sheet
-    const heavy = /alphabet/.test(sc.name);
     try {
-      const r = await one(sc, seconds, heavy ? 25 : res, heavy ? 0.05 : 1);
+      const r = await one(sc, seconds, res);
       if(r) all.push(r);
     } catch(err){ say('  BUILD FAILED: ' + err.message); }
   }

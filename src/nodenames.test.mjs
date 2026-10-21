@@ -5,7 +5,7 @@
 
 import { ok, report } from '../tools/harness.mjs';
 import { NODE_DEFS } from './nodes.js';
-import { ALL_SCENARIOS } from './experiments.js';
+import { ALL_SCENARIOS } from './scenelist.js';
 import { nameNodes, isDefaultName } from './nodenames.js';
 import { defaultNodeName, tagToken } from './tagname.js';
 

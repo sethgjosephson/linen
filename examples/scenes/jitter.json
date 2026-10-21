@@ -1,6 +1,6 @@
 {
  "v": 1,
- "format": 12,
+ "format": 14,
  "nextId": 16,
  "view": {
   "x": 0,
@@ -296,6 +296,8 @@
     "width": 10,
     "t0": 0,
     "duration": 0,
+    "tauNoise": 0,
+    "common": 0,
     "spread": 0,
     "seedSpread": 1
    },
@@ -327,6 +329,8 @@
     "width": 10,
     "t0": 0,
     "duration": 0,
+    "tauNoise": 0,
+    "common": 0,
     "spread": 0,
     "seedSpread": 1
    },
@@ -409,6 +413,7 @@
     "aM": 0.001,
     "tauS": 16.8,
     "tauM": 33.7,
+    "stdpAt": 0,
     "trip": 0,
     "tauY": 114,
     "tin": 0,
@@ -432,6 +437,7 @@
     "stpU": 0.5,
     "stpNorm": 0,
     "stpOrder": 0,
+    "stpScope": 0,
     "stpTauD": 800,
     "stpTauF": 1,
     "variants": [],

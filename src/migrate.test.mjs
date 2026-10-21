@@ -251,3 +251,18 @@ console.log('migrate: all checks passed');
   assert.equal(e.format, SCENE_FORMAT);
   console.log('ok  8 -> 9: scenes using short-term plasticity keep their release order');
 }
+
+// 13 -> 14: the pair rule is timed at the synapse by default; a scene from before declares the soma reading it was tuned on
+{
+  const d = migrateScene({ format:13, nodes:[
+    { id:1, type:'checkpoint', params:{ plast:1 } },
+    { id:2, type:'checkpoint', params:{ plast:0 } },
+    { id:3, type:'checkpoint', params:{ plast:1, stdpAt:1 } },
+    { id:4, type:'connect', params:{} } ] });
+  assert.equal(d.nodes[0].params.stdpAt, 0, 'a checkpoint from before reads at the soma');
+  assert.equal(d.nodes[1].params.stdpAt, 0, 'with plasticity off as well, so switching it on later keeps the reading the scene had');
+  assert.equal(d.nodes[2].params.stdpAt, 1, 'a reading already set is kept');
+  assert.equal(d.nodes[3].params.stdpAt, undefined, 'other nodes are untouched');
+  assert.equal(d.format, SCENE_FORMAT);
+  console.log('ok  13 -> 14: scenes from before declare the soma reading');
+}

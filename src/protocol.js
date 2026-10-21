@@ -13,8 +13,21 @@
 //   3   hello before init (the engine's contract number, name, terms
 //       and optional queries); the CUDA child answers HELLO; custom on
 //       init and tune carries the engine settings node's entries
+//   4   chanMg on init and tune (the CUDA tune frame carries six f32
+//       at 184 and its rule table from 208); stpScope on init and tune
+//       (byte 100 of that frame carries it as 4 and 8)
+//   5   a noise protocol carries tau and common (a time constant and a
+//       shared fraction); the CUDA NAMP frame carries five arrays per
+//       cell (amplitude, decay, its complement, shared fraction, stimulus
+//       id) instead of one
+//   6   stdpAt on init and tune (byte 100 of the CUDA tune frame carries
+//       it as 16); the pair rule read at the synapse
+//   7   short-term plasticity per rule: stpClasses, stpTable (four f32
+//       per class: on, U, tauD, tauF) and stpCls (the class of each of
+//       the 16 rule rows) on init and tune; the CUDA tune frame carries
+//       them after the rule table
 
-export const PROTOCOL = 3;
+export const PROTOCOL = 7;
 
 // The refusal, shared by every engine: null when the init matches, else the message to fail with.
 // An init without the field is from before the number existed, and is refused for the same reason.
@@ -79,9 +92,11 @@ export const TERMS = [
   ['protocols:1', 'pulse train stimulus', m => modes(m).has(1)],
   ['protocols:2', 'ramp stimulus', m => modes(m).has(2)],
   ['protocols:3', 'noise stimulus', m => modes(m).has(3)],
+  ['noiseTau', 'a noise stimulus with a time constant or a shared fraction', m => (m.protocols || []).some(p => p.mode === 3 && (p.tau > 0 || p.common > 0))],
   ['inputs', 'input maps (inputFrame)', m => Array.isArray(m.inputs) && m.inputs.length > 0],
   ['graded', 'graded (non-spiking) rows', graded],
   ['plast', 'plasticity (pair STDP and the inhibitory rule)', plastic],
+  ['stdpAt', 'the pair rule timed at the synapse (stdpAt 1)', m => plastic(m) && (m.stdpAt|0) === 1],
   ['rhoMode', 'measured rate set points', m => plastic(m) && (m.rhoMode|0) === 1],
   ['scale', 'synaptic scaling', m => plastic(m) && (m.scale|0) === 1],
   ['trip', 'the triplet term', m => plastic(m) && anyRule(m, 4, 'trip')],
@@ -93,7 +108,10 @@ export const TERMS = [
   ['stp', 'short-term plasticity', m => m.stp > 0],
   ['stpNorm', 'scaled short-term release (stpNorm 1)', m => m.stp > 0 && (m.stpNorm|0) === 1],
   ['stpOrder', 'facilitation before release (stpOrder 1)', m => m.stp > 0 && (m.stpOrder|0) === 1],
+  ['stpScope', 'short-term plasticity on one sign of synapse (stpScope)', m => m.stp > 0 && (m.stpScope|0) > 0],
+  ['stpRules', 'short-term plasticity per rule (more than one class)', m => m.stp > 0 && (m.stpClasses|0) > 1],
   ['chanTau', 'receptor channels', m => (Array.isArray(m.chanTau) || ArrayBuffer.isView(m.chanTau)) && m.chanTau.length > 0],
+  ['chanMg', 'the magnesium block on a receptor channel', m => (Array.isArray(m.chanMg) || ArrayBuffer.isView(m.chanMg)) && Array.from(m.chanMg).some(x => x > 0)],
   ['pool', 'feedback inhibition', m => !!(m.pool && m.pool.length && m.poolK && m.poolK.length > 1)],
 ];
 export const TERM_NAMES = TERMS.map(t => t[0]);

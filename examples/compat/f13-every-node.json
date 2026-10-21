@@ -1,0 +1,1725 @@
+{
+ "v": 1,
+ "format": 13,
+ "nextId": 60,
+ "view": {
+  "x": 0,
+  "y": 0,
+  "scale": 1
+ },
+ "viewSlots": {},
+ "activeView": null,
+ "scenarioName": "every node",
+ "plugins": [],
+ "groups": [
+  {
+   "label": "the core  sphere, neuron scatters, cell type",
+   "members": [
+    9,
+    10,
+    11,
+    12
+   ],
+   "hue": 25,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "one arm  a ribbon through every arrange node",
+   "members": [
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+    21
+   ],
+   "hue": 270,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "the buds  noise field, neuron scatter, forked by a repeat",
+   "members": [
+    22,
+    23,
+    24,
+    25
+   ],
+   "hue": 190,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "one ray  arm and buds, tilted, typed",
+   "members": [
+    26,
+    27,
+    28,
+    29
+   ],
+   "hue": 300,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "the crown  six rays, three tiers, picked apart",
+   "members": [
+    30,
+    31,
+    32,
+    33,
+    34,
+    35
+   ],
+   "hue": 270,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "wiring  gather to connect",
+   "members": [
+    36,
+    37,
+    38,
+    39,
+    40,
+    41
+   ],
+   "hue": 140,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "drive  currents, a bar sweep, a lesson",
+   "members": [
+    42,
+    43,
+    44,
+    45,
+    46,
+    47,
+    48,
+    49,
+    50,
+    51,
+    52
+   ],
+   "hue": 55,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "readout  a probe per tissue, analysis, chart",
+   "members": [
+    53,
+    54,
+    55,
+    56,
+    57,
+    59
+   ],
+   "hue": 175,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "run  the checkpoint, plasticity on",
+   "members": [
+    58
+   ],
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": 1,
+   "type": "note",
+   "x": -380,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Every node\n\nOne structure with a node of every kind that needs no file or device. It has a balanced core, six arms around it that each fork into three buds, and the whole crown repeated into three tiers that shrink and turn as they rise. Read the note beside each group, then double-click any node to see its settings. You can also bypass a node (d) to see what it was doing.",
+    "width": 340,
+    "near": ""
+   },
+   "inputs": []
+  },
+  {
+   "id": 2,
+   "type": "note",
+   "x": -380,
+   "y": 200,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "The core: a sphere region, a neuron scatter per class filling it at a density per cubic millimeter, and a cell type node that makes a fraction of the excitatory cells intrinsically bursting. The wiring and the drive follow, at a smaller weight, the balanced random net's.",
+    "width": 340,
+    "near": "the core"
+   },
+   "inputs": []
+  },
+  {
+   "id": 3,
+   "type": "note",
+   "x": -380,
+   "y": 340,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "One arm: a flat box region filled by a neuron scatter, then every arrange node in turn. Cull cuts an eyelet out of it with a small sphere, gradient thins it toward the tip, twist turns the ribbon half a turn along its length, noise warp bends it with a smooth field, gauss blur softens its edges, and operations lays a wave along it with a formula.",
+    "width": 340,
+    "near": "one arm"
+   },
+   "inputs": []
+  },
+  {
+   "id": 4,
+   "type": "note",
+   "x": -380,
+   "y": 520,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "The buds: a noise field region, a seeded density pattern inside a bounds box, filled by a neuron scatter beyond the arm's tip. Repeat lays down three copies turned about the tip, and a move turns the fan back so it sits astride the arm.",
+    "width": 340,
+    "near": "the buds"
+   },
+   "inputs": []
+  },
+  {
+   "id": 5,
+   "type": "note",
+   "x": -380,
+   "y": 660,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "One ray: the arm and its buds gathered, tilted upward by a move, and typed: a cell type node set to custom names a row of the scene's own for the arm (the measured regular-spiking numbers, so its currents are in picoamps), and another makes half of the bud cells chattering.",
+    "width": 340,
+    "near": "one ray"
+   },
+   "inputs": []
+  },
+  {
+   "id": 6,
+   "type": "note",
+   "x": -380,
+   "y": 800,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "The crown: repeat turns the ray six times about the vertical axis, and a second repeat stacks the six as three tiers, each two thirds the size of the one below, raised and turned by thirty degrees. The copies are numbered, so every cell has a population name that says where it is: tier2.ray4.fork1.bud. Three population nodes pick the tiers back out by name, and the top one is tilted on its own before all three are gathered with the core.",
+    "width": 340,
+    "near": "the crown"
+   },
+   "inputs": []
+  },
+  {
+   "id": 7,
+   "type": "note",
+   "x": -380,
+   "y": 1000,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Wiring: gather joins the populations; receptors declares channels beyond E and I; plasticity names a pair STDP rule on the core's excitatory synapses; feedback inhibition pools the core's excitatory cells; project runs a tract from the core to the lowest tier's arms; connect grows the local synapses.",
+    "width": 340,
+    "near": "wiring"
+   },
+   "inputs": []
+  },
+  {
+   "id": 8,
+   "type": "note",
+   "x": -380,
+   "y": 1180,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Drive: a noise current per population, a pulse train on every arm by its population name, a slower pulse on the top tier alone through a sphere as a mask, a bar sweep from the test signal fed across the lowest tier through a flat box as a mask, and a lesson of shapes from the curriculum fed onto the core. Readout: a probe per kind of tissue, analysis, the checkpoint with plasticity on, and a chart.",
+    "width": 340,
+    "near": "drive"
+   },
+   "inputs": []
+  },
+  {
+   "id": 9,
+   "type": "sphere",
+   "x": 40,
+   "y": 20,
+   "on": true,
+   "name": "exc + inh sphere",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 250
+   },
+   "inputs": []
+  },
+  {
+   "id": 10,
+   "type": "scatter",
+   "x": 40,
+   "y": 75,
+   "on": true,
+   "name": "exc",
+   "params": {
+    "fill": 1,
+    "density": 72000,
+    "count": 2000,
+    "type": 10,
+    "tag": "exc",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 9
+    }
+   ]
+  },
+  {
+   "id": 11,
+   "type": "scatter",
+   "x": 190,
+   "y": 75,
+   "on": true,
+   "name": "inh",
+   "params": {
+    "fill": 1,
+    "density": 18000,
+    "count": 2000,
+    "type": 13,
+    "tag": "inh",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 9
+    }
+   ]
+  },
+  {
+   "id": 12,
+   "type": "celltype",
+   "x": 40,
+   "y": 130,
+   "on": true,
+   "name": "exc IB 15%",
+   "params": {
+    "row": 12,
+    "tag": "",
+    "frac": 0.15,
+    "name": "mycell",
+    "preset": 0,
+    "sign": 0,
+    "kind": 0,
+    "C": 100,
+    "k": 0.7,
+    "vr": -60,
+    "vt": -40,
+    "vpeak": 35,
+    "a": 0.03,
+    "b": -2,
+    "c": -50,
+    "d": 100,
+    "thr": -55,
+    "slope": 10,
+    "hue": 300
+   },
+   "inputs": [
+    {
+     "id": 10
+    }
+   ]
+  },
+  {
+   "id": 13,
+   "type": "box",
+   "x": 340,
+   "y": 20,
+   "on": true,
+   "name": "arm box",
+   "params": {
+    "center": [
+     520,
+     0,
+     0
+    ],
+    "size": [
+     520,
+     30,
+     170
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 14,
+   "type": "sphere",
+   "x": 490,
+   "y": 20,
+   "on": true,
+   "name": "arm cull region",
+   "params": {
+    "center": [
+     470,
+     0,
+     0
+    ],
+    "radius": 45
+   },
+   "inputs": []
+  },
+  {
+   "id": 15,
+   "type": "scatter",
+   "x": 340,
+   "y": 75,
+   "on": true,
+   "name": "arm",
+   "params": {
+    "fill": 1,
+    "density": 400000,
+    "count": 2000,
+    "type": 0,
+    "tag": "arm",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 3
+   },
+   "inputs": [
+    {
+     "id": 13
+    }
+   ]
+  },
+  {
+   "id": 16,
+   "type": "cull",
+   "x": 340,
+   "y": 130,
+   "on": true,
+   "name": "arm cull",
+   "params": {
+    "keep": 0
+   },
+   "inputs": [
+    {
+     "id": 15
+    },
+    {
+     "id": 14
+    }
+   ]
+  },
+  {
+   "id": 17,
+   "type": "gradient",
+   "x": 340,
+   "y": 185,
+   "on": true,
+   "name": "arm gradient",
+   "params": {
+    "axis": 0,
+    "start": 1,
+    "end": 0.35,
+    "seed": 7
+   },
+   "inputs": [
+    {
+     "id": 16
+    }
+   ]
+  },
+  {
+   "id": 18,
+   "type": "twist",
+   "x": 340,
+   "y": 240,
+   "on": true,
+   "name": "arm twist",
+   "params": {
+    "axis": 0,
+    "angle": 360,
+    "center": [
+     520,
+     0,
+     0
+    ]
+   },
+   "inputs": [
+    {
+     "id": 17
+    }
+   ]
+  },
+  {
+   "id": 19,
+   "type": "noisewarp",
+   "x": 340,
+   "y": 295,
+   "on": true,
+   "name": "arm warp",
+   "params": {
+    "amplitude": 22,
+    "scale": 260,
+    "seed": 6
+   },
+   "inputs": [
+    {
+     "id": 18
+    }
+   ]
+  },
+  {
+   "id": 20,
+   "type": "gaussblur",
+   "x": 340,
+   "y": 350,
+   "on": true,
+   "name": "arm blur",
+   "params": {
+    "sigma": 5,
+    "seed": 5
+   },
+   "inputs": [
+    {
+     "id": 19
+    }
+   ]
+  },
+  {
+   "id": 21,
+   "type": "ops",
+   "x": 340,
+   "y": 405,
+   "on": true,
+   "name": "arm formula",
+   "params": {
+    "expr": "y = y + sin(x*0.014)*28",
+    "a": 0,
+    "b": 0,
+    "c": 0,
+    "d": 0,
+    "seed": 1,
+    "shuffle": 0
+   },
+   "inputs": [
+    {
+     "id": 20
+    }
+   ]
+  },
+  {
+   "id": 22,
+   "type": "noisefield",
+   "x": 640,
+   "y": 20,
+   "on": true,
+   "name": "bud field",
+   "params": {
+    "center": [
+     935,
+     0,
+     0
+    ],
+    "size": [
+     290,
+     80,
+     80
+    ],
+    "pattern": 0,
+    "scale": 60,
+    "coverage": 0.6,
+    "octaves": 2,
+    "direction": [
+     1,
+     0,
+     0
+    ],
+    "seed": 3
+   },
+   "inputs": []
+  },
+  {
+   "id": 23,
+   "type": "scatter",
+   "x": 640,
+   "y": 75,
+   "on": true,
+   "name": "bud",
+   "params": {
+    "fill": 1,
+    "density": 300000,
+    "count": 2000,
+    "type": 10,
+    "tag": "bud",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 4
+   },
+   "inputs": [
+    {
+     "id": 22
+    }
+   ]
+  },
+  {
+   "id": 24,
+   "type": "repeat",
+   "x": 640,
+   "y": 130,
+   "on": true,
+   "name": "fork x3",
+   "params": {
+    "copies": 3,
+    "pops": 0,
+    "tag": "fork",
+    "translate": [
+     0,
+     0,
+     0
+    ],
+    "rotate": [
+     0,
+     48,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ],
+    "pivot": [
+     790,
+     0,
+     0
+    ],
+    "mirror": 0
+   },
+   "inputs": [
+    {
+     "id": 23
+    }
+   ]
+  },
+  {
+   "id": 25,
+   "type": "move",
+   "x": 640,
+   "y": 185,
+   "on": true,
+   "name": "bud move",
+   "params": {
+    "translate": [
+     0,
+     0,
+     0
+    ],
+    "rotate": [
+     0,
+     -48,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ],
+    "pivot": [
+     790,
+     0,
+     0
+    ]
+   },
+   "inputs": [
+    {
+     "id": 24
+    }
+   ]
+  },
+  {
+   "id": 26,
+   "type": "gather",
+   "x": 490,
+   "y": 460,
+   "on": true,
+   "name": "arm + bud",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 21
+    },
+    {
+     "id": 25
+    },
+    null,
+    null
+   ]
+  },
+  {
+   "id": 27,
+   "type": "move",
+   "x": 490,
+   "y": 515,
+   "on": true,
+   "name": "arm + bud move",
+   "params": {
+    "translate": [
+     0,
+     0,
+     0
+    ],
+    "rotate": [
+     0,
+     0,
+     14
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ],
+    "pivot": [
+     250,
+     0,
+     0
+    ]
+   },
+   "inputs": [
+    {
+     "id": 26
+    }
+   ]
+  },
+  {
+   "id": 28,
+   "type": "celltype",
+   "x": 490,
+   "y": 570,
+   "on": true,
+   "name": "arm armcell",
+   "params": {
+    "row": 0,
+    "tag": "arm",
+    "frac": 1,
+    "name": "armcell",
+    "preset": 0,
+    "sign": 0,
+    "kind": 0,
+    "C": 100,
+    "k": 0.7,
+    "vr": -60,
+    "vt": -40,
+    "vpeak": 35,
+    "a": 0.03,
+    "b": -2,
+    "c": -50,
+    "d": 100,
+    "thr": -55,
+    "slope": 10,
+    "hue": 285
+   },
+   "inputs": [
+    {
+     "id": 27
+    }
+   ]
+  },
+  {
+   "id": 29,
+   "type": "celltype",
+   "x": 490,
+   "y": 625,
+   "on": true,
+   "name": "fork*.bud CH 50%",
+   "params": {
+    "row": 13,
+    "tag": "fork*.bud",
+    "frac": 0.5,
+    "name": "mycell",
+    "preset": 0,
+    "sign": 0,
+    "kind": 0,
+    "C": 100,
+    "k": 0.7,
+    "vr": -60,
+    "vt": -40,
+    "vpeak": 35,
+    "a": 0.03,
+    "b": -2,
+    "c": -50,
+    "d": 100,
+    "thr": -55,
+    "slope": 10,
+    "hue": 300
+   },
+   "inputs": [
+    {
+     "id": 28
+    }
+   ]
+  },
+  {
+   "id": 30,
+   "type": "repeat",
+   "x": 490,
+   "y": 680,
+   "on": true,
+   "name": "ray x6",
+   "params": {
+    "copies": 6,
+    "pops": 0,
+    "tag": "ray",
+    "translate": [
+     0,
+     0,
+     0
+    ],
+    "rotate": [
+     0,
+     60,
+     0
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "mirror": 0
+   },
+   "inputs": [
+    {
+     "id": 29
+    }
+   ]
+  },
+  {
+   "id": 31,
+   "type": "repeat",
+   "x": 490,
+   "y": 735,
+   "on": true,
+   "name": "tier x3",
+   "params": {
+    "copies": 3,
+    "pops": 0,
+    "tag": "tier",
+    "translate": [
+     0,
+     340,
+     0
+    ],
+    "rotate": [
+     0,
+     30,
+     0
+    ],
+    "scale": [
+     0.66,
+     0.66,
+     0.66
+    ],
+    "pivot": [
+     0,
+     0,
+     0
+    ],
+    "mirror": 0
+   },
+   "inputs": [
+    {
+     "id": 30
+    }
+   ]
+  },
+  {
+   "id": 32,
+   "type": "population",
+   "x": 340,
+   "y": 790,
+   "on": true,
+   "name": "pick tier1.*",
+   "params": {
+    "tag": "tier1.*",
+    "hue": -1
+   },
+   "inputs": [
+    {
+     "id": 31
+    }
+   ]
+  },
+  {
+   "id": 33,
+   "type": "population",
+   "x": 490,
+   "y": 790,
+   "on": true,
+   "name": "pick tier2.*",
+   "params": {
+    "tag": "tier2.*",
+    "hue": -1
+   },
+   "inputs": [
+    {
+     "id": 31
+    }
+   ]
+  },
+  {
+   "id": 34,
+   "type": "population",
+   "x": 640,
+   "y": 790,
+   "on": true,
+   "name": "pick tier3.*",
+   "params": {
+    "tag": "tier3.*",
+    "hue": -1
+   },
+   "inputs": [
+    {
+     "id": 31
+    }
+   ]
+  },
+  {
+   "id": 35,
+   "type": "move",
+   "x": 640,
+   "y": 845,
+   "on": true,
+   "name": "tier3.* move",
+   "params": {
+    "translate": [
+     0,
+     40,
+     0
+    ],
+    "rotate": [
+     0,
+     0,
+     10
+    ],
+    "scale": [
+     1,
+     1,
+     1
+    ],
+    "pivot": [
+     0,
+     560,
+     0
+    ]
+   },
+   "inputs": [
+    {
+     "id": 34
+    }
+   ]
+  },
+  {
+   "id": 36,
+   "type": "gather",
+   "x": 190,
+   "y": 900,
+   "on": true,
+   "name": "all cells",
+   "params": {
+    "ports": 6
+   },
+   "inputs": [
+    {
+     "id": 12
+    },
+    {
+     "id": 11
+    },
+    {
+     "id": 32
+    },
+    {
+     "id": 33
+    },
+    {
+     "id": 35
+    },
+    null
+   ]
+  },
+  {
+   "id": 37,
+   "type": "receptor",
+   "x": 190,
+   "y": 955,
+   "on": true,
+   "name": "receptor channels",
+   "params": {
+    "table": "ach 3 + acetylcholine\ngabaa 8 - gaba\nglucl 30 - glutamate histamine"
+   },
+   "inputs": [
+    {
+     "id": 36
+    }
+   ]
+  },
+  {
+   "id": 38,
+   "type": "plasticity",
+   "x": 190,
+   "y": 1010,
+   "on": true,
+   "name": "rule stdp",
+   "params": {
+    "preset": 0,
+    "name": "stdp",
+    "from": "exc",
+    "to": "exc",
+    "aP": 0.8,
+    "aM": 0.001,
+    "wmax": 3000,
+    "wdep": 1,
+    "trip": 0,
+    "iEta": 0.002,
+    "het": 0,
+    "tin": 0,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10
+   },
+   "inputs": [
+    {
+     "id": 37
+    }
+   ]
+  },
+  {
+   "id": 39,
+   "type": "pool",
+   "x": 190,
+   "y": 1065,
+   "on": true,
+   "name": "pool on exc",
+   "params": {
+    "tag": "exc",
+    "gain": -1
+   },
+   "inputs": [
+    {
+     "id": 38
+    }
+   ]
+  },
+  {
+   "id": 40,
+   "type": "project",
+   "x": 190,
+   "y": 1120,
+   "on": true,
+   "name": "exc to tier1.ray*.arm",
+   "params": {
+    "from": "exc",
+    "to": "tier1.ray*.arm",
+    "axisFrom": 1,
+    "axisTo": 1,
+    "dispersed": 1,
+    "flipU": 0,
+    "flipV": 0,
+    "sigma": 60,
+    "prob": 0.35,
+    "fanout": 20,
+    "offset": 0,
+    "across": "",
+    "weight": 40,
+    "velocity": 5000,
+    "tract": 0,
+    "frozen": 0,
+    "rule": "",
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 39
+    },
+    null
+   ]
+  },
+  {
+   "id": 41,
+   "type": "connect",
+   "x": 190,
+   "y": 1175,
+   "on": true,
+   "name": "local wiring",
+   "params": {
+    "radius": 300,
+    "sigma": 3000,
+    "prob": 0.1,
+    "wExc": 30,
+    "wInh": -150,
+    "wdist": 1,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "",
+    "velocity": 100,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 40
+    }
+   ]
+  },
+  {
+   "id": 42,
+   "type": "stimulus",
+   "x": 190,
+   "y": 1230,
+   "on": true,
+   "name": "noise on exc",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 560,
+    "tag": "exc",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "tauNoise": 0,
+    "common": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 41
+    },
+    null
+   ]
+  },
+  {
+   "id": 43,
+   "type": "stimulus",
+   "x": 190,
+   "y": 1258,
+   "on": true,
+   "name": "noise on inh",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 200,
+    "tag": "inh",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "tauNoise": 0,
+    "common": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 42
+    },
+    null
+   ]
+  },
+  {
+   "id": 44,
+   "type": "stimulus",
+   "x": 190,
+   "y": 1286,
+   "on": true,
+   "name": "noise on *.bud",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 800,
+    "tag": "*.bud",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "tauNoise": 0,
+    "common": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 43
+    },
+    null
+   ]
+  },
+  {
+   "id": 45,
+   "type": "stimulus",
+   "x": 190,
+   "y": 1314,
+   "on": true,
+   "name": "pulse on *.arm at 0 ms",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 500,
+    "tag": "*.arm",
+    "mode": 1,
+    "period": 200,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "tauNoise": 0,
+    "common": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 44
+    },
+    null
+   ]
+  },
+  {
+   "id": 46,
+   "type": "sphere",
+   "x": 490,
+   "y": 1340,
+   "on": true,
+   "name": "pulse region",
+   "params": {
+    "center": [
+     0,
+     640,
+     0
+    ],
+    "radius": 330
+   },
+   "inputs": []
+  },
+  {
+   "id": 47,
+   "type": "stimulus",
+   "x": 190,
+   "y": 1340,
+   "on": true,
+   "name": "pulse on *.arm at 100 ms",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400,
+    "current": 500,
+    "tag": "*.arm",
+    "mode": 1,
+    "period": 330,
+    "width": 10,
+    "t0": 100,
+    "duration": 0,
+    "tauNoise": 0,
+    "common": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 45
+    },
+    {
+     "id": 46
+    }
+   ]
+  },
+  {
+   "id": 48,
+   "type": "box",
+   "x": 490,
+   "y": 1395,
+   "on": true,
+   "name": "bar sweep into tier1.ray*.arm region",
+   "params": {
+    "center": [
+     0,
+     110,
+     0
+    ],
+    "size": [
+     2600,
+     420,
+     2600
+    ],
+    "rotate": [
+     0,
+     0,
+     0
+    ]
+   },
+   "inputs": []
+  },
+  {
+   "id": 49,
+   "type": "testsignal",
+   "x": 640,
+   "y": 1395,
+   "on": true,
+   "name": "bar sweep",
+   "params": {
+    "pattern": 0,
+    "period": 1500,
+    "direction": 0
+   },
+   "inputs": []
+  },
+  {
+   "id": 50,
+   "type": "input",
+   "x": 190,
+   "y": 1395,
+   "on": true,
+   "name": "bar sweep into tier1.ray*.arm",
+   "params": {
+    "tag": "tier1.ray*.arm",
+    "map": 0,
+    "code": 1,
+    "axis": 1,
+    "cols": 16,
+    "rows": 16,
+    "arbor": 0.8,
+    "fanin": 8,
+    "seed": 1,
+    "transient": 0.6,
+    "lagMs": 0,
+    "jitter": 1,
+    "amp": 2500
+   },
+   "inputs": [
+    {
+     "id": 47
+    },
+    {
+     "id": 48
+    },
+    {
+     "id": 49
+    }
+   ]
+  },
+  {
+   "id": 51,
+   "type": "curriculum",
+   "x": 490,
+   "y": 1450,
+   "on": true,
+   "name": "lesson, sight",
+   "params": {
+    "sense": 0,
+    "acuity": 1,
+    "jitter": 0.18,
+    "scaleVar": 0.25,
+    "rotVar": 12,
+    "voice": 0,
+    "offset": 0,
+    "set": 4,
+    "order": 1,
+    "onMs": 400,
+    "offMs": 350,
+    "phases": "",
+    "scramble": 0,
+    "place": 0,
+    "placeOrder": 0,
+    "seed": 1,
+    "probeEvery": 0,
+    "condNames": "both, sight, sound",
+    "calCycles": 0,
+    "reSweepEvery": 0
+   },
+   "inputs": [
+    null
+   ]
+  },
+  {
+   "id": 52,
+   "type": "input",
+   "x": 190,
+   "y": 1450,
+   "on": true,
+   "name": "lesson, sight into exc",
+   "params": {
+    "tag": "exc",
+    "map": 0,
+    "code": 1,
+    "axis": 1,
+    "cols": 12,
+    "rows": 12,
+    "arbor": 0.8,
+    "fanin": 8,
+    "seed": 1,
+    "transient": 0.6,
+    "lagMs": 0,
+    "jitter": 1,
+    "amp": 120
+   },
+   "inputs": [
+    {
+     "id": 50
+    },
+    {
+     "id": 9
+    },
+    {
+     "id": 51
+    }
+   ]
+  },
+  {
+   "id": 53,
+   "type": "probe",
+   "x": 190,
+   "y": 1505,
+   "on": true,
+   "name": "core exc probe",
+   "params": {
+    "label": "core exc",
+    "tag": "exc",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 52
+    },
+    null
+   ]
+  },
+  {
+   "id": 54,
+   "type": "probe",
+   "x": 190,
+   "y": 1560,
+   "on": true,
+   "name": "core inh probe",
+   "params": {
+    "label": "core inh",
+    "tag": "inh",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 53
+    },
+    null
+   ]
+  },
+  {
+   "id": 55,
+   "type": "probe",
+   "x": 190,
+   "y": 1615,
+   "on": true,
+   "name": "arms probe",
+   "params": {
+    "label": "arms",
+    "tag": "*.arm",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 54
+    },
+    null
+   ]
+  },
+  {
+   "id": 56,
+   "type": "probe",
+   "x": 190,
+   "y": 1670,
+   "on": true,
+   "name": "buds probe",
+   "params": {
+    "label": "buds",
+    "tag": "*.bud",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 55
+    },
+    null
+   ]
+  },
+  {
+   "id": 57,
+   "type": "analysis",
+   "x": 190,
+   "y": 1725,
+   "on": true,
+   "name": "readout measures",
+   "params": {
+    "cap": 8192,
+    "topQ": 0.1,
+    "setExpr": "both and not sight and not sound",
+    "probeWith": "sight, sound",
+    "margin": 0.15,
+    "minCells": 4,
+    "minTrials": 2,
+    "nPerm": 40,
+    "doDecode": 1,
+    "doBind": 1,
+    "doTiming": 1,
+    "doLike": 1,
+    "exportTrials": 0
+   },
+   "inputs": [
+    {
+     "id": 56
+    }
+   ]
+  },
+  {
+   "id": 58,
+   "type": "checkpoint",
+   "x": 190,
+   "y": 1780,
+   "on": true,
+   "name": "simulation",
+   "params": {
+    "steps": 2,
+    "engine": 0,
+    "liveHost": "ws://localhost:8801",
+    "syn": 1,
+    "tauE": 3,
+    "tauI": 8,
+    "eRevE": 0,
+    "eRevI": -70,
+    "psc": 1,
+    "refrac": 2,
+    "vmin": -90,
+    "plast": 1,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 16.8,
+    "tauM": 33.7,
+    "trip": 0,
+    "tauY": 114,
+    "tin": 0,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "het": 0,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "tauCons": 20,
+    "consStep": 1.2,
+    "commit": 0,
+    "stpPreset": 0,
+    "stp": 0,
+    "stpU": 0.5,
+    "stpNorm": 0,
+    "stpOrder": 0,
+    "stpScope": 0,
+    "stpTauD": 800,
+    "stpTauF": 1,
+    "variants": [],
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trEngine": 0,
+    "trHost": "ws://localhost:8801",
+    "exportSecs": 2
+   },
+   "inputs": [
+    {
+     "id": 57
+    }
+   ]
+  },
+  {
+   "id": 59,
+   "type": "chart",
+   "x": 190,
+   "y": 1835,
+   "on": true,
+   "name": "rate of core exc",
+   "params": {
+    "plot": 7,
+    "pop": "core exc",
+    "window": 5,
+    "smooth": 0,
+    "which": 0,
+    "field": "decode",
+    "bins": 40,
+    "height": 130,
+    "source": "",
+    "title": "",
+    "xText": "",
+    "yText": "",
+    "yMin": "",
+    "yMax": "",
+    "grid": 1,
+    "legend": 1,
+    "cmap": 0,
+    "preview": 0,
+    "format": 0,
+    "sizePreset": 0,
+    "figW": 180,
+    "figH": 100,
+    "dpi": 300,
+    "theme": 0,
+    "figFont": 0,
+    "fontPt": 8,
+    "linePt": 1,
+    "caption": 0
+   },
+   "inputs": [
+    {
+     "id": 58
+    }
+   ]
+  }
+ ]
+}

@@ -14,7 +14,7 @@ import { PROTOCOL, checkHello, TERM_NAMES } from './protocol.js';
 import { mean as smean, std as sstd } from './spikestats.js';
 import { corticalColumn, balancedNet, guidedTour, travelingWaves, SCENARIOS as TISSUE_SCENES } from './scenarios.js';
 import { BarSweep, encodeGains } from './io.js';
-import { ALL_SCENARIOS as SCENARIOS } from './experiments.js';
+import { ALL_SCENARIOS as SCENARIOS } from './scenelist.js';
 import { buildBrainFile, buildPlasticFile, parseBrainFile, applyBrainWeights,
   plasticCount } from './brain.js';
 import { buildExpr } from './expr.js';
@@ -620,28 +620,35 @@ export const TESTS = [
   run: async () => {
     // N spiking sources, each onto its own target through one synapse on channel 2
     const N = 200;
-    const mk = (tau, syn) => {
+    const mk = (tau, syn, mg = 0) => {
       const ntype = new Uint8Array(2*N); const bias = new Float32Array(2*N);
       for(let i = 0; i < N; i++) bias[i] = 6 + 2*(i/N);
       const preStart = new Int32Array(2*N + 1); for(let i = 0; i < N; i++) preStart[i+1] = i + 1; for(let i = N; i <= 2*N; i++) preStart[i] = N;
       const post = new Int32Array(N); for(let i = 0; i < N; i++) post[i] = N + i;
       return { kind:'net', count:2*N, pos:new Float32Array(6*N), ntype, bias, src:new Int32Array(2*N).fill(1), lidx:Uint32Array.from({ length:2*N }, (_, i) => i),
         preStart, post, w:new Float32Array(N).fill(4), delay:new Uint8Array(N).fill(1), synCount:N, pmask:new Uint8Array(N).fill(1 | (2 << 5)),
-        receptors:{ channels:[{ name:'x', tau, sign:1, transmitters:['x'] }] },
+        receptors:{ channels:[{ name:'x', tau, sign:1, mg, transmitters:['x'] }] },
         plast:0, refrac:2, seed:5, syn, tauE:3, tauI:8, psc:0, protocols:[] };
     };
     const rate = (r, lo, hi) => { let s = 0; for(let i = lo; i < hi; i++) s += r.counts[i]; return s/(hi - lo); };
     const fast = await simRun(mk(3, 1), 1000, { steps:1, perNeuron:true });
     const slow = await simRun(mk(30, 1), 1000, { steps:1, perNeuron:true });
     const kick = await simRun(mk(30, 0), 200, { steps:1, perNeuron:true });
+    // the magnesium block (MODEL.md 2): at rest the gate passes a few percent of the channel's current, so the same drive through a gated channel moves the targets far less
+    const gated = await simRun(mk(30, 1, 1), 1000, { steps:1, perNeuron:true });
     const out = [
       { label:'a slow channel drives its target harder than a fast one at the same peak', measured: (fast.error || slow.error) || ('targets ' + rate(fast, N, 2*N).toFixed(1) + ' Hz at tau 3 vs ' + rate(slow, N, 2*N).toFixed(1) + ' Hz at tau 30, sources ' + rate(fast, 0, N).toFixed(1) + ' Hz'),
         expected:'sources alike, targets higher at tau 30', pass: !fast.error && !slow.error && rate(fast, 0, N) > 1 && Math.abs(rate(fast, 0, N) - rate(slow, 0, N)) < 0.5 && rate(slow, N, 2*N) > 1.5*Math.max(0.5, rate(fast, N, 2*N)) },
       { label:'a channel needs exponential synapses', measured: kick.error || 'ran', expected:'refused with a message naming exp', pass: /exponential/.test(kick.error || '') },
     ];
+    out.push({ label:'the magnesium block lets a resting cell pass little of the channel', measured: gated.error || ('targets ' + rate(gated, N, 2*N).toFixed(1) + ' spikes/s gated vs ' + rate(slow, N, 2*N).toFixed(1) + ' open, sources ' + rate(gated, 0, N).toFixed(1)),
+      expected:'sources alike, targets well below the open channel and not silent', pass: !gated.error && Math.abs(rate(gated, 0, N) - rate(slow, 0, N)) < 0.5 && rate(gated, N, 2*N) < 0.5*rate(slow, N, 2*N) });
     if(typeof navigator !== 'undefined' && navigator.gpu){
       const gf = await simRun(mk(3, 1), 1000, { steps:1, perNeuron:true, gpu:true });
       const gs = await simRun(mk(30, 1), 1000, { steps:1, perNeuron:true, gpu:true });
+      const gg = await simRun(mk(30, 1, 1), 1000, { steps:1, perNeuron:true, gpu:true });
+      out.push({ label:'gpu parity on the gated channel', measured: gg.error || ('gpu ' + rate(gg, N, 2*N).toFixed(1) + ' vs cpu ' + rate(gated, N, 2*N).toFixed(1) + ' spikes/s'),
+        expected:'target rates within 10%', pass: !gg.error && Math.abs(rate(gg, N, 2*N) - rate(gated, N, 2*N)) <= Math.max(0.5, 0.1*rate(gated, N, 2*N)) });
       out.push({ label:'gpu parity on both channels', measured: (gf.error || gs.error) || ('gpu ' + rate(gf, N, 2*N).toFixed(1) + ' / ' + rate(gs, N, 2*N).toFixed(1) + ' vs cpu ' + rate(fast, N, 2*N).toFixed(1) + ' / ' + rate(slow, N, 2*N).toFixed(1) + ' Hz'),
         expected:'target rates within 10% at tau 3 and tau 30', pass: !gf.error && !gs.error &&
           Math.abs(rate(gf, N, 2*N) - rate(fast, N, 2*N)) <= Math.max(0.5, 0.1*rate(fast, N, 2*N)) && Math.abs(rate(gs, N, 2*N) - rate(slow, N, 2*N)) <= Math.max(0.5, 0.1*rate(slow, N, 2*N)) });
@@ -1144,7 +1151,7 @@ export const TESTS = [
 
 { name:'firing rate distribution is skewed', source:'Buzsaki and Mizuseki 2014 (Nat Rev Neurosci); Mizuseki and Buzsaki 2013 (Cell Rep): principal cell rates are lognormal in every cortical region and brain state examined, most cells firing rarely with a heavy tail carrying the rest',
   async run(){
-    // A network of statistically identical neurons under a uniform drive produces a uniform population: measured on the block 2026-08-28 as a 1.4x spread from median to 99th percentile with no silent cells, where cortex spans orders of magnitude.
+    // A network of statistically identical neurons under a uniform drive produces a uniform population: measured 2026-08-28 as a 1.4x spread from median to 99th percentile with no silent cells, where cortex spans orders of magnitude.
     // This group compares a uniform drive against a lognormal per-neuron drive of the same mean.
     const run = async spread => {
       const pts = mkPts(1200, 320, 11);
@@ -1489,7 +1496,7 @@ export const TESTS = [
     const BANDS = {
       'guided tour': [['sheet', 3, 30], ['sheeti', 3, 40], ['pacemaker', 15, 150]],
       'traveling waves': [['sheet', 3, 30], ['sheeti', 3, 40], ['pacemaker', 15, 150]],
-      'mouse cortical column': [['L2/3e', 0.5, 25], ['L4e', 0.5, 25], ['L5e', 0.5, 30], ['L6e', 0.5, 25], ['L2/3i', 1, 40], ['L4i', 1, 40]],
+      'mouse cortical column': [['L2/3e', 0.5, 25], ['L4e', 0.5, 25], ['L5e', 0.5, 30], ['L6e', 0.5, 25], ['L2/3i', 1, 40], ['L4i', 1, 40], ['L2/3s', 1, 40], ['L4s', 1, 40]],
       'visual pathway': [['rgc', 3, 60], ['lgn', 3, 40], ['L4e', 2, 30], ['L2/3e', 1, 30]],
       'thalamocortical loop': [['ce', 1, 25], ['ci', 2, 40], ['tc', 5, 40], ['rz', 2, 40]],
       'CA3 pattern completion': [['ca3', 0.1, 3], ['ca3i', 0.5, 10]],
@@ -1637,6 +1644,60 @@ export const TESTS = [
       for(let k = 1; k < N/2; k++){ let re = 0, im = 0; for(let j = 0; j < N; j++){ const ph = 2*Math.PI*k*j/N; re += (x[j] - mean)*Math.cos(ph); im -= (x[j] - mean)*Math.sin(ph); }
         const p = re*re + im*im; total += p; if(p > best[1]) best = [k/(N*0.001), p]; }
       out.push({ label:'gamma: the population rate peaks in the gamma band', measured:best[0].toFixed(1) + ' Hz carrying ' + (100*best[1]/total).toFixed(0) + ' percent of the power', expected:'30 to 80 Hz, above 10 percent', pass:best[0] >= 30 && best[0] <= 80 && best[1] > 0.1*total });
+    }
+    return out;
+  } },
+{ name:'delay-aware STDP keeps the synapses whose spikes arrive in time (polychrony)', source:'Izhikevich 2006 (Neural Comput 18:245): timed at the synapse, a pairing counts from the presynaptic spike\'s arrival, so plasticity selects synapses by their delays. The polychrony scene without its tuned weight: every source reaches both readers at 30 pA, where each reader answers both orders, plasticity on (A+ 0.4, A- 0.02, soft bounds, limit 60) for 30 s of both orders. In the order a reader does not belong to, the nearest source arrives first and the farthest arrives after the reader has fired. Timed at the synapse, the farthest source loses what its own order gives it and the nearest saturates; timed at the soma, every emission precedes the reader\'s spike and every pathway grows alike. Measured 2026-10-20, the same on both engines: from 29.9, at the synapse a to x 58.3, b to x 56.7, c to x 31.9 (at y c 58.1, b 57.3, a 33.4) and the other order answered 1.10 spikes per cell per volley; at the soma every pathway 51 to 54 and the other order answered 1.50.',
+  run: async () => {
+    const build = TISSUE_SCENES.find(x => x.name === 'polychrony').build;
+    const train = async (stdpAt, gpu) => {
+      const net = await computeScenario(build, ed => {
+        Object.assign(ed.nodes.find(n => n.type === 'connect').params, { wExc:30 });
+        Object.assign(ed.nodes.find(n => n.type === 'checkpoint').params, { plast:1, stdpAt, aP:0.4, aM:0.02, wmax:60, wdep:1, iEta:0 });
+      });
+      const tagOf = i => (net.tags && net.tags[net.src[i]]) || '';
+      const who = new Uint8Array(net.count); let nX = 0, nY = 0;
+      for(let i = 0; i < net.count; i++){ const t = tagOf(i); if(t === 'readx'){ who[i] = 1; nX++; } else if(t === 'ready'){ who[i] = 2; nY++; } }
+      // the answer to each reader's other order over the last 4 s (ten volleys): a, b, c for the reader beside a, c, b, a for the one beside c; ticks of 10 ms, so the order windows start on a tick
+      const MS = 30000; let other = 0;
+      const w0 = Float32Array.from(net.w);
+      const r = await simRun(net, MS, { steps:10, gpu, weights:true, onFrame:(fired, t) => {
+        if(t < MS - 4000) return;
+        const ph = t % 400, o = ph < 100 ? 1 : (ph >= 200 && ph < 300) ? 2 : 0;
+        if(!o) return;
+        for(let i = 0; i < fired.length; i++) if(fired[i] && who[i] && who[i] !== o) other += fired[i]; } });
+      if(r.error) return { error:r.error };
+      const mean = {};
+      for(let i = 0; i < net.count; i++) for(let k = net.preStart[i]; k < net.preStart[i + 1]; k++){
+        const key = tagOf(i) + '>' + tagOf(net.post[k]); if(!/^src.>read.$/.test(key)) continue;
+        (mean[key] = mean[key] || [0, 0, 0]); mean[key][0] += r.w[k]; mean[key][1]++; mean[key][2] += w0[k]; }
+      for(const k in mean) mean[k] = { end:mean[k][0]/mean[k][1], start:mean[k][2]/mean[k][1] };
+      return { mean, other:other/((nX + nY)*10) };
+    };
+    const out = [];
+    for(const gpu of [false, true]){
+      const eng = gpu ? 'gpu' : 'cpu';
+      const at1 = await train(1, gpu), at0 = await train(0, gpu);
+      if(at1.error || at0.error){
+        const err = at1.error || at0.error;
+        out.push({ label:eng + ' engine runs the training', measured:err, expected:'no engine error', pass:false, skipped:gpu && /WebGPU/i.test(err) });
+        continue;
+      }
+      const m1 = at1.mean, m0 = at0.mean, f = x => x.end.toFixed(1);
+      out.push({ label:eng + ', timed at the synapse: the source that arrives late at a reader ends weakest there, the nearest strongest',
+        measured:'reader beside a: a ' + f(m1['srca>readx']) + ', b ' + f(m1['srcb>readx']) + ', c ' + f(m1['srcc>readx']) +
+          '; reader beside c: c ' + f(m1['srcc>ready']) + ', b ' + f(m1['srcb>ready']) + ', a ' + f(m1['srca>ready']) + ' (from ' + m1['srca>readx'].start.toFixed(1) + ')',
+        expected:'on each reader the farthest source below 0.7 of the nearest, and within 20 percent of where it started', pass:
+          m1['srcc>readx'].end < 0.7*m1['srca>readx'].end && m1['srca>ready'].end < 0.7*m1['srcc>ready'].end &&
+          Math.abs(m1['srcc>readx'].end/m1['srcc>readx'].start - 1) < 0.2 && Math.abs(m1['srca>ready'].end/m1['srca>ready'].start - 1) < 0.2 });
+      const ends0 = Object.values(m0).map(x => x.end);
+      out.push({ label:eng + ', timed at the soma: every pathway grows alike',
+        measured:Object.entries(m0).map(([k, x]) => k.replace('>', ' to ') + ' ' + f(x)).join(', '),
+        expected:'every source-to-reader mean above where it started and within 10 percent of the others', pass:
+          Object.values(m0).every(x => x.end > x.start) && Math.max(...ends0) < 1.1*Math.min(...ends0) });
+      out.push({ label:eng + ': the order a reader does not belong to is answered less when the rule is timed at the synapse',
+        measured:'at the synapse ' + at1.other.toFixed(2) + ', at the soma ' + at0.other.toFixed(2) + ' spikes per cell per volley over the last 4 s',
+        expected:'at the synapse below 0.8 of at the soma', pass: at1.other < 0.8*at0.other });
     }
     return out;
   } },
@@ -2128,7 +2189,7 @@ export const TESTS = [
         measured:`weight-dependent at the additive ratio and bounds: ${fmt(softRF)}`,
         expected:'still fails to differentiate, isolating the rule from the ratio', pass:
           softRF.dEnd < softRF.dStart + 0.02 && hardF.dEnd > softRF.dEnd },
-      { label:'at the first alphabet school\'s rates, over 200 simulated seconds',
+      { label:'at sparse cortical rates, over 200 simulated seconds',
         measured:`additive ${fmt(hard)}; weight-dependent ${fmt(soft)}`,
         expected:'recorded, not gated: says how far 200 s gets at those rates',
         advisory:true, pass:true },
@@ -2359,6 +2420,79 @@ export const TESTS = [
     return checks;
   } },
 
+{ name:'a background drive with memory and a shared part', source:'MODEL.md 2, the noise term: a noise stimulus with a time constant is an Ornstein-Uhlenbeck drive of the same variance (Destexhe, Rudolph, Fellous and Sejnowski 2001, Neuroscience 107:13), and a shared fraction is the part every cell of the stimulus receives alike, the common afferents. Gated: the memory moves the rate on both page engines the same way, the shared part raises population synchrony on both, a run with both repeats exactly, and the gpu stays within 20% of the cpu',
+  async run(){
+    // cells driven by bias and the noise alone, one weak synapse each onto a neighbor so every engine has a wiring to hold: a recurrent net synchronizes by itself and would hide what the drive does
+    const N = 400, MS = 2000;
+    const all = Uint32Array.from({ length:N }, (_, i) => i);
+    const mk = (tau, common) => {
+      const ntype = new Uint8Array(N), bias = new Float32Array(N).fill(5);
+      const preStart = new Int32Array(N + 1); for(let i = 0; i <= N; i++) preStart[i] = i;
+      const post = new Int32Array(N); for(let i = 0; i < N; i++) post[i] = (i + 1) % N;
+      return { kind:'net', count:N, pos:new Float32Array(3*N), ntype, bias, src:new Int32Array(N).fill(1), lidx:Uint32Array.from({ length:N }, (_, i) => i),
+        preStart, post, w:new Float32Array(N).fill(0.1), delay:new Uint8Array(N).fill(1), synCount:N, pmask:new Uint8Array(N),
+        syn:1, tauE:3, tauI:8, psc:0, plast:0, refrac:2, seed:9,
+        protocols:[{ idx:all, amp:12, mode:3, period:100, width:10, t0:0, duration:0, tau, common }] };
+    };
+    const rate = r => r.frames.reduce((a, b) => a + b, 0)/N/(MS/1000);
+    // population synchrony as the variance-to-mean of the population count per tick (MODEL.md section 5), the measure a shared drive raises
+    const sync = r => { const m = mean(r.frames); return m > 0 ? sstd(r.frames)*sstd(r.frames)/m : 0; };
+    const out = [];
+    for(const gpu of [false, true]){
+      const eng = gpu ? 'gpu' : 'cpu';
+      if(gpu && !(typeof navigator !== 'undefined' && navigator.gpu)){
+        out.push({ label:'WebGPU availability', measured:'unavailable, gpu checks skipped', expected:'runs where WebGPU exists', pass:false, skipped:true });
+        continue;
+      }
+      const white = await simRun(mk(0, 0), MS, { steps:2, gpu }), slow = await simRun(mk(20, 0), MS, { steps:2, gpu });
+      const shared = await simRun(mk(20, 1), MS, { steps:2, gpu }), again = await simRun(mk(20, 0.5), MS, { steps:2, gpu }), twice = await simRun(mk(20, 0.5), MS, { steps:2, gpu });
+      const err = [white, slow, shared, again, twice].find(r => r.error);
+      if(err){ out.push({ label:eng + ': the runs complete', measured:err.error, expected:'no engine error', pass:false }); continue; }
+      out.push({ label:eng + ': the memory moves the rate', measured:`white ${rate(white).toFixed(2)} Hz, tau 20 ms ${rate(slow).toFixed(2)} Hz`,
+        expected:'the network fires and the rate changes by more than 5%', pass: rate(white) > 0.5 && Math.abs(rate(slow) - rate(white))/rate(white) > 0.05 });
+      out.push({ label:eng + ': the shared part raises population synchrony', measured:`variance to mean of the count per tick: independent ${sync(slow).toFixed(2)}, shared ${sync(shared).toFixed(2)}`,
+        expected:'at least twice', pass: sync(shared) > 2*sync(slow) });
+      out.push({ label:eng + ': a run with both repeats exactly', measured:`${again.frames.filter((f, k) => f !== twice.frames[k]).length} ticks differ of ${again.frames.length}`,
+        expected:'none', pass: again.frames.length > 0 && again.frames.every((f, k) => f === twice.frames[k]) });
+      if(gpu){
+        const cw = out.find(o => o.label === 'cpu: the memory moves the rate'), cs = out.find(o => o.label === 'cpu: the shared part raises population synchrony');
+        out.push({ label:'gpu parity with the cpu', measured:(cw ? cw.measured : '') + ' (cpu) vs ' + `white ${rate(white).toFixed(2)} Hz, tau 20 ms ${rate(slow).toFixed(2)} Hz (gpu)`,
+          expected:'the white and the tau 20 rates within 20% of the cpu\'s', pass: !!cw && !!cs && Math.abs(rate(white) - +cw.measured.match(/white ([\d.]+)/)[1]) <= Math.max(0.3, 0.2*rate(white))
+            && Math.abs(rate(slow) - +cw.measured.match(/ms ([\d.]+)/)[1]) <= Math.max(0.3, 0.2*rate(slow)) });
+      }
+    }
+    return out;
+  } },
+{ name:'measured set points use each cell\'s own target', source:'MODEL.md 4, the heterosynaptic gate and measured set points: under rhoMode 1 every homeostatic term, the gate included, uses the rate each cell measured for itself, so the global iRho has no say once calibration is over. Gated: two runs that differ only in iRho learn identical weights on each page engine (the WebGPU ring is integer, so its runs repeat exactly), and at rhoMode 0 the same two runs differ, which shows the check can tell',
+  async run(){
+    const all = Uint32Array.from({ length:1200 }, (_, i) => i);
+    const mk = (rhoMode, iRho) => {
+      const net = wireConnect(mkPts(1200, 300, 9), { ...CN, radius:250, prob:0.3, wExc:4*EQ, wInh:-6*IQ }, null);
+      return { ...net, syn:1, plast:1, aP:0.005, aM:0.006, tauS:20, wmax:30, iEta:0.002, trip:0.002, het:0.3,
+        rhoMode, calS:1, iRho, scale:0,
+        protocols:[{ idx:all, amp:9, mode:3, period:100, width:10, t0:0, duration:0 }] };
+    };
+    const differing = (a, b) => { if(!a || !b || a.length !== b.length) return -1; let n = 0; for(let i = 0; i < a.length; i++) if(a[i] !== b[i]) n++; return n; };
+    const out = [];
+    for(const gpu of [false, true]){
+      const eng = gpu ? 'gpu' : 'cpu';
+      if(gpu && !(typeof navigator !== 'undefined' && navigator.gpu)){
+        out.push({ label:'WebGPU availability', measured:'unavailable, gpu checks skipped', expected:'runs where WebGPU exists', pass:false, skipped:true });
+        continue;
+      }
+      const a = await simRun(mk(1, 2), 2500, { steps:2, weights:true, gpu }), b = await simRun(mk(1, 20), 2500, { steps:2, weights:true, gpu });
+      const c = await simRun(mk(0, 2), 2500, { steps:2, weights:true, gpu }), d = await simRun(mk(0, 20), 2500, { steps:2, weights:true, gpu });
+      const err = [a, b, c, d].find(r => r.error);
+      if(err){ out.push({ label:eng + ': the runs complete', measured:err.error, expected:'no engine error', pass:false }); continue; }
+      const spikes = a.frames.reduce((x, y) => x + y, 0);
+      const dm = differing(a.w, b.w), df = differing(c.w, d.w);
+      out.push({ label:eng + ': under measured set points iRho 2 and 20 learn identical weights', measured:`${dm} of ${a.w.length} weights differ, ${spikes} spikes`,
+        expected:'none differ, and the network fires', pass:dm === 0 && spikes > 0 });
+      out.push({ label:eng + ': with the fixed target the same two runs differ', measured:`${df} weights differ`,
+        expected:'some differ', pass:df > 0 });
+    }
+    return out;
+  } },
 { name:'the reference engine is reproducible', source:'project rule: the same graph and seeds must always compute the same network, which is worth nothing if simulating it twice gives two answers. An unseeded initial membrane jitter hides well: the weight trajectory washes the initial condition out, so learned weights come back bit-identical run to run and every weight-based check passes. What it moves is anything read from the early transient, such as measured per-neuron set points',
   async run(){
     const net = wireConnect(mkPts(1200, 260, 5), { ...CN, radius:220, prob:0.35 }, null);
@@ -2790,19 +2924,36 @@ export const TESTS = [
     if(oG.error) return [{ label:'gpu engine runs with facilitation before release',
       measured:oG.error, expected:'no engine error', pass:false }];
     const oGpu = stats(oG);
+    // the scope (stpScope 1, excitatory synapses only) on both engines: parity, and taking the inhibitory synapses out of the release has to move the rate on each
+    const spBase = { ...sBase, stpScope:1 };
+    const spCpu = stats(await simRun(spBase, MS, opts));
+    const spG = await simRun(spBase, MS, { ...opts, gpu:true });
+    if(spG.error) return [{ label:'gpu engine runs with short-term plasticity on excitatory synapses only',
+      measured:spG.error, expected:'no engine error', pass:false }];
+    const spGpu = stats(spG);
+    // per-rule short-term plasticity: every other synapse under a facilitating rule of its own, the rest on the checkpoint's depressing class, so each presynaptic cell carries two classes of state
+    const facRule = { name:'fac', from:'', to:'', aP:0, aM:0, wmax:30, wdep:1, trip:0, iEta:0, het:0, tin:0,
+      cons:0, consW:0, consP:10, stpOwn:2, stpU:0.03, stpTauD:130, stpTauF:530 };
+    const rPm = Uint8Array.from(sBase.pmask, (b, k) => k % 2 ? b : (b & ~31) | 2);
+    const rBase = { ...sBase, pmask:rPm, rules:[facRule] };
+    const rCpu = stats(await simRun(rBase, MS, opts));
+    const rG = await simRun(rBase, MS, { ...opts, gpu:true });
+    if(rG.error) return [{ label:'gpu engine runs with short-term plasticity per rule',
+      measured:rG.error, expected:'no engine error', pass:false }];
+    const rGpu = stats(rG);
     const ge = stats(await simRun({ ...base, syn:1, psc:1, tauE:3, tauI:8 }, MS, { ...opts, gpu:true }));
     const ce = stats(await simRun({ ...base, syn:1, psc:1, tauE:3, tauI:8 }, MS, opts));
     // the exact convention (psc 2): parity on both engines, and it has to move the rate against the peak convention on the same weights, since an engine that ignores the mode passes parity with one that does too
     const gx = stats(await simRun({ ...base, syn:1, psc:2, tauE:3, tauI:8 }, MS, { ...opts, gpu:true }));
     const cx = stats(await simRun({ ...base, syn:1, psc:2, tauE:3, tauI:8 }, MS, opts));
     const cp = stats(await simRun({ ...base, syn:1, psc:0, tauE:3, tauI:8 }, MS, opts));
-    // plasticity parity: the forced-pairing protocol is deterministic (noise free, pulse driven), so the two engines should land near-identical dw
-    const dw = async (dt, gpu) => {
+    // plasticity parity: the forced-pairing protocol is deterministic (noise free, pulse driven), so the two engines should land near-identical dw d is the synapse's delay and stdpAt where the rule is timed (MODEL.md 4): at the soma (0) the pairing is read from the spikes, at the synapse (1) from the presynaptic spike's arrival, d steps later
+    const dw = async (dt, gpu, d = 1, stdpAt = 0) => {
       const net2 = { count:2, ntype:new Uint8Array([0,0]), bias:new Float32Array(2),
         pos:new Float32Array(6), src:[1,1], lidx:new Uint32Array([0,1]),
         preStart:new Int32Array([0,1,1]), post:new Int32Array([1]),
-        w:new Float32Array([1]), delay:new Uint8Array([1]), synCount:1,
-        syn:0, plast:1, aP:0.01, aM:0.012, tauS:16.8, tauM:33.7, wmax:10, iEta:0, iRho:5,
+        w:new Float32Array([1]), delay:new Uint8Array([d]), synCount:1,
+        syn:0, plast:1, aP:0.01, aM:0.012, tauS:16.8, tauM:33.7, wmax:10, iEta:0, iRho:5, stdpAt,
         protocols:[
           { idx:new Uint32Array([0]), amp:60, mode:1, period:200, width:3, t0:60, duration:0 },
           { idx:new Uint32Array([1]), amp:60, mode:1, period:200, width:3, t0:60+dt, duration:0 },
@@ -2812,6 +2963,9 @@ export const TESTS = [
     };
     const cLtp = await dw(10, false), gLtp = await dw(10, true);
     const cLtd = await dw(-10, false), gLtd = await dw(-10, true);
+    // the rule timed at the synapse: pre 5 ms before post through a 12 ms delay arrives 7 ms after the post spike, so the pairing depresses, where the soma reading potentiates it
+    const cSyn = await dw(5, false, 12, 1), gSyn = await dw(5, true, 12, 1);
+    const cSoma = await dw(5, false, 12, 0), gSoma = await dw(5, true, 12, 0);
     // Triplet and transmitter terms on the same deterministic two-neuron pairing harness the mechanism group uses.
     // Noise free and pulse driven, so the two engines see identical input and any difference is the engine rather than the network.
     const pairDw = async (periodMs, extra, gpu) => {
@@ -3019,15 +3173,41 @@ export const TESTS = [
           gLtp > 0 && gLtd < 0 &&
           Math.abs(gLtp-cLtp) < 0.15*Math.abs(cLtp) &&
           Math.abs(gLtd-cLtd) < 0.15*Math.abs(cLtd) },
+      { label:'the pair rule timed at the synapse (stdpAt 1): parity', measured:
+          `pre 5 ms before post through a 12 ms delay: gpu ${gSyn.toFixed(4)} vs cpu ${cSyn.toFixed(4)}`,
+        expected:'both depress, within 15%', pass:
+          cSyn < 0 && gSyn < 0 && Math.abs(gSyn-cSyn) < 0.15*Math.abs(cSyn) },
+      { label:'where the rule is timed turns the same pairing around on both engines', measured:
+          `at the soma cpu ${cSoma.toFixed(4)}, gpu ${gSoma.toFixed(4)}; at the synapse cpu ${cSyn.toFixed(4)}, gpu ${gSyn.toFixed(4)}`,
+        expected:'the soma reading potentiates, the synapse reading depresses, on each engine', pass:
+          cSoma > 0 && gSoma > 0 && cSyn < 0 && gSyn < 0 },
       { label:'short-term plasticity parity, facilitation before release (stpOrder 1)', measured:
           `gpu ${oGpu.rate.toFixed(1)} vs cpu ${oCpu.rate.toFixed(1)} Hz`,
         expected:'within 20%', pass: oCpu.rate > 0.5 &&
           Math.abs(oGpu.rate-oCpu.rate)/oCpu.rate < 0.2 },
+      { label:'short-term plasticity parity, excitatory synapses only (stpScope 1)', measured:
+          `gpu ${spGpu.rate.toFixed(1)} vs cpu ${spCpu.rate.toFixed(1)} Hz`,
+        expected:'within 20%', pass: spCpu.rate > 0.5 &&
+          Math.abs(spGpu.rate-spCpu.rate)/spCpu.rate < 0.2 },
+      { label:'the scope moves the rate the same way on both engines', measured:
+          `cpu ${sCpu.rate.toFixed(1)} to ${spCpu.rate.toFixed(1)} Hz, gpu ${sGpu.rate.toFixed(1)} to ${spGpu.rate.toFixed(1)} Hz`,
+        expected:'the cpu rate changes by more than 5%, the gpu rate in the same direction', pass:
+          Math.abs(spCpu.rate-sCpu.rate)/Math.max(0.1, sCpu.rate) > 0.05 &&
+          Math.sign(spGpu.rate-sGpu.rate) === Math.sign(spCpu.rate-sCpu.rate) },
       { label:'the release order moves the rate the same way on both engines', measured:
           `cpu ${sCpu.rate.toFixed(1)} to ${oCpu.rate.toFixed(1)} Hz, gpu ${sGpu.rate.toFixed(1)} to ${oGpu.rate.toFixed(1)} Hz`,
         expected:'the cpu rate changes by more than 5%, the gpu rate in the same direction', pass:
           Math.abs(oCpu.rate-sCpu.rate)/Math.max(0.1, sCpu.rate) > 0.05 &&
           Math.sign(oGpu.rate-sGpu.rate) === Math.sign(oCpu.rate-sCpu.rate) },
+      { label:'short-term plasticity per rule: parity', measured:
+          `gpu ${rGpu.rate.toFixed(1)} vs cpu ${rCpu.rate.toFixed(1)} Hz`,
+        expected:'within 20%', pass: rCpu.rate > 0.5 &&
+          Math.abs(rGpu.rate-rCpu.rate)/rCpu.rate < 0.2 },
+      { label:'a facilitating rule on half the synapses moves the rate the same way on both engines', measured:
+          `cpu ${sCpu.rate.toFixed(1)} to ${rCpu.rate.toFixed(1)} Hz, gpu ${sGpu.rate.toFixed(1)} to ${rGpu.rate.toFixed(1)} Hz`,
+        expected:'the cpu rate changes by more than 5%, the gpu rate in the same direction', pass:
+          Math.abs(rCpu.rate-sCpu.rate)/Math.max(0.1, sCpu.rate) > 0.05 &&
+          Math.sign(rGpu.rate-sGpu.rate) === Math.sign(rCpu.rate-sCpu.rate) },
       { label:'short-term plasticity parity', measured:
           `gpu ${sGpu.rate.toFixed(1)} vs cpu ${sCpu.rate.toFixed(1)} Hz`,
         expected:'within 20%', pass: sCpu.rate > 0.5 &&

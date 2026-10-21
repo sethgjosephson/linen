@@ -6,7 +6,7 @@ import path from 'node:path';
 import { NODE_DEFS, setFileReader } from '../src/nodes.js';
 import { migrateScene } from '../src/migrate.js';
 import { loadPlugin, importer, checkScenePlugins } from '../src/plugins.js';
-import { ALL_SCENARIOS } from '../src/experiments.js';
+import { ALL_SCENARIOS } from '../src/scenelist.js';
 import { applyOverrides } from './overrides.mjs';
 
 export function blankNode(type, id, x, y){

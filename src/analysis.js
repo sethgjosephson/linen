@@ -75,7 +75,7 @@ export function fanoPerCell(trials, labels, nItems, nNeurons,
 
 // The trial matrix as a self-describing binary, so a run's data can be opened by something other than this app.
 //
-// Every measure in ANALYSIS.md is computed from this one array: decoding, the response matrix, sparseness, the Fano factor, tuning curves, the confusion matrix, PCA.
+// Every measure in MODEL.md section 5 is computed from this one array: decoding, the response matrix, sparseness, the Fano factor, tuning curves, the confusion matrix, PCA.
 // Reporting only the scalars derived from it means every question nobody thought to ask in advance is unanswerable, and means nobody can check the arithmetic. tools/np_trials.py reads this into numpy and Neo.
 //
 // Layout: "NPT1", u32 header length, that many bytes of UTF-8 JSON, then the arrays back to back in the order the header lists them.
@@ -140,7 +140,7 @@ export function decodeAccuracy(trials, labels, nItems, nNeurons){
   for(let i=0;i<nItems;i++)
     if(cnt[i]) for(let j=0;j<nNeurons;j++) cent[i*nNeurons + j] /= cnt[i];
   // Pearson similarity, the cosine of the centered vectors: robust to the overall activity level drifting between the two halves, which homeostasis guarantees will happen, and to one centroid being broader than the rest.
-  // Uncentered, a centroid with many active cells is the nearest to everything (measured 2026-09-02 on the binding bench: the reverse direction of the cross-modal test sat at 0.01 to 0.02 against 0.083 chance while the forward one read 0.18), which is why RSA correlates centered patterns (Kriegeskorte, Mur and Bandettini 2008).
+  // Uncentered, a centroid with many active cells is the nearest to everything, which is why RSA correlates centered patterns (Kriegeskorte, Mur and Bandettini 2008).
   const norm = new Float64Array(nItems), cmean = new Float64Array(nItems);
   for(let i=0;i<nItems;i++){
     let m = 0;
@@ -176,7 +176,6 @@ export function decodeAccuracy(trials, labels, nItems, nNeurons){
 
 // Nearest-centroid decoding on per-trial normalized patterns.
 // The decoder above compares raw summed spike counts, so a population whose cells are broadly tuned and whose item information lives in the relative rates across cells, rather than in how hard the population fired overall, scores far below what it actually carries: the overall level varies trial to trial with the network's state and dominates the comparison.
-// Measured 2026-08-29, the association territory turns a 65 percent code into a 35 to 42 percent one and that does not move for tissue quantity, sampling breadth, sampling density or recurrence plasticity, which is the pattern a readout artifact would produce.
 //
 // Each trial is z-scored across its own cells before the comparison, so only the shape of the pattern counts.
 // Same split-half protocol as decodeAccuracy, so the two numbers are directly comparable.
@@ -317,7 +316,7 @@ export function transferAccuracy(cent, cnt, packed, nItems, nNeurons){
 
 // ---- layer transformation measures ---------------------------------------
 // Cortex does not merely sparsen from layer 4 to layer 2: the responsive fraction falls (0.16 to 0.09 in barrel cortex) while response probability among the cells that do respond rises (0.13 to 0.22), correlated ensembles multiply, and decodability improves.
-// The block sparsens without any of the rest, so these three quantities are what distinguish a sparse informative code from a merely quiet one.
+// A network can sparsen without any of the rest, so these three quantities are what distinguish a sparse informative code from a merely quiet one.
 // Reported per population at every checkpoint.
 //
 // responsive: a cell counts as responsive to an item when its mean response to that item exceeds its own mean across items by a margin, so the measure is about tuning rather than about firing a lot.
@@ -434,9 +433,9 @@ export function ensembleCorrelation(trials, labels, nNeurons, cap = 64){
 
 // ---- like-to-like wiring -------------------------------------------------
 // The MICrONS functional connectome (Ding et al., Nature 2025) reports that tuning similarity predicts fine-scale connectivity in mouse visual cortex beyond what axon and dendrite proximity explain.
-// The block wires on distance and population pair alone, so it has no term that could produce the rule.
+// The connect node wires on distance and population pair alone, so it has no term that could produce the rule.
 //
-// Two statistics, both matched for distance because the block's wiring is distance dependent and tuning may be spatially clustered, which would manufacture the effect from proximity alone:
+// Two statistics, both matched for distance because the wiring is distance dependent and tuning may be spatially clustered, which would manufacture the effect from proximity alone:
 //   deltaCorr: mean signal correlation of connected pairs minus that of
 //     unconnected pairs in the same distance bin. This is the MICrONS
 //     statistic and it reads zero for wiring that ignores tuning.
@@ -942,7 +941,7 @@ export function setsFromExpr(ast, cents, nItems, nN, q = 0.1, margin = 0){
   return sets;
 }
 
-// ---- the field's cross-modal measures (ANALYSIS.md section 12) ----
+// ---- the field's cross-modal measures ----
 
 // Single-neuron multisensory integration in the form of Meredith and Stein 1983 and Stein and Stanford 2008 (Nat Rev Neurosci 9:255).
 // Per cell and item: the crossmodal enhancement index CRE = (CM - SMmax)/SMmax, where CM is the mean response to both senses and SMmax the larger of the two unimodal means, and the additivity class of CM against SMv + SMa within a tolerance.
@@ -1004,7 +1003,7 @@ export function confusionShape(confusion, nItems, minRowErrors = 3){
     off += rowOff;
     if(bestK >= 0 && best > 0) partner[i] = bestK;
     // A row with one or two wrong answers has its favorite wrong item whatever it does, so it says nothing about concentration and would read as the ceiling.
-    // Only rows with enough errors to spread are counted: measured 2026-09-03, a bench window with 26 trials read the ceiling on rows holding a single error each.
+    // Only rows with enough errors to spread are counted.
     if(rowOff >= minRowErrors){ kept++; keptOff += rowOff; top += best; }
   }
   if(off <= 0) return null;
@@ -1333,7 +1332,7 @@ export function itemCoupling(between, setsA, setsB, w, w0){
 }
 
 // Where a population's conjunctive cells sit around the vertical axis, against where all its cells sit: counts per angular bin of the cells any item's set holds, and of every sampled cell, with the angle taken about y from the population's own center.
-// For a structure whose senses enter at known angles (the mandelbulb, with sight and sound bulbs alternating around a ring), this is the readout of whether binding cells gather at the boundaries between a sight sector and a sound sector or spread evenly.
+// For a structure whose senses enter at known angles (sight and sound sectors alternating around a ring), this is the readout of whether binding cells gather at the boundaries between a sight sector and a sound sector or spread evenly.
 // Angles are in degrees from the +x axis toward +z.
 export function sectorHistogram(sets, idx, pos, bins = 12){
   const n = idx.length;

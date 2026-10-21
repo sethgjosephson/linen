@@ -2,14 +2,17 @@
 // What the shell adds is what a tab cannot have: the server and the engine host inside the app (the host runs on the app's own binary as node), the project folder from the machine's own picker with the last one remembered, no throttling when the window is in the background, a larger heap, and the viewer window put back where it was.
 //
 //   npm start          (in desktop/, after npm install)
-import { app, BrowserWindow, dialog, shell } from 'electron';
+import { app, BrowserWindow, dialog, shell, Menu } from 'electron';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startServer, looksLikeProject } from './serve.mjs';
 
 // From source the app's files are the checkout above this folder; packaged, they are the linen folder electron-builder copies into resources (the build section of package.json says which).
-const ROOT = app.isPackaged ? path.join(process.resourcesPath, 'linen') : path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
+// --root DIR runs the app on another checkout's files instead, so a fork or an edited copy gets this window, its server and its host without a build of its own.
+const rootArg = (() => { const k = process.argv.indexOf('--root'); return k >= 0 && process.argv[k + 1] ? path.resolve(process.argv[k + 1]) : null; })();
+const ROOT = rootArg || (app.isPackaged ? path.join(process.resourcesPath, 'linen') : path.join(path.dirname(fileURLToPath(import.meta.url)), '..'));
+if(rootArg && !fs.existsSync(path.join(ROOT, 'index.html'))){ console.error('linen: no index.html under --root ' + ROOT); app.exit(1); }
 // A tab's heap is capped near 4 GB; the wiring of a large network holds more than that (the synapse budget is derived from the machine's memory).
 app.commandLine.appendSwitch('js-flags', '--max-old-space-size=16384');
 
@@ -54,8 +57,13 @@ app.whenReady().then(async () => {
   let project = settings.project;
   if(!project){ project = await chooseProject(); settings.project = project; writeSettings(settings); }
   fs.mkdirSync(project, { recursive:true });
+  // the startup folder beside the settings: every node module in it loads with every project (init.js by convention); the folders added from the menu are listed after it
+  const startupDir = path.join(app.getPath('userData'), 'startup');
+  fs.mkdirSync(startupDir, { recursive:true });
+  if(!Array.isArray(settings.nodePaths)) settings.nodePaths = [];
   const s = await startServer({
     root:ROOT, project, port:0, host:'127.0.0.1',
+    startupDirs:() => [startupDir, ...settings.nodePaths],
     // the machine's own folder picker, over the app's windows
     pick: async ({ start, title }) => {
       const r = await dialog.showOpenDialog(BrowserWindow.getFocusedWindow() || undefined, { title, defaultPath:start, properties:['openDirectory', 'createDirectory', 'promptToCreate'] });
@@ -76,6 +84,23 @@ app.whenReady().then(async () => {
   });
   if(settings.window && settings.window.max) win.maximize();
   remember('window', win);
+  // an application menu, hidden until Alt: the edit roles for the text fields, the developer tools on F12 as in a browser, since the page is the same page and people will want to look
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    { label:'Folders', submenu:[
+      { label:'Open the project folder', click:() => shell.openPath(s.project()) },
+      { label:'Open the startup folder', click:() => shell.openPath(startupDir) },
+      // a folder of node modules served to every project, kept in the settings; the page's "reload node modules" picks it up
+      { label:'Add a folder of node modules...', click:async () => {
+        const r = await dialog.showOpenDialog(win, { title:'a folder of node modules', properties:['openDirectory'] });
+        if(r.canceled || !r.filePaths.length) return;
+        const d = r.filePaths[0];
+        if(!settings.nodePaths.includes(d)){ settings.nodePaths.push(d); writeSettings(settings); }
+      } },
+    ] },
+    { role:'editMenu' },
+    { label:'View', submenu:[ { role:'toggleDevTools', accelerator:'F12' }, { role:'togglefullscreen' } ] },
+    { label:'Help', submenu:[ { label:'linen.build', click:() => shell.openExternal('https://linen.build') } ] },
+  ]));
   // VIEWER WINDOW opens with window.open and the DOM moves across: the same realm, kept; it gets a window of its own where it was last put.
   // A new-window link to a page of the app (docs.html) gets an ordinary window; a link to anywhere else goes to the system browser.
   const local = url => url.startsWith('http://127.0.0.1:' + s.port + '/');

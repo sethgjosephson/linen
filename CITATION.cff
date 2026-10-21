@@ -7,7 +7,7 @@ type: software
 title: linen
 abstract: >-
   An interactive sandbox for 3D spiking neural networks.
-  Neurons are points in micrometre space built through a procedural node
+  Neurons are points in micrometer space built through a procedural node
   graph, simulated with Izhikevich 2007 dynamics and real conduction delays
   on a reference engine, a WebGPU engine and a CUDA engine that share one
   contract, with spike-timing plasticity, a validation battery against
@@ -18,7 +18,7 @@ authors:
 license: AGPL-3.0-or-later
 repository-code: https://github.com/sethgjosephson/linen
 url: https://linen.build
-version: 0.1.0
+version: 0.2.0
 keywords:
   - spiking neural network
   - Izhikevich model

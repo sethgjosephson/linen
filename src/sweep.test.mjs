@@ -1,6 +1,6 @@
 // The checkpoint's sweep tab against every scenario: a sweep with one edit on every node that has an editable setting expands onto a copy of the graph with every edit applied and the graph on screen untouched; text variants and address-bar overrides go through the same selectors.
 import { NODE_DEFS } from './nodes.js';
-import { ALL_SCENARIOS as SCENARIOS } from './experiments.js';
+import { ALL_SCENARIOS as SCENARIOS } from './scenelist.js';
 import { applyVariant, applyOverrides, gatherVariants } from './sweepvariant.js';
 import { ok, report } from '../tools/harness.mjs';
 

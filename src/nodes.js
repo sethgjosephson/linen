@@ -1147,17 +1147,20 @@ export function engineConfig(net){
     chanErev:(receptorChannels(net) || []).map(c => Number.isFinite(c.erev) ? c.erev : (c.sign > 0 ? 0 : -70)),
     protocols:net.protocols || [],
     plast:net.plast, aP:net.aP, aM:net.aM, tauS:net.tauS, tauM:net.tauM,
-    wmax:net.wmax, wdep:net.wdep, iEta:net.iEta, iRho:net.iRho,
+    wmax:net.wmax, wdep:net.wdep, stdpAt:net.stdpAt|0, iEta:net.iEta, iRho:net.iRho,
     rhoMode:net.rhoMode, calS:net.calS, scale:net.scale, sEta:net.sEta,
     trip:net.trip, tauY:net.tauY, het:net.het, tin:net.tin,
     cons:net.cons, consW:net.consW, consP:net.consP, commit:net.commit|0,
     tauCons:net.tauCons > 0 ? net.tauCons*60000 : 0,   // sim-minutes in the panel, ms in the engine
     consStep:net.consStep > 0 ? net.consStep*1000 : 0,  // sim-seconds in the panel, ms in the engine
-    stp:net.stp, stpU:net.stpU, stpNorm:net.stpNorm|0, stpOrder:net.stpOrder|0,
-    stpTauD:net.stpTauD, stpTauF:net.stpTauF, refrac:net.refrac,
+    stpNorm:net.stpNorm|0, stpOrder:net.stpOrder|0, stpScope:net.stpScope|0,
+    // the checkpoint's own set, and the class table built from it and the rules (stpClassTable); stp is on when any class is
+    ...stpClassTable(net, net.rules), refrac:net.refrac,
     vmin:net.vmin === undefined ? -90 : +net.vmin,
     // receptor channels beyond E and I: their time constants, in order (channel 2 first); the wiring put each synapse's channel in the top three bits of its plasticity byte
     chanTau:(receptorChannels(net) || []).map(c => c.tau),
+    // the magnesium concentration gating each channel, mM, 0 for no gate (MODEL.md 2)
+    chanMg:(receptorChannels(net) || []).map(c => c.mg > 0 ? c.mg : 0),
     // feedback inhibition: which pool each cell is in and each pool's kick per spike, wired by wirePools; absent when the graph has no pool node
     pool:net.pool, poolK:net.poolK,
     // the engine settings node's entries, passed to the engine as they were entered (ENGINE.md section 2); the stock engines ignore them
@@ -1210,6 +1213,32 @@ export function wirePools(pts){
     }
   }
   return { pool, poolK:Float32Array.from(K), poolInfo:info };
+}
+
+// Short-term plasticity per rule, as classes: each distinct set of settings is a class, with state per presynaptic cell and class, so rules with the same settings share it and a scene whose rules all inherit the checkpoint has one class, as before.
+// Class 0 is the checkpoint's own set; rule row 0 (frozen) and row 1 take it, and a declared rule takes it unless it says off or gives its own settings.
+// A class row is [on, U, tauD, tauF], with the same defaults the engines apply to the checkpoint's fields.
+// The map stpCls gives each of the 16 rule rows its class; stp is 1 when any class is on, and stp, stpU, stpTauD and stpTauF stay the checkpoint's own for the engines' single-class path.
+export const STP_CLASS_ROW = 4, STP_CLASSES = 16;
+export function stpClassTable(base, rules){
+  const U0 = base.stpU > 0 ? +base.stpU : 0.2, D0 = base.stpTauD > 0 ? +base.stpTauD : 200, F0 = base.stpTauF > 0 ? +base.stpTauF : 600;
+  const on0 = base.stp > 0 ? 1 : 0;
+  const rows = [[on0, U0, D0, F0]];
+  const cls = new Uint8Array(STP_CLASSES);
+  (rules || []).forEach((r, k) => {
+    const own = r.stpOwn|0;
+    const t = own === 1 ? [0, U0, D0, F0]
+      : own === 2 ? [1, r.stpU > 0 ? +r.stpU : 0.2, r.stpTauD > 0 ? +r.stpTauD : 200, r.stpTauF > 0 ? +r.stpTauF : 600]
+      : rows[0];
+    let c = rows.findIndex(x => x[0] === t[0] && (!t[0] || (x[1] === t[1] && x[2] === t[2] && x[3] === t[3])));
+    if(c < 0){ c = rows.length; rows.push(t); }
+    if(2 + k < STP_CLASSES) cls[2 + k] = c;
+  });
+  const table = new Float32Array(rows.length*STP_CLASS_ROW);
+  rows.forEach((x, c) => table.set(x, c*STP_CLASS_ROW));
+  const any = rows.some(x => x[0] === 1);
+  return { stp:any ? (on0 ? base.stp : 1) : 0, stpU:base.stpU, stpTauD:base.stpTauD, stpTauF:base.stpTauF,
+    stpClasses:rows.length, stpTable:table, stpCls:cls };
 }
 
 export function buildRuleTable(base, rules){
@@ -1687,6 +1716,23 @@ function finishConnect(pts, p, st, onProgress){
       preStart = ps; postA = post2; wA = w2; delA = del2; pmA = pmc; m = m2;
     }
   }
+  // A receptor channel that names presynaptic populations (from:<tag> on the receptor node) takes the connect node's synapses from them; its sign has to be theirs.
+  const chans = receptorChannels(pts);
+  if(chans && chans.some(c => c.from && c.from.length)){
+    const tags = pts.tags || {}, chOf = new Int8Array(n).fill(-1);
+    for(let i = 0; i < n; i++){
+      const t = tags[pts.src[i]]; if(!t) continue;
+      const k = chans.findIndex(c => (c.from || []).some(f => tagMatch(t, f) !== null));
+      if(k >= 0) chOf[i] = k;
+    }
+    for(let i = 0; i < n; i++){
+      const k = chOf[i]; if(k < 0) continue;
+      if(NEURON_TYPES[pts.ntype[i]].sign !== chans[k].sign)
+        throw new Error('receptors: channel ' + chans[k].name + ' takes synapses from ' + tags[pts.src[i]] + ', whose cells are ' +
+          (NEURON_TYPES[pts.ntype[i]].sign > 0 ? 'excitatory' : 'inhibitory') + ', and its sign is ' + (chans[k].sign > 0 ? '+' : '-'));
+      for(let s = preStart[i]; s < preStart[i + 1]; s++) pmA[s] = (pmA[s] & 31) | ((k + 2) << 5);
+    }
+  }
   // explicit synapses from connections tables, on top of what the sweep made
   let connectionsReport = null;
   if(pts.connectionTables && pts.connectionTables.length){
@@ -2018,7 +2064,9 @@ function stimulusCompute(ins, p, node){
     for(let i=0;i<src.count;i++) if(inside(i)) idx.push(i);
     const proto = { idx:Uint32Array.from(idx), amp:p.current, mode,
       period:Math.max(1, p.period), width:Math.max(1, p.width),
-      t0:Math.max(0, p.t0), duration:Math.max(0, p.duration) };
+      t0:Math.max(0, p.t0), duration:Math.max(0, p.duration),
+      // a noise stimulus's memory and shared part (MODEL.md 2); absent on the other modes
+      ...(mode === 3 ? { tau:p.tauNoise > 0 ? +p.tauNoise : 0, common:p.common > 0 ? Math.min(1, +p.common) : 0 } : {}) };
     if(spread > 0) proto.gain = Float32Array.from(idx, i => spreadAt(i));
     const drive = { id:node ? node.id : -1, idx:proto.idx, amp:p.current, mode,
       gain:proto.gain || null };
@@ -2570,13 +2618,23 @@ export const NODE_DEFS = {
         // an optional reversal potential in mV after the sign, read in conductance mode; a number where a transmitter name would be
         let at = 3, erev;
         if(f.length > 4 && /^-?[0-9.]+$/.test(f[3])){ erev = +f[3]; at = 4; }
-        if(f.length <= at) throw new Error('receptors: ' + f[0] + ' names no transmitter');
-        channels.push({ name:f[0].toLowerCase(), tau, sign:f[2] === '+' ? 1 : -1, erev, transmitters:f.slice(at).map(x => x.toLowerCase()) });
+        // an optional magnesium block among the transmitters, mg:<mM>: the channel's current is gated by the voltage as an NMDA receptor's is (MODEL.md 2)
+        let mg = 0;
+        // from:<population> puts the connect node's synapses from that population on this channel (a tag, or a prefix with *), where a transmitter names a connections file's
+        const from = [];
+        const rest = f.slice(at).filter(x => {
+          const m = /^mg:([0-9.]+)$/i.exec(x); if(m){ mg = +m[1]; return false; }
+          const fr = /^from:(.+)$/i.exec(x); if(fr){ from.push(fr[1]); return false; }
+          return true; });
+        if(!(mg >= 0)) throw new Error('receptors: ' + f[0] + ' has a magnesium concentration that is not a number');
+        if(!rest.length && !from.length) throw new Error('receptors: ' + f[0] + ' names no transmitter and no population (from:<tag>)');
+        channels.push({ name:f[0].toLowerCase(), tau, sign:f[2] === '+' ? 1 : -1, erev, mg, transmitters:rest.map(x => x.toLowerCase()), from });
       }
       if(!channels.length) throw new Error('receptors: no channel declared');
       if(channels.length > 6) throw new Error('receptors: at most six channels beyond E and I');
-      const seen = new Set();
+      const seen = new Set(), seenFrom = new Set();
       for(const c of channels) for(const t of c.transmitters){ if(seen.has(t)) throw new Error('receptors: transmitter ' + t + ' is on two channels'); seen.add(t); }
+      for(const c of channels) for(const t of c.from){ if(seenFrom.has(t)) throw new Error('receptors: population ' + t + ' is on two channels'); seenFrom.add(t); }
       return { ...pts, receptors:{ channels } };
     } },
   // One population out of a stream, by tag: the cells keep their identity, so a fan of these from a points file and a merge back is the same tissue as the file node alone, with each population a node of its own.
@@ -2772,6 +2830,10 @@ export const NODE_DEFS = {
       { k:'width', label:'pulse width ms', t:'float', def:10, min:1, s:[1,300], cond:q => (q.mode|0) === 1 },
       { k:'t0', label:'onset ms', t:'float', def:0, min:0, s:[0,5000], cond:q => (q.mode|0) > 0 },
       { k:'duration', label:'duration ms (0=on)', t:'float', def:0, min:0, s:[0,10000], cond:q => (q.mode|0) > 0 },
+      // A noise drive with a time constant is an Ornstein-Uhlenbeck process of the same variance (Destexhe, Rudolph, Fellous and Sejnowski 2001); 0 is the white draw per millisecond.
+      // The shared fraction is the part of each cell's drive that every cell of this stimulus receives alike, the common afferents.
+      { k:'tauNoise', label:'noise time constant ms (0: white)', t:'float', def:0, min:0, s:[0,200], cond:q => (q.mode|0) === 3 },
+      { k:'common', label:'shared fraction', t:'float', def:0, min:0, max:1, s:[0,1], cond:q => (q.mode|0) === 3 },
       { k:'spread', label:'per-neuron spread', t:'float', def:0, min:0, s:[0,1.5] },
       { k:'seedSpread', label:'spread seed', t:'int', def:1, s:[1,999], cond:q => q.spread > 0 } ],
     compute: stimulusCompute },        // net->net (or points->points); input 2: optional geometry mask; * params used only without mask
@@ -3074,7 +3136,7 @@ export const NODE_DEFS = {
 
   plasticity: { title:'plasticity', cat:'wiring', color:'hsl(140,55%,58%)', inputs:1, params:[
       // Published rules, named, rather than a row of amplitudes to fill in from memory.
-      // Choosing one writes the terms below and names the rule, which is the name the connect pair table's fifth column refers to, so a scene reads 'weavei weave inh' and the node beside it says inhibitory homeostasis in words.
+      // Choosing one writes the terms below and names the rule, which is the name the connect pair table's fifth column refers to, so a scene reads 'ci ce inh' and the node beside it says inhibitory homeostasis in words.
       // Editing any term afterwards is ordinary: the preset is a starting point, not a mode, and the panel shows what it wrote.
       { k:'preset', g:'scope', label:'preset', t:'select', def:0,
         options:['custom', 'pair STDP', 'triplet STDP', 'inhibitory homeostasis',
@@ -3105,14 +3167,31 @@ export const NODE_DEFS = {
       { k:'consW', g:'more', label:'consolidated weight', t:'float', def:0, min:0, s:[0,20],
         cond:q => +q.cons > 0 },
       { k:'consP', g:'more', label:'well depth', t:'float', def:10, min:0, s:[0,50],
-        cond:q => +q.cons > 0 } ],
+        cond:q => +q.cons > 0 },
+      // Short-term plasticity for this rule's synapses: one axon can depress onto one target and facilitate onto another (Reyes et al. 1998; Markram, Wang and Tsodyks 1998).
+      // The state is per presynaptic cell and per class of settings, so two rules with the same settings share it.
+      { k:'stp', g:'short-term', label:'short-term plasticity', t:'select', def:0,
+        options:['as the checkpoint', 'off', 'own settings'] },
+      { k:'stpPreset', g:'short-term', label:'synapse class', t:'select', def:0,
+        options:['custom', 'depressing (Markram 1998)', 'facilitating (Markram 1998)'],
+        apply:(q, i) => {
+          if(i === 1) Object.assign(q, { stpU:0.5, stpTauD:800, stpTauF:1 });
+          else if(i === 2) Object.assign(q, { stpU:0.03, stpTauD:130, stpTauF:530 });
+        },
+        cond:q => (q.stp|0) === 2 },
+      { k:'stpU', g:'short-term', label:'release probability U', t:'float', def:0.5, min:0.01, s:[0.01,1],
+        cond:q => (q.stp|0) === 2 },
+      { k:'stpTauD', g:'short-term', label:'depression tau (ms)', t:'float', def:800, min:1, s:[10,1000],
+        cond:q => (q.stp|0) === 2 },
+      { k:'stpTauF', g:'short-term', label:'facilitation tau (ms)', t:'float', def:1, min:1, s:[10,2000],
+        cond:q => (q.stp|0) === 2 } ],
     // Passes the stream through and appends itself, the same way project accumulates projs.
     // Place it anywhere before connect, since connect is what wires the per-synapse rule assignment.
     //
     // The parameters here are the ones that can differ per synapse: amplitudes and bounds.
     // Time constants are not among them, and that is a limitation rather than an oversight. tauS and tauY govern Kpre and Kslow, which are per-neuron traces, so two rules wanting different windows onto the same cell would each need their own copy of that state.
-    // The set points and normalizations, iRho, rhoMode, calS, scale and sEta, belong to the postsynaptic neuron for the same reason, and the short-term terms belong to the presynaptic one.
-    // All of those stay on the checkpoint and are global.
+    // The set points and normalizations, iRho, rhoMode, calS, scale and sEta, belong to the postsynaptic neuron for the same reason, and stay on the checkpoint.
+    // Short-term plasticity is per rule: its state is per presynaptic cell and per class of settings (stpClassTable), so a rule's synapses can depress while another rule's from the same axon facilitate.
     // See buildRuleTable.
     compute:(ins, p) => { const pts = need(ins[0], 'points',
         'plasticity needs points (place before connect)');
@@ -3122,7 +3201,8 @@ export const NODE_DEFS = {
         name, from:String(p.from || '').trim(), to:String(p.to || '').trim(),
         aP:+p.aP, aM:+p.aM, wmax:+p.wmax, wdep:p.wdep|0, trip:+p.trip,
         iEta:+p.iEta, het:+p.het, tin:+p.tin,
-        cons:+p.cons, consW:+p.consW, consP:+p.consP }] }; } },
+        cons:+p.cons, consW:+p.consW, consP:+p.consP,
+        stpOwn:p.stp|0, stpU:+p.stpU, stpTauD:+p.stpTauD, stpTauF:+p.stpTauF }] }; } },
   // A lumped inhibitory pool per population: every spike in the population inhibits every cell of it one millisecond later, by gain times the population's mean rate in Hz.
   // The mushroom body's APL neuron and the dentate's basket cell feedback, which hold a stage sparse whatever arrives (Lin et al. 2014).
   // Pass-through like the plasticity node; the wiring resolves it (wirePools) and every engine steps it the same way.
@@ -3258,6 +3338,11 @@ export const NODE_DEFS = {
       // Song, Miller and Abbott 2000 use 20 for both; set them equal to recover that.
       { k:'tauS', g:'timing', term:'plast', label:'stdp tau+ ms', t:'float', def:16.8, min:1, s:[5,100], cond:q => (q.plast|0) === 1 },
       { k:'tauM', g:'timing', term:'plast', label:'stdp tau- ms', t:'float', def:33.7, min:1, s:[5,100], cond:q => (q.plast|0) === 1 },
+      // Where the pair rule reads its traces (MODEL.md 4): at the synapse a presynaptic spike counts when it arrives, so a pairing is timed from the arrival (Izhikevich 2006, dt = t_post - (t_pre + d)); at the soma both traces are read when the cell fires.
+      // Scenes tuned on the soma reading declare it (scene format 14).
+      { k:'stdpAt', g:'timing', term:'stdpAt', label:'stdp timed at', t:'select', def:1,
+        options:['the soma: traces read when the cell fires', 'the synapse: a pre spike counts when it arrives'],
+        cond:q => (q.plast|0) === 1 },
       // The clamp rewrites anything above this on its first plasticity event, so it has to clear the largest wired weight, not the mean.
       // Default 30 rather than 10: the default inhibitory weight is -7 and a lognormal draw carries it several times higher.
       { k:'trip', g:'timing', term:'trip', label:'triplet A3+', t:'float', def:0, min:0, s:[0,0.02],
@@ -3331,6 +3416,10 @@ export const NODE_DEFS = {
       { k:'stpOrder', g:'short-term', term:'stpOrder', label:'stp order', t:'select', def:0,
         options:['release, then facilitation (published)', 'facilitation, then release'],
         cond:p => p.stp > 0 },
+      // Which synapses the release applies to, by the sign of the weight: Mongillo, Barak and Tsodyks 2008 carry the working-memory trace on excitatory synapses only.
+      { k:'stpScope', g:'short-term', term:'stpScope', label:'stp applies to', t:'select', def:0,
+        options:['every synapse', 'excitatory synapses only', 'inhibitory synapses only'],
+        cond:p => p.stp > 0 },
       { k:'stpTauD', g:'short-term', term:'stp', label:'depression tau (ms)', t:'float', def:800, min:1, s:[10,1000],
         cond:p => p.stp > 0 },
       { k:'stpTauF', g:'short-term', term:'stp', label:'facilitation tau (ms)', t:'float', def:1, min:1, s:[10,2000],
@@ -3364,7 +3453,7 @@ export const NODE_DEFS = {
       return { ...net, bias:compensationBias(net, p), steps:p.steps, engine:p.engine|0, liveHost:String(p.liveHost || '').trim(),
         syn:p.syn|0, tauE:p.tauE, tauI:p.tauI,
         psc:p.psc|0,
-        plast:p.plast|0, aP:p.aP, aM:p.aM, tauS:p.tauS, tauM:p.tauM, wmax:p.wmax, wdep:p.wdep|0,
+        plast:p.plast|0, aP:p.aP, aM:p.aM, tauS:p.tauS, tauM:p.tauM, wmax:p.wmax, wdep:p.wdep|0, stdpAt:p.stdpAt|0,
         iEta:p.iEta, iRho:p.iRho, rhoMode:p.rhoMode|0, calS:p.calS,
         scale:p.scale|0, sEta:p.sEta,
         trip:p.trip || 0, tauY:p.tauY || 114, het:p.het || 0, tin:p.tin || 0,
@@ -3372,7 +3461,7 @@ export const NODE_DEFS = {
         // the commit switch and its two timings reach the engine through engineConfig, which reads them off the network
         commit:p.commit|0, tauCons:+p.tauCons || 20, consStep:+p.consStep || 1.2,
         // the node's own defaults, the Markram 1998 depressing class
-        stp:p.stp || 0, stpU:p.stpU || 0.5, stpNorm:p.stpNorm|0, stpOrder:p.stpOrder|0,
+        stp:p.stp || 0, stpU:p.stpU || 0.5, stpNorm:p.stpNorm|0, stpOrder:p.stpOrder|0, stpScope:p.stpScope|0,
         stpTauD:p.stpTauD || 800, stpTauF:p.stpTauF || 1,
         refrac:p.refrac|0,
         // the membrane floor and the reversal potentials have to reach the network, or every engine runs -90, 0 and -70 whatever the panel says; src/engineparams.test.mjs moves every engine-facing setting and requires the engine config to follow

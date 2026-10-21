@@ -9,7 +9,7 @@ import { inProcessWorker } from './harness.mjs';
 inProcessWorker(wireConnect, assembleConnect);
 import { initState } from '../src/rand.js';
 import { BarSweep, encodeGains } from '../src/io.js';
-import { ALL_SCENARIOS } from '../src/experiments.js';
+import { ALL_SCENARIOS } from '../src/scenelist.js';
 import { splitTerms, applyOverrides } from './overrides.mjs';
 
 const [name = 'guided tour', secs = '3', res = '1'] = process.argv.slice(2);
@@ -67,7 +67,7 @@ for(let t = 0; t < ms; t += 2){
   if(INPUT && t % 10 === 0) (net.inputMaps || []).forEach((m, mi) => { send({ cmd:'inputFrame', mi, gains:encodeGains(bar.sample(t, m), m, ist[mi], t, 3) }); });
   replies.length = 0; send({ cmd:'tick', steps:2 });
   for(const r of replies) if(r.cmd === 'state'){
-    if(process.env.SPECTRUM) frameTotals.push(r.spikes);
+    if(process.env.SPECTRUM || process.env.FANO) frameTotals.push(r.spikes);
     let wn = 0, ws = 0;
     for(const g of REG) for(const i of g.idx) if(r.fired[i]) g.spikes += r.fired[i];
     if(ISI) for(let i = 0; i < n; i++) if(r.fired[i]){ const tg = tagOf(i); if(!isiBins.has(tg)) isiBins.set(tg, [0, 0, 0, 0, 0]);
@@ -117,6 +117,11 @@ if(process.env.SPECTRUM && frameTotals.length > 64){
   top.sort((a, b) => b[1] - a[1]);
   const total = top.reduce((a, b) => a + b[1], 0);
   console.log('spectrum peak ' + top[0][0].toFixed(1) + ' Hz (' + (100*top[0][1]/total).toFixed(1) + '% of power), next ' + top.slice(1, 4).map(p => p[0].toFixed(1)).join(', ') + ' Hz');
+}
+// FANO=1: the population Fano factor of the whole net's spike count per 2 ms frame, after the first 200 ms, per thousand cells (audit.html's measure; above 5 reads as synchronized)
+if(process.env.FANO && frameTotals.length > 200){
+  const x = frameTotals.slice(100), m = x.reduce((a, b) => a + b, 0)/x.length, v = x.reduce((a, b) => a + (b - m)**2, 0)/x.length;
+  console.log('population Fano per 1000 cells ' + (v/Math.max(0.001, m)/(n/1000)).toFixed(2));
 }
 for(const g of REG) console.log('  region ' + g.nm + ' (' + g.idx.length + ' cells) Hz per bin: ' + g.bins.join(' '));
 // POPBINS=1 adds each population's busiest bin, so a response the sweep dilutes still shows

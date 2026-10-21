@@ -20,12 +20,13 @@
 #include <cstdlib>
 #include <cstring>
 #include <vector>
+#include <algorithm>
 #include <io.h>
 #include <fcntl.h>
 #include "kernels.cuh"
 
 // The engine contract this child implements, PROTOCOL in src/protocol.js; src/protocol.test.mjs holds the two equal.
-#define ENGINE_PROTOCOL 3
+#define ENGINE_PROTOCOL 7
 
 #define CK(x) do { cudaError_t e = (x); if(e != cudaSuccess){ \
   fprintf(stderr, "CUDA error %s at line %d\n", cudaGetErrorString(e), __LINE__); \
@@ -61,6 +62,10 @@ struct Net {
   float aP = 0, aM = 0, tauS = 16.8f, wmax = 10, iEta = 0, iRho = 0;
   float tauM = 16.8f, stpNorm = 0;          // depression window; stp delivery scale
   int stpOrder = 0;                         // stp: 0 release then facilitation, 1 the reverse
+  int stpScope = 0;                         // stp on every synapse (0), excitatory only (1), inhibitory only (2)
+  int stdpAt = 0;                           // where the pair rule is timed: 0 at the soma, 1 at the synapse (MODEL.md 4)
+  unsigned int *hist = nullptr, *dmask = nullptr;   // per cell: the spikes of the last 16 steps (bit k for k steps ago), and the delays its synapses carry (bit d)
+  unsigned int *arr = nullptr, *nArr = nullptr;     // the cells with a spike arriving this step, listed by the trace step, for the arrival pass
   unsigned int psc = 0;                     // exp current scale: 0 peak, 1 charge, 2 exact integral over the step
   float trip = 0, tauY = 114, het = 0, tin = 0;
   unsigned int refrac = 0;
@@ -78,6 +83,9 @@ struct Net {
   unsigned int vtraceCap = 0;
   float *stpX = nullptr, *stpR = nullptr;
   float stp = 0, stpU = 0.2f, stpTauD = 200.0f, stpTauF = 600.0f;
+  int stpC = 1, stpCAlloc = 0;              // short-term classes in use, and the count the state was last seeded for
+  float stpTbl[16*4] = {};                  // per class: on, U, tauD, tauF
+  float* dlvAmpC = nullptr;                 // each delivering cell's release per class, STP_CMAX a cell
   float tauCons = 1200000.0f, consStep = 1200.0f;
   float consAcc = 0;
   // synaptic scaling: the cadence follows the consolidation pattern above rather than an absolute clock, which is equivalent because the accumulator resets each pass
@@ -101,9 +109,13 @@ struct Net {
   float chanTau[6] = {0,0,0,0,0,0};
   // conductance mode (syn 2): reversal potentials of E, I and each channel
   float eE = 0.0f, eI = -70.0f, chanErev[6] = {0,0,0,0,0,0}; float *erevX = nullptr;
+  // the magnesium block per channel, mM, 0 for none (MODEL.md 2)
+  float chanMg[6] = {0,0,0,0,0,0}; float *mgX = nullptr;
   float *poolK = nullptr;
   unsigned int *poolCnt = nullptr, poolG = 0;
   float *a, *b, *c, *d, *bias, *ext, *namp, *v, *u;
+  // a noise stimulus's memory and shared part per cell (src/noisefold.js): decay, its complement, shared fraction, stimulus id, and the two filter states; noiseOn when any cell carries them
+  float *nA = nullptr, *nK = nullptr, *nC = nullptr, *nz = nullptr, *nzs = nullptr; int *nId = nullptr; int noiseOn = 0;
   float *ring, *ring2, *gE, *gI, *Kpre, *Kpost, *w;
   int *pre, *post, *inStart, *revSyn, *revPre;
   unsigned char *delay, *pmask, *fired;
@@ -179,13 +191,22 @@ int main(){
       CK(cudaMemcpy(preH.data(), N.pre, (n+1)*4, cudaMemcpyDeviceToHost));
       CK(cudaMemcpy(postH.data(), N.post, (size_t)m*4, cudaMemcpyDeviceToHost));
       std::vector<int> inStart(n+1, 0), revSyn(m), revPre(m), fill(n, 0);
+      std::vector<unsigned char> delH(m);
+      std::vector<unsigned int> dmaskH(n, 0);
+      CK(cudaMemcpy(delH.data(), N.delay, m, cudaMemcpyDeviceToHost));
       for(unsigned int s = 0; s < m; s++) inStart[postH[s]+1]++;
       for(unsigned int i = 0; i < n; i++) inStart[i+1] += inStart[i];
+      // the delay rides in the top five bits of revPre, so the incoming pass at the synapse reads it with the presynaptic cell; the mask per cell says which delays its synapses carry
       for(unsigned int i = 0; i < n; i++)
         for(int s = preH[i]; s < preH[i+1]; s++){
           int at = inStart[postH[s]] + fill[postH[s]]++;
-          revSyn[at] = s; revPre[at] = (int)i;
+          revSyn[at] = s; revPre[at] = (int)(i | ((unsigned int)delH[s] << 27));
+          dmaskH[i] |= 1u << delH[s];
         }
+      CK(cudaMalloc((void**)&N.dmask, n*4));
+      CK(cudaMemcpy(N.dmask, dmaskH.data(), n*4, cudaMemcpyHostToDevice));
+      CK(cudaMalloc((void**)&N.hist, n*4)); CK(cudaMemset(N.hist, 0, n*4));
+      CK(cudaMalloc((void**)&N.arr, (size_t)n*4)); CK(cudaMalloc((void**)&N.nArr, 4)); CK(cudaMemset(N.nArr, 0, 4));
       CK(cudaMalloc((void**)&N.inStart, (n+1)*4));
       CK(cudaMalloc((void**)&N.revSyn, (size_t)m*4));
       CK(cudaMalloc((void**)&N.revPre, (size_t)m*4));
@@ -242,6 +263,7 @@ int main(){
       CK(cudaMalloc((void**)&N.spk, (size_t)n*4)); CK(cudaMalloc((void**)&N.nSpk, 4));
       CK(cudaMemset(N.nSpk, 0, 4));
       CK(cudaMalloc((void**)&N.dlv, (size_t)n*4)); CK(cudaMalloc((void**)&N.dlvAmp, (size_t)n*4)); CK(cudaMalloc((void**)&N.nDlv, 4));
+      CK(cudaMalloc((void**)&N.dlvAmpC, (size_t)n*STP_CMAX*4));
       CK(cudaMemset(N.nDlv, 0, 4));
       CK(cudaMemset(N.ring, 0, (size_t)ROWS*n*4));
       CK(cudaMemset(N.ring2, 0, (size_t)ROWS*n*4));
@@ -249,6 +271,10 @@ int main(){
       CK(cudaMemset(N.Kpre, 0, n*4)); CK(cudaMemset(N.Kpost, 0, n*4));
       CK(cudaMemset(N.Kslow, 0, n*4));
       CK(cudaMemset(N.ext, 0, n*4)); CK(cudaMemset(N.namp, 0, n*4));
+      CK(cudaMalloc((void**)&N.nA, n*4)); CK(cudaMalloc((void**)&N.nK, n*4)); CK(cudaMalloc((void**)&N.nC, n*4)); CK(cudaMalloc((void**)&N.nId, n*4));
+      CK(cudaMalloc((void**)&N.nz, n*4)); CK(cudaMalloc((void**)&N.nzs, n*4));
+      CK(cudaMemset(N.nA, 0, n*4)); CK(cudaMemset(N.nK, 0, n*4)); CK(cudaMemset(N.nC, 0, n*4)); CK(cudaMemset(N.nId, 0, n*4));
+      CK(cudaMemset(N.nz, 0, n*4)); CK(cudaMemset(N.nzs, 0, n*4)); N.noiseOn = 0;
       CK(cudaMemset(N.counts, 0, n*4)); CK(cudaMemset(N.total, 0, 8));
       hostFired.resize(n);
       // Allocated here as well as in SENDT: the client asks for latency before init, when SENDT sees n == 0 and allocates nothing.
@@ -297,8 +323,13 @@ int main(){
         memcpy(&N.tauM, p+96, 4); memcpy(&N.stpNorm, p+100, 4);
       } else { N.tauM = N.tauS; N.stpNorm = 0; }
       if(N.tauM <= 0) N.tauM = N.tauS;
-      // byte 100 carries two switches: 1 is stpNorm, 2 is stpOrder (facilitation before release)
-      { int code = (int)(N.stpNorm + 0.5f); N.stpOrder = (code >> 1) & 1; N.stpNorm = (float)(code & 1); }
+      // byte 100 carries the switches: 1 is stpNorm, 2 is stpOrder (facilitation before release), 4 and 8 the scope, 16 stdpAt (the pair rule timed at the synapse)
+      { int code = (int)(N.stpNorm + 0.5f); N.stpOrder = (code >> 1) & 1; N.stpScope = (code >> 2) & 3; N.stdpAt = (code >> 4) & 1; N.stpNorm = (float)(code & 1); }
+      // the tables of the rule at the synapse, from the potentiation window
+      { float ek[17], exd[17];
+        for(int k = 0; k < 17; k++){ ek[k] = expf(-(float)k/N.tauS); exd[k] = expf((float)k/N.tauS); }
+        CK(cudaMemcpyToSymbol(cEk, ek, sizeof(ek)));
+        CK(cudaMemcpyToSymbol(cExd, exd, sizeof(exd))); }
       if(len >= 116){
         float cm = 0;
         memcpy(&cm, p+104, 4); N.commit = cm > 0.5f ? 1 : 0;
@@ -313,6 +344,10 @@ int main(){
       if(len >= 180){ memcpy(&N.eE, p+148, 4); memcpy(&N.eI, p+152, 4); memcpy(N.chanErev, p+156, 24); }
       if(!N.erevX) CK(cudaMalloc((void**)&N.erevX, 24));
       CK(cudaMemcpy(N.erevX, N.chanErev, 24, cudaMemcpyHostToDevice));
+      // the magnesium block per channel at 184 (six f32, mM); a shorter frame means none
+      if(len >= 208) memcpy(N.chanMg, p+184, 24); else memset(N.chanMg, 0, 24);
+      if(!N.mgX) CK(cudaMalloc((void**)&N.mgX, 24));
+      CK(cudaMemcpy(N.mgX, N.chanMg, 24, cudaMemcpyHostToDevice));
       { unsigned int kx = 0; if(len >= 148){ memcpy(&kx, p+120, 4); memcpy(N.chanTau, p+124, 24); }
         if(kx > 6) kx = 6;
         if(kx && !N.syn){ fprintf(stderr, "engine.cu: receptor channels need exponential synapses\n"); exit(1); }
@@ -338,11 +373,11 @@ int main(){
         float rules[RULE_MAX*RULE_STRIDE];
         memset(rules, 0, sizeof(rules));
         unsigned int rc = 0;
-        if(len >= 188) memcpy(&rc, p+184, 4);
+        if(len >= 212) memcpy(&rc, p+208, 4);
         if(rc > RULE_MAX) rc = RULE_MAX;
-        bool sent = rc >= 2 && len >= 188 + rc*RULE_STRIDE*4;
+        bool sent = rc >= 2 && len >= 212 + rc*RULE_STRIDE*4;
         if(sent){
-          memcpy(rules, p + 188, (size_t)rc*RULE_STRIDE*4);
+          memcpy(rules, p + 212, (size_t)rc*RULE_STRIDE*4);
           N.ruleCount = rc;
         } else {
           float* R = rules + RULE_STRIDE;             // row 1
@@ -359,6 +394,34 @@ int main(){
         CK(cudaMemcpyToSymbol(cRules, rules, sizeof(rules)));
         fprintf(stderr, "engine.cu: rules=%u anyHet=%u anyCons=%u aP[1]=%g\n",
           N.ruleCount, N.anyHet, N.anyCons, rules[RULE_STRIDE + R_aP]);
+        // Short-term plasticity per rule, after the rule table: a u32 class count, the class of each of the 16 rule rows (16 bytes), then on, U, tauD and tauF per class.
+        // Absent means one class built from the scalars, the checkpoint's own.
+        unsigned char cls[32]; memset(cls, 0, sizeof(cls));
+        unsigned int C = 0;
+        const size_t off = sent ? 212 + (size_t)rc*RULE_STRIDE*4 : 0;
+        if(sent && len >= off + 20) memcpy(&C, p + off, 4);
+        if(C >= 1 && C <= STP_CMAX && len >= off + 20 + C*16){
+          memcpy(cls, p + off + 4, 16);
+          memcpy(N.stpTbl, p + off + 20, (size_t)C*16);
+        } else {
+          C = 1;
+          N.stpTbl[0] = N.stp > 0 ? 1.0f : 0.0f; N.stpTbl[1] = N.stpU; N.stpTbl[2] = N.stpTauD; N.stpTbl[3] = N.stpTauF;
+        }
+        float4 P[STP_CMAX]; int on[STP_CMAX]; int any = 0;
+        memset(P, 0, sizeof(P)); memset(on, 0, sizeof(on));
+        for(unsigned int c = 0; c < C; c++){
+          float U = N.stpTbl[c*4 + 1] > 0 ? N.stpTbl[c*4 + 1] : 0.2f;
+          float tD = N.stpTbl[c*4 + 2] > 0 ? N.stpTbl[c*4 + 2] : 200.0f, tF = N.stpTbl[c*4 + 3] > 0 ? N.stpTbl[c*4 + 3] : 600.0f;
+          float scale = N.stpNorm > 0 ? 1.0f/(N.stpOrder ? U*(2.0f - U) : U) : 1.0f;
+          P[c] = make_float4(U, expf(-1.0f/tD), expf(-1.0f/tF), scale);
+          on[c] = N.stpTbl[c*4] > 0 ? 1 : 0; any |= on[c];
+        }
+        N.stpC = (int)C;
+        N.stp = any ? 1.0f : 0.0f;
+        CK(cudaMemcpyToSymbol(cStpP, P, sizeof(P)));
+        CK(cudaMemcpyToSymbol(cStpOn, on, sizeof(on)));
+        CK(cudaMemcpyToSymbol(cStpCls, cls, sizeof(cls)));
+        CK(cudaMemcpyToSymbol(cStpC, &N.stpC, sizeof(int)));
       }
       if((N.scaleOn > 0 || N.rhoMode > 0) && !N.spkAcc && N.n){
         CK(cudaMalloc((void**)&N.spkAcc, (size_t)N.n*4));
@@ -371,12 +434,18 @@ int main(){
         CK(cudaMemset(N.spkAcc, 0, (size_t)N.n*4));
         N.calibrating = 1; N.calAcc = 0;
       } else if(!N.plast) N.calibrating = 0;
-      if(N.stp > 0 && !N.stpX && N.n){
-        CK(cudaMalloc((void**)&N.stpX, (size_t)N.n*4));
-        CK(cudaMalloc((void**)&N.stpR, (size_t)N.n*4));
-        std::vector<float> ix(N.n, 1.0f), ir(N.n, N.stpU);
-        CK(cudaMemcpy(N.stpX, ix.data(), (size_t)N.n*4, cudaMemcpyHostToDevice));
-        CK(cudaMemcpy(N.stpR, ir.data(), (size_t)N.n*4, cudaMemcpyHostToDevice));
+      // the state for every class the table can hold, seeded (X 1, R at its class's U) when the term first turns on and again when the number of classes changes, as the reference reallocates it
+      if(N.stp > 0 && N.n && (!N.stpX || N.stpCAlloc != N.stpC)){
+        if(!N.stpX){
+          CK(cudaMalloc((void**)&N.stpX, (size_t)N.n*STP_CMAX*4));
+          CK(cudaMalloc((void**)&N.stpR, (size_t)N.n*STP_CMAX*4));
+        }
+        std::vector<float> ix((size_t)N.n*N.stpC, 1.0f), ir((size_t)N.n*N.stpC);
+        for(int c = 0; c < N.stpC; c++)
+          std::fill(ir.begin() + (size_t)c*N.n, ir.begin() + (size_t)(c + 1)*N.n, N.stpTbl[c*4 + 1] > 0 ? N.stpTbl[c*4 + 1] : 0.2f);
+        CK(cudaMemcpy(N.stpX, ix.data(), ix.size()*4, cudaMemcpyHostToDevice));
+        CK(cudaMemcpy(N.stpR, ir.data(), ir.size()*4, cudaMemcpyHostToDevice));
+        N.stpCAlloc = N.stpC;
       }
       if((N.anyHet > 0 || N.anyCons > 0) && !N.wRef && N.w){
         // heterosynaptic reference = the weights when het switches on, the same capture rule as the reference engine
@@ -386,14 +455,23 @@ int main(){
       fprintf(stderr, "engine.cu: tune plast=%u wdep=%u aP=%g aM=%g wmax=%g trip=%g het=%g tin=%g cons=%g consW=%g\n",
         N.plast, N.wdep, N.aP, N.aM, N.wmax, N.trip, N.het, N.tin,
         N.cons, N.consW);
-      fprintf(stderr, "engine.cu: tune stp=%g scale=%g sEta=%g\n",
-        N.stp, N.scaleOn, N.sEta);
+      fprintf(stderr, "engine.cu: tune stp=%g classes=%d scale=%g sEta=%g\n",
+        N.stp, N.stpC, N.scaleOn, N.sEta);
     }
     else if(cmd == 3){                     // EXT
       CK(cudaMemcpy(N.ext, p, N.n*4, cudaMemcpyHostToDevice));
     }
-    else if(cmd == 4){                     // NAMP
+    else if(cmd == 4){                     // NAMP: the amplitude, then the decay, its complement, the shared fraction and the stimulus id per cell (five arrays of n)
+      if(len < (size_t)N.n*4*5){ fprintf(stderr, "engine.cu: NAMP frame is %u bytes, expected %zu; the host and this engine.exe disagree on the protocol (rebuild)\n", len, (size_t)N.n*4*5); exit(1); }
       CK(cudaMemcpy(N.namp, p, N.n*4, cudaMemcpyHostToDevice));
+      CK(cudaMemcpy(N.nA, p + N.n*4, N.n*4, cudaMemcpyHostToDevice));
+      CK(cudaMemcpy(N.nK, p + N.n*8, N.n*4, cudaMemcpyHostToDevice));
+      CK(cudaMemcpy(N.nC, p + N.n*12, N.n*4, cudaMemcpyHostToDevice));
+      CK(cudaMemcpy(N.nId, p + N.n*16, N.n*4, cudaMemcpyHostToDevice));
+      // the arrays are handed to the kernels only when a cell carries a memory or a shared part, so a white drive keeps the draw it had
+      N.noiseOn = 0;
+      { const float* fa = (const float*)(p + N.n*4); const float* fc = (const float*)(p + N.n*12);
+        for(unsigned int i = 0; i < N.n; i++) if(fa[i] > 0.0f || fc[i] > 0.0f){ N.noiseOn = 1; break; } }
     }
     else if(cmd == 7){                     // QUERY
       // Outgoing synapses are a slice of the forward CSR; incoming ones come from the reverse index the plasticity passes already build, so this is two small copies rather than a scan of every synapse.
@@ -417,6 +495,8 @@ int main(){
           cudaMemcpyDeviceToHost));
         if(innN) CK(cudaMemcpy(innv.data(), N.revPre + i0, (size_t)innN*4,
           cudaMemcpyDeviceToHost));
+        // the reverse list carries each synapse's delay in its top five bits; the owner alone is answered
+        for(unsigned int k = 0; k < innN; k++) innv[k] = (int)((unsigned int)innv[k] & 0x7ffffffu);
         std::vector<unsigned char> out(20 + (size_t)(outN + innN)*4);
         unsigned int head[5] = { idx, outTotal, inTotal, outN, innN };
         memcpy(out.data(), head, 20);
@@ -468,7 +548,8 @@ int main(){
         CK(cudaMemsetAsync(N.nDlv, 0, 4));
         if(N.syn)
           PK(0, stepExp<<<grid, block>>>(n, cur, decE, decI, itauE, itauI,
-            N.a, N.b, N.c, N.d, N.bias, N.ext, N.namp, N.t, N.seed,
+            N.a, N.b, N.c, N.d, N.bias, N.ext, N.namp,
+            N.noiseOn ? N.nA : nullptr, N.nK, N.nC, N.nId, N.nz, N.nzs, N.t, N.seed,
             N.v, N.u, N.ring, N.ring2, N.gE, N.gI,
             N.pre, N.post, N.w, N.delay, N.fired, N.counts, N.total,
             N.refCnt, N.refrac,
@@ -477,11 +558,12 @@ int main(){
             N.poolG > 1 ? N.pool : nullptr, N.poolK, N.poolCnt, N.poolG, par, N.vmin,
             N.C7, N.k7, N.vr7, N.vt7, N.vp7, N.grd, N.gthr, N.gslp,
             N.KX, N.gX, N.ringX, N.decX, N.itauX, N.KX ? N.pmask : nullptr,
-            N.syn == 2 ? 1 : 0, N.eE, N.eI, N.erevX,
-            N.spk, N.nSpk, N.dlv, N.dlvAmp, N.nDlv));
+            N.syn == 2 ? 1 : 0, N.eE, N.eI, N.erevX, N.mgX,
+            N.spk, N.nSpk, N.dlv, N.dlvAmp, N.nDlv, N.stpC > 1 ? N.dlvAmpC : nullptr));
         else
           PK(0, stepKick<<<grid, block>>>(n, cur,
-            N.a, N.b, N.c, N.d, N.bias, N.ext, N.namp, N.t, N.seed,
+            N.a, N.b, N.c, N.d, N.bias, N.ext, N.namp,
+            N.noiseOn ? N.nA : nullptr, N.nK, N.nC, N.nId, N.nz, N.nzs, N.t, N.seed,
             N.v, N.u, N.ring,
             N.pre, N.post, N.w, N.delay, N.fired, N.counts, N.total,
             N.refCnt, N.refrac,
@@ -489,35 +571,47 @@ int main(){
             N.sendT ? N.firstMs : nullptr, (int)t,
             N.poolG > 1 ? N.pool : nullptr, N.poolK, N.poolCnt, N.poolG, par, N.vmin,
             N.C7, N.k7, N.vr7, N.vt7, N.vp7, N.grd, N.gthr, N.gslp,
-            N.spk, N.nSpk, N.dlv, N.dlvAmp, N.nDlv));
+            N.spk, N.nSpk, N.dlv, N.dlvAmp, N.nDlv, N.stpC > 1 ? N.dlvAmpC : nullptr));
+        // at the synapse, the spikes arriving this step depress their synapses first, against Kpost as it stood before the step's spikes, as the reference does at the start of its step; the list is consumed once
+        if(N.plast && N.stdpAt){
+          if(!N.calibrating)
+            PK(2, plastArrive<<<gridW, block>>>(N.arr, N.nArr, N.hist, N.pre, N.post, N.w, N.delay, N.pmask,
+              N.Kpost, iAlpha, N.alphaI, N.wRef, N.commit));
+          CK(cudaMemsetAsync(N.nArr, 0, 4));
+        }
         // delivery from the step's list, before the learning passes change the weights, as the per-neuron form delivered inside the step
         if(N.syn)
           PK(8, deliverExp<<<gridW, block>>>(N.dlv, N.dlvAmp, N.nDlv, n, cur, N.ring, N.ring2, N.ringX,
-            N.pre, N.post, N.w, N.delay, N.KX ? N.pmask : nullptr));
+            N.pre, N.post, N.w, N.delay, N.KX ? N.pmask : nullptr, N.stp > 0 ? N.stpScope : 0,
+            N.stp > 0 && N.stpC > 1 ? N.dlvAmpC : nullptr, N.pmask));
         else
           PK(8, deliverKick<<<gridW, block>>>(N.dlv, N.dlvAmp, N.nDlv, n, cur, N.ring,
-            N.pre, N.post, N.w, N.delay));
+            N.pre, N.post, N.w, N.delay, N.stp > 0 ? N.stpScope : 0,
+            N.stp > 0 && N.stpC > 1 ? N.dlvAmpC : nullptr, N.pmask));
         // the half this step read is zeroed for the step after next
         if(N.poolG > 1)
           CK(cudaMemsetAsync(N.poolCnt + (size_t)(par ^ 1u)*N.poolG, 0, (size_t)N.poolG*4));
         N.t++;                              // simulated ms, the noise counter
         if(N.stp > 0 && N.stpX)
-          PK(1, stpStepK<<<grid, block>>>(n, N.stpX, N.stpR, N.stpU,
-            expf(-1.0f/N.stpTauD), expf(-1.0f/N.stpTauF)));
+          PK(1, stpStepK<<<(int)(((size_t)n*N.stpC + block - 1)/block), block>>>(n, N.stpC, N.stpX, N.stpR));
         if(N.watch >= 0 && N.vtrace && t < N.vtraceCap)
           watchK<<<1, 1>>>(N.v, N.vtrace, (int)t, N.watch);
         if(N.plast){
           // while calibrating, measure and change nothing: the traces and the spike accumulator still advance, the weights do not
           if(!N.calibrating){
-          PK(2, plastOut<<<gridW, block>>>(N.spk, N.nSpk, N.pre, N.post, N.w, N.pmask,
-            N.Kpost, iAlpha, N.alphaI, N.wRef, N.commit));
+          // at the soma the outgoing half runs at the spike; at the synapse it ran above, at the arrivals
+          if(!N.stdpAt)
+            PK(2, plastOut<<<gridW, block>>>(N.spk, N.nSpk, N.pre, N.post, N.w, N.pmask,
+              N.Kpost, iAlpha, N.alphaI, N.wRef, N.commit));
           PK(3, plastIn<<<gridW, block>>>(N.spk, N.nSpk, N.inStart, N.revSyn, N.revPre,
-            N.w, N.revMask, N.Kpre, N.Kslow, N.wRef,
-            N.tauY*(N.iRho > 0 ? N.iRho : 5.0f)*0.001f, N.commit));
+            N.w, N.revMask, N.Kpre, N.stdpAt ? N.hist : nullptr, N.Kslow, N.wRef,
+            N.tauY*(N.iRho > 0 ? N.iRho : 5.0f)*0.001f,
+            N.rhoMode > 0 ? N.alphaI : nullptr, N.tauY/(N.tauS + N.tauM), N.commit));
           }
           PK(4, traceStep<<<grid, block>>>(n, N.fired, N.Kpre, N.Kpost, decS, decM,
             N.Kslow, expf(-1.0f/N.tauY),
-            (N.scaleOn > 0 || N.calibrating) ? N.spkAcc : nullptr));
+            (N.scaleOn > 0 || N.calibrating) ? N.spkAcc : nullptr,
+            N.hist, N.dmask, N.stdpAt, N.arr, N.nArr));
           if(N.calibrating){
             N.calAcc += 1.0f;
             if(N.calAcc >= N.calS*1000.0f){

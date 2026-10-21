@@ -45,7 +45,7 @@ npm install
 npm start
 ```
 
-The first launch asks where your project folder should live. It has been run on Windows so far; macOS and Linux should work but haven't been tried, and an installer will come later.
+The first launch asks where your project folder should live. Its Folders menu opens the project folder and a startup folder whose node modules load with every project (`init.js` by convention), and adds other folders of modules; F12 opens the developer tools; `npm start -- --root DIR` runs the app on another checkout's files. It has been run on Windows so far; macOS and Linux should work but haven't been tried, and an installer will come later.
 
 ## A quick tour
 
@@ -91,7 +91,8 @@ Simulation methods:
 - Brunel, N. (2000), balanced E/I network dynamics (the regimes)
 - van Albada, Helias & Diesmann (2015), *Scalability of Asynchronous Networks Is Limited by One-to-One Mapping between Effective Connectivity and Correlations*, PLOS Comput. Biol.: https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004490 (downscaling)
 - Song, Miller & Abbott (2000), Bi & Poo (1998), Vogels et al. (2011), Pfister & Gerstner (2006), Zenke, Agnes & Gerstner (2015), Tsodyks & Markram (1997), van Rossum, Bi & Turrigiano (2000) (plasticity rules)
-- Pokorny, Ison, Rao, Legenstein, Papadimitriou & Maass (2019), *STDP Forms Associations between Memory Traces in Networks of Spiking Neurons*, Cerebral Cortex 29(8): 3577-3589. https://pmc.ncbi.nlm.nih.gov/articles/PMC7132978/ (the weave)
+- Markram, Wang & Tsodyks (1998), Reyes et al. (1998), Silberberg & Markram (2007), Ali & Thomson (2008) (short-term plasticity per synapse class, the column's PV and SST cells)
+- Pokorny, Ison, Rao, Legenstein, Papadimitriou & Maass (2019), *STDP Forms Associations between Memory Traces in Networks of Spiking Neurons*, Cerebral Cortex 29(8): 3577-3589. https://pmc.ncbi.nlm.nih.gov/articles/PMC7132978/ (association between assemblies)
 
 Columns and dendrites (background; `references/INDEX.md`):
 

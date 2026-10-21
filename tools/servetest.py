@@ -47,7 +47,13 @@ import shlex
 cmd = ([t.strip('"') for t in shlex.split(os.environ['NPTEST_SERVER'], posix=(os.name != 'nt'))]
        if os.environ.get('NPTEST_SERVER')
        else [sys.executable, '-u', os.path.join(ROOT, 'serve.py')])
-srv = subprocess.Popen(cmd + [str(PORT), '--project', PROJ],
+# a startup folder of node modules beside the project, served to every project under /startup
+STARTUP = tempfile.mkdtemp(prefix='nptest-startup-')
+with open(os.path.join(STARTUP, 'init.js'), 'wb') as f:
+    f.write(b'export default function(linen){}\n')
+with open(os.path.join(STARTUP, 'notes.txt'), 'wb') as f:
+    f.write(b'not a module')
+srv = subprocess.Popen(cmd + [str(PORT), '--project', PROJ, '--startup', STARTUP],
                        stdout=logf, stderr=logf, cwd=ROOT)
 try:
     up = False
@@ -132,6 +138,19 @@ try:
     ok('and a module reads back as written', code == 200 and body == module, body[:60])
     code, body = req('GET', '/project/list/nodes/missing')
     ok('a missing folder lists as empty', code == 200 and json.loads(body)['entries'] == [], body[:60])
+
+    # The startup modules: the folders given with --startup, listed by folder index and read by name only.
+    code, body = req('GET', '/startup/list')
+    ents = json.loads(body)['entries']
+    ok('the startup folder lists its modules', code == 200 and [e['name'] for e in ents] == ['init.js'] and ents[0]['from'] == 0, body[:120])
+    code, body = req('GET', '/startup/file/0/init.js')
+    ok('and a startup module reads back', code == 200 and body == b'export default function(linen){}\n', body[:60])
+    code, _ = req('GET', '/startup/file/0/notes.txt')
+    ok('a file that is not a module is not served from there', code == 404, code)
+    code, _ = req('GET', '/startup/file/1/init.js')
+    ok('a folder index past the list is 404', code == 404, code)
+    code, _ = req('GET', '/startup/file/0/..%2Fruns%2Ft1%2Fckpt.npb')
+    ok('a startup name cannot leave its folder', code in (400, 404), code)
 
     code, _ = req('DELETE', '/project/file/runs/t1/metrics.json')
     ok('a file deletes', code == 200 and
@@ -224,6 +243,7 @@ finally:
     except Exception:
         srv.kill()
     shutil.rmtree(PROJ, ignore_errors=True)
+    shutil.rmtree(STARTUP, ignore_errors=True)
 
 print(('%d failed, %d passed' % (failed, passed)) if failed
       else 'all passed (%d checks)' % passed)

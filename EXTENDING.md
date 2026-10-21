@@ -137,6 +137,12 @@ a node that goes into the repository itself.
    modules named; the same module registering again replaces its own node,
    which is how an edited module reloads. The node carries `plugin: {
    module, hash }`, the module's file name and a hash of its source.
+   A module meant for every project lives in a startup folder rather
+   than a project: the desktop app's, beside its settings (`init.js`
+   by convention), or a folder added from its Folders menu; `serve.py`
+   and `desktop/serve.mjs` take such folders with `--startup DIR` and
+   serve them under `/startup`. They load before the project's own, so a
+   project's module of the same key wins.
 3. **The interface**: `registerNode`, the stream helpers `need` and
    `clonePts`, and from `src/rand.js` `h32`, `pairHash`, `pairGauss` and
    `rng`. The object also carries `apiVersion`, 1 today, which counts the

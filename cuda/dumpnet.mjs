@@ -45,7 +45,7 @@ const POOL = +(process.argv[16] || 0);
 // ISCALE multiplies every current in the dump (bias and weights): the measured rows (MEASURED=1) divide currents by 20 to 100 pF, so tissue that fires on the classic rows is silent there without it
 const ISCALE = +(process.env.ISCALE || 1) || 1;
 const TAUE = 3, TAUI = 8;
-// the learning lab's committed rule, so plasticity parity is measured on the configuration the real experiments run
+// a rule with every term the engines carry for learning, so plasticity parity covers all of them at once
 const RULE = { aP:0.003, aM:0.001, tauS:20, wmax:60, wdep:1, iEta:0.01, iRho:2,
   trip:0.002, tauY:114, het:0.01, tin:0.00005 };
 
@@ -160,7 +160,7 @@ send({ cmd:'init', protocol:PROTOCOL, count:N, ntype, bias,
   trip:RULE.trip, tauY:RULE.tauY, het:RULE.het, tin:RULE.tin,
   cons:CONS, consW:0, consP:10,   // 0 = the scaled default, a tenth of wmax
   commit:COMMIT, tauCons:TAUCONS,
-  stp:STP, stpOrder:+(process.env.STPORDER || 0), stpU:0.2, stpTauD:200, stpTauF:600,
+  stp:STP, stpOrder:+(process.env.STPORDER || 0), stpScope:+(process.env.STPSCOPE || 0), stdpAt:+(process.env.STDPAT || 0), stpU:0.2, stpTauD:200, stpTauF:600,
   seed:ESEED, ...initState(ESEED, ntype, CLASSES),
   pmask:chanBytes(N, ntype, preStart, m), ...(CHAN > 0 ? { chanTau:[CHAN] } : {}),
   ...(POOL < 0 ? { pool:poolA, poolK } : {}),

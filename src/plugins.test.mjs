@@ -7,7 +7,7 @@ import { ok, report, threw, inProcessWorker } from '../tools/harness.mjs';
 import { NODE_DEFS, registerNode, computeNode, memoKey, nodeDocProblems, isBuiltinNode,
   setResolution, wireConnect, assembleConnect } from './nodes.js';
 import { isDefaultName } from './nodenames.js';
-import { API_VERSION, loadPlugin, importer, moduleName, sourceHash, pluginState, loadProjectPlugins, addPluginFromUrl,
+import { API_VERSION, loadPlugin, importer, moduleName, sourceHash, pluginState, loadProjectPlugins, loadStartupPlugins, addPluginFromUrl,
   scenePlugins, scenePluginsMissing } from './plugins.js';
 import { SCENE_FORMAT } from './migrate.js';
 const { NodeEditor } = await import('./editor.js');
@@ -145,6 +145,19 @@ function memStore(files = {}){
   const edited = await loadProjectPlugins(st, imp);
   ok('an edited module replaces its node', edited[1].changed === true && defOf('proj_b').title === 'shift x, edited');
   ok('an empty project loads no modules', (await loadProjectPlugins(memStore(), imp)).length === 0);
+}
+
+{
+  // the startup modules: what the server lists under /startup, by folder index, loaded before the project's own; a server without the route lists none
+  const listed = { ok:true, entries:[ { name:'init.js', from:0, dir:'C:/app/startup' }, { name:'notes.txt', from:0, dir:'C:/app/startup' }, { name:'gone.js', from:1, dir:'D:/mods' } ] };
+  const files = { '/startup/file/0/init.js':shiftModule(3, 'startup_shift') };
+  const fetchJson = async u => u === '/startup/list' ? listed : null;
+  const fetchText = async u => { if(!(u in files)) throw new Error('404 ' + u); return files[u]; };
+  const recs = await loadStartupPlugins(fetchJson, fetchText, imp);
+  ok('the startup modules load from the list, each with its folder', recs.map(r => r.module).join() === 'init.js,gone.js' && recs[0].from === 0 && recs[0].dir === 'C:/app/startup', recs.map(r => r.module).join());
+  ok('a startup module registers its node', !recs[0].error && defOf('startup_shift'));
+  ok('one the server cannot read is recorded with its folder', /could not be read from D:\/mods/.test(recs[1].error), recs[1].error);
+  ok('a server without the route lists none', (await loadStartupPlugins(async () => { throw new Error('404'); }, fetchText, imp)).length === 0);
 }
 
 {

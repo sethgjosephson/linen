@@ -2,6 +2,8 @@
 // Same message protocol and dynamics contract as the CPU reference engine (simworker.js); see ENGINE.md.
 import { gradedArrays, freezeGraded } from './nodes.js';
 import { checkProtocol, helloReply, TERM_NAMES, OPTIONAL } from './protocol.js';
+import { NOISE_SHARED } from './rand.js';
+import { foldNoise } from './noisefold.js';
 // Differences inside the contract: spike deliveries accumulate in 1/4096 fixed point through i32 atomics (integer addition is order independent, so delivery sums are exactly reproducible run to run), and the per-ms noise draw comes from a counter based hash of (neuron, t, seed) instead of Math.random.
 // Plasticity (pair STDP + Vogels homeostasis, same rules as the CPU engine) runs as three extra dispatches per step when enabled: outgoing updates (thread per spike over its CSR slice), incoming updates (thread per spike over the reverse index, filtered per partition), trace bump, with trace decay folded into the next update pass.
 // One contract-level deviation: on the CPU, two neurons spiking in the same millisecond see each other's traces in neuron-index order; here all same-step updates read the pre-increment traces.
@@ -13,7 +15,7 @@ const SCALE = 4096;            // fixed point step for ring accumulation
 const ROWS = 18;               // ring rows, matches the CPU engine
 const WG = 256;                // update pass workgroup size
 const DWG = 64;                // delivery pass workgroup size
-const SLOT = 256;              // dynamic-offset alignment for step uniforms
+const SLOT = 512;              // dynamic-offset alignment for step uniforms (a multiple of 256), equal to USIZE
 const MAX_BATCH = 64;          // steps encoded per submission
 
 const STEP_STRUCT = `
@@ -25,13 +27,17 @@ struct Step { t:u32, cur:u32, watch:i32, seed:u32, n:u32, syn:u32, slot:u32, pla
               tin:f32, trip:f32, decY:f32, het:f32,
               kRef:f32, consRate:f32, consW:f32, consP:f32,
               decM:f32, stpScale:f32, commit:f32, poolG:u32,
-              vmin:f32, stpOrder:u32, kx:u32, pad4:f32,
+              vmin:f32, stpOrder:u32, kx:u32, kRefA:f32,
               dx0:f32, dx1:f32, dx2:f32, dx3:f32, dx4:f32, dx5:f32,
               ix0:f32, ix1:f32, ix2:f32, ix3:f32, ix4:f32, ix5:f32,
-              eE:f32, eI:f32, ex0:f32, ex1:f32, ex2:f32, ex3:f32, ex4:f32, ex5:f32 };
+              eE:f32, eI:f32, ex0:f32, ex1:f32, ex2:f32, ex3:f32, ex4:f32, ex5:f32,
+              mg0:f32, mg1:f32, mg2:f32, mg3:f32, mg4:f32, mg5:f32, stpScope:u32, stdpAt:u32,
+              ek:array<vec4<f32>, 5>, exd:array<vec4<f32>, 5> };
 struct Spikes { count:atomic<u32>, total:atomic<u32>, list:array<u32> };
+// the cells whose spikes arrive somewhere this step, each with its spike history: filled by the decay pass at the end of the step before, walked by the arrival pass, then cleared
+struct Arrivals { count:atomic<u32>, pad:u32, list:array<vec2<u32>> };
 `;
-const USIZE = 256;  // Step struct bytes (a multiple of 16, as uniforms require; equal to SLOT)
+const USIZE = 512;  // Step struct bytes (a multiple of 16, as uniforms require; equal to SLOT; the struct is 432 bytes)
 const SST = 12;     // state floats per neuron: v, u, gE, gI, then six receptor channels, padding
 
 const SHADER_UPDATE = STEP_STRUCT + `
@@ -59,6 +65,8 @@ fn pcg(x: u32) -> u32 {
   return (word >> 22u) ^ word;
 }
 fn unif(x: u32) -> f32 { return f32(pcg(x)) * (1.0 / 4294967295.0); }
+// the magnesium block (Jahr and Stevens 1990): the fraction of a channel's current the voltage lets through, 1 for a channel with no concentration
+fn mgGate(mg: f32, v: f32) -> f32 { return select(1.0, 1.0/(1.0 + (mg/3.57)*exp(-0.062*v)), mg > 0.0); }
 
 @compute @workgroup_size(${WG})
 fn update(@builtin(global_invocation_id) gid: vec3<u32>){
@@ -71,11 +79,22 @@ fn update(@builtin(global_invocation_id) gid: vec3<u32>){
   let iIn = f32(atomicLoad(&ring[rowI])) * (1.0/${SCALE}.0);
   atomicStore(&ring[rowE], 0);
   atomicStore(&ring[rowI], 0);
-  var I = drive[i*2u];
-  let namp = drive[i*2u+1u];
+  var I = drive[i*6u];
+  let namp = drive[i*6u+1u];
   if(namp != 0.0){
     let h = i ^ (U.t * 2654435761u) ^ U.seed;
-    I += namp * (unif(h) + unif(h ^ 0x9e3779b9u) - 1.0);
+    var d = unif(h) + unif(h ^ 0x9e3779b9u) - 1.0;
+    // a stimulus with a time constant filters the draw per cell, an Ornstein-Uhlenbeck process of the same variance; a shared fraction mixes in the stimulus's own draw, filtered the same way (MODEL.md 2)
+    let na = drive[i*6u+2u];
+    if(na > 0.0){ let z = na*st[i*12u+10u] + drive[i*6u+3u]*d; st[i*12u+10u] = z; d = z; }
+    let nc = drive[i*6u+4u];
+    if(nc > 0.0){
+      let hs = (${NOISE_SHARED}u + u32(drive[i*6u+5u])) ^ (U.t * 2654435761u) ^ U.seed;
+      var sdraw = unif(hs) + unif(hs ^ 0x9e3779b9u) - 1.0;
+      if(na > 0.0){ let zs = na*st[i*12u+11u] + drive[i*6u+3u]*sdraw; st[i*12u+11u] = zs; sdraw = zs; }
+      d = sqrt(1.0 - nc)*d + sqrt(nc)*sdraw;
+    }
+    I += namp * d;
   }
   // Feedback inhibition: what the cell's pool delivers this millisecond is its kick per spike times the spikes it fired last millisecond, read from the half of the count table the previous step wrote.
   let rcw = atomicLoad(&refcnt[i]);
@@ -101,13 +120,14 @@ fn update(@builtin(global_invocation_id) gid: vec3<u32>){
     gi = st[i*12u+3u]*U.decI + iIn + pin;
     // current-based: g times the scale; conductance-based: |g| (E - v)
     I += select(ge*U.itauE + gi*U.itauI, abs(ge)*(U.eE - v0) + abs(gi)*(U.eI - v0), cnd);
-    // receptor channels 2 and up (MODEL.md 2): their own decay, their own ring rows
-    if(U.kx > 0u){ let rx = (2u*${ROWS}u)*n + rowE; gx0 = st[i*12u+4u]*U.dx0 + f32(atomicLoad(&ring[rx]))*(1.0/${SCALE}.0); atomicStore(&ring[rx], 0); I += select(gx0*U.ix0, abs(gx0)*(U.ex0 - v0), cnd); }
-    if(U.kx > 1u){ let rx = (3u*${ROWS}u)*n + rowE; gx1 = st[i*12u+5u]*U.dx1 + f32(atomicLoad(&ring[rx]))*(1.0/${SCALE}.0); atomicStore(&ring[rx], 0); I += select(gx1*U.ix1, abs(gx1)*(U.ex1 - v0), cnd); }
-    if(U.kx > 2u){ let rx = (4u*${ROWS}u)*n + rowE; gx2 = st[i*12u+6u]*U.dx2 + f32(atomicLoad(&ring[rx]))*(1.0/${SCALE}.0); atomicStore(&ring[rx], 0); I += select(gx2*U.ix2, abs(gx2)*(U.ex2 - v0), cnd); }
-    if(U.kx > 3u){ let rx = (5u*${ROWS}u)*n + rowE; gx3 = st[i*12u+7u]*U.dx3 + f32(atomicLoad(&ring[rx]))*(1.0/${SCALE}.0); atomicStore(&ring[rx], 0); I += select(gx3*U.ix3, abs(gx3)*(U.ex3 - v0), cnd); }
-    if(U.kx > 4u){ let rx = (6u*${ROWS}u)*n + rowE; gx4 = st[i*12u+8u]*U.dx4 + f32(atomicLoad(&ring[rx]))*(1.0/${SCALE}.0); atomicStore(&ring[rx], 0); I += select(gx4*U.ix4, abs(gx4)*(U.ex4 - v0), cnd); }
-    if(U.kx > 5u){ let rx = (7u*${ROWS}u)*n + rowE; gx5 = st[i*12u+9u]*U.dx5 + f32(atomicLoad(&ring[rx]))*(1.0/${SCALE}.0); atomicStore(&ring[rx], 0); I += select(gx5*U.ix5, abs(gx5)*(U.ex5 - v0), cnd); }
+    // Receptor channels 2 and up (MODEL.md 2): their own decay, their own ring rows.
+    // Each channel's current passes through its magnesium block, mgGate (MODEL.md 2); a gate of 0 mM lets everything through.
+    if(U.kx > 0u){ let rx = (2u*${ROWS}u)*n + rowE; gx0 = st[i*12u+4u]*U.dx0 + f32(atomicLoad(&ring[rx]))*(1.0/${SCALE}.0); atomicStore(&ring[rx], 0); I += mgGate(U.mg0, v0)*select(gx0*U.ix0, abs(gx0)*(U.ex0 - v0), cnd); }
+    if(U.kx > 1u){ let rx = (3u*${ROWS}u)*n + rowE; gx1 = st[i*12u+5u]*U.dx1 + f32(atomicLoad(&ring[rx]))*(1.0/${SCALE}.0); atomicStore(&ring[rx], 0); I += mgGate(U.mg1, v0)*select(gx1*U.ix1, abs(gx1)*(U.ex1 - v0), cnd); }
+    if(U.kx > 2u){ let rx = (4u*${ROWS}u)*n + rowE; gx2 = st[i*12u+6u]*U.dx2 + f32(atomicLoad(&ring[rx]))*(1.0/${SCALE}.0); atomicStore(&ring[rx], 0); I += mgGate(U.mg2, v0)*select(gx2*U.ix2, abs(gx2)*(U.ex2 - v0), cnd); }
+    if(U.kx > 3u){ let rx = (5u*${ROWS}u)*n + rowE; gx3 = st[i*12u+7u]*U.dx3 + f32(atomicLoad(&ring[rx]))*(1.0/${SCALE}.0); atomicStore(&ring[rx], 0); I += mgGate(U.mg3, v0)*select(gx3*U.ix3, abs(gx3)*(U.ex3 - v0), cnd); }
+    if(U.kx > 4u){ let rx = (6u*${ROWS}u)*n + rowE; gx4 = st[i*12u+8u]*U.dx4 + f32(atomicLoad(&ring[rx]))*(1.0/${SCALE}.0); atomicStore(&ring[rx], 0); I += mgGate(U.mg4, v0)*select(gx4*U.ix4, abs(gx4)*(U.ex4 - v0), cnd); }
+    if(U.kx > 5u){ let rx = (7u*${ROWS}u)*n + rowE; gx5 = st[i*12u+9u]*U.dx5 + f32(atomicLoad(&ring[rx]))*(1.0/${SCALE}.0); atomicStore(&ring[rx], 0); I += mgGate(U.mg5, v0)*select(gx5*U.ix5, abs(gx5)*(U.ex5 - v0), cnd); }
   } else {
     I += eIn + iIn + pin;
   }
@@ -192,14 +212,30 @@ fn clearCount(){ atomicStore(&spikes.count, 0u); }
 const SHADER_IND = STEP_STRUCT + `
 @group(0) @binding(0) var<storage, read_write> spikes: Spikes;
 @group(0) @binding(1) var<storage, read_write> ind: array<u32>;
+@group(0) @binding(2) var<storage, read_write> arrivals: Arrivals;
 @compute @workgroup_size(1)
 fn writeIndirect(){
   ind[0] = (atomicLoad(&spikes.count) + ${DWG - 1}u) / ${DWG}u;
   ind[1] = 1u; ind[2] = 1u;
+  ind[3] = (atomicLoad(&arrivals.count) + ${DWG - 1}u) / ${DWG}u;
+  ind[4] = 1u; ind[5] = 1u;
 }
 `;
+// the arrival list is consumed once per step and cleared after its pass
+const SHADER_CLEAR_ARR = STEP_STRUCT + `
+@group(0) @binding(0) var<storage, read_write> arrivals: Arrivals;
+@compute @workgroup_size(1)
+fn clearArrivals(){ atomicStore(&arrivals.count, 0u); }
+`;
 
-const SHADER_DELIVER = STEP_STRUCT + `
+// Short-term plasticity per rule, as classes (stpClassTable in nodes.js): per class U, the two decays and the release scale, its on flag, and the class of each of the 16 rule rows.
+// A uniform, since the delivery pass is at the eight storage buffers WebGPU guarantees.
+const STP_STRUCT = `
+struct StpClasses { par: array<vec4<f32>, 16>, on: array<vec4<u32>, 4>, cls: array<vec4<u32>, 4>, count: vec4<u32> };
+`;
+const STP_CLASS_BYTES = 400;
+
+const SHADER_DELIVER = STEP_STRUCT + STP_STRUCT + `
 struct Part { n0:u32, n1:u32, base:u32, pad:u32 };
 @group(0) @binding(0) var<uniform> U: Step;
 @group(0) @binding(1) var<uniform> P: Part;
@@ -213,6 +249,7 @@ struct Part { n0:u32, n1:u32, base:u32, pad:u32 };
 @group(0) @binding(8) var<storage, read_write> stpR: array<f32>;
 // the plasticity bytes, packed four to a word: the top three bits of each are the synapse's receptor channel (0: by sign into E or I)
 @group(0) @binding(9) var<storage, read> rid: array<u32>;
+@group(0) @binding(10) var<uniform> SC: StpClasses;
 
 @compute @workgroup_size(${DWG})
 fn deliver(@builtin(global_invocation_id) gid: vec3<u32>){
@@ -232,22 +269,52 @@ fn deliver(@builtin(global_invocation_id) gid: vec3<u32>){
   var sf = 1.0;
   if(ab != 255u){
     sf = f32(ab)/254.0;                      // a graded release: no short-term plasticity
-  } else if(U.stpOn == 1u){
+  } else if(U.stpOn == 1u && SC.count.x <= 1u){
     if(U.stpOrder == 1u){ stpR[i] = stpR[i] + U.stpU*(1.0 - stpR[i]); }   // stpOrder 1: facilitation before release
     let rel = stpR[i]*stpX[i];
     stpX[i] = stpX[i] - rel;                 // depletion
     if(U.stpOrder == 0u){ stpR[i] = stpR[i] + U.stpU*(1.0 - stpR[i]); }   // as published: facilitation after release
     sf = rel*U.stpScale;
   }
+  // With more than one class, each class releases from its own state at [c*n + i], and a synapse takes its rule's class.
+  let C = SC.count.x;
+  var rel: array<f32, 16>;
+  let multi = ab == 255u && U.stpOn == 1u && C > 1u;
+  if(multi){
+    for(var c = 0u; c < C; c++){
+      var f = 1.0;
+      if(SC.on[c >> 2u][c & 3u] != 0u){
+        let k = c*n + i;
+        let Uc = SC.par[c].x;
+        if(U.stpOrder == 1u){ stpR[k] = stpR[k] + Uc*(1.0 - stpR[k]); }
+        let r = stpR[k]*stpX[k];
+        stpX[k] = stpX[k] - r;
+        if(U.stpOrder == 0u){ stpR[k] = stpR[k] + Uc*(1.0 - stpR[k]); }
+        f = r*SC.par[c].w;
+      }
+      rel[c] = f;
+    }
+  }
+  // stpScope confines a spike's release to one sign of weight; a graded release is not short-term plasticity and applies to every synapse
+  let spike = ab == 255u;
+  var sfE = select(sf, 1.0, spike && U.stpScope == 2u);
+  var sfI = select(sf, 1.0, spike && U.stpScope == 1u);
   for(var s = s0; s < s1; s++){
     let pd = postd[s];
     let j = pd & 0x7ffffffu;
     let d = pd >> 27u;
     let row = (U.cur + d) % ${ROWS}u;
+    let byte = (rid[s >> 2u] >> ((s & 3u) * 8u)) & 0xffu;
+    if(multi){
+      let r5 = byte & 31u;
+      let f = rel[SC.cls[r5 >> 2u][r5 & 3u]];
+      sfE = select(f, 1.0, U.stpScope == 2u);
+      sfI = select(f, 1.0, U.stpScope == 1u);
+    }
     // Route on the stored weight, not the scaled one: the release factor is never negative but can be zero, and a zero must not be read as inhibitory.
     let w0 = wgt[s];
-    let fx = i32(round(w0 * sf * ${SCALE}.0));
-    let ch = ((rid[s >> 2u] >> ((s & 3u) * 8u)) & 0xffu) >> 5u;
+    let fx = i32(round(w0 * select(sfI, sfE, w0 > 0.0) * ${SCALE}.0));
+    let ch = byte >> 5u;
     if(ch >= 2u){ atomicAdd(&ring[ch*${ROWS}u*n + row*n + j], fx); }
     else if(w0 > 0.0){ atomicAdd(&ring[row*n + j], fx); }
     else { atomicAdd(&ring[${ROWS}u*n + row*n + j], fx); }
@@ -318,6 +385,61 @@ fn plastOut(@builtin(global_invocation_id) gid: vec3<u32>){
 }
 `;
 
+// The pair rule timed at the synapse (stdpAt 1): the outgoing half runs when a spike arrives, d steps after it was fired, against Kpost as it stands at the start of that step.
+// The decay pass lists each cell whose history meets the delays its synapses carry, with the history; here every synapse whose delay bit is set in that history is depressed.
+// The same bindings as the pass at the soma, the list in place of the spikes.
+const SHADER_PLAST_ARRIVE = STEP_STRUCT + `
+struct Part { n0:u32, n1:u32, base:u32, sEnd:u32 };
+@group(0) @binding(0) var<uniform> U: Step;
+@group(0) @binding(1) var<uniform> P: Part;
+@group(0) @binding(2) var<storage, read_write> arrivals: Arrivals;
+@group(0) @binding(3) var<storage, read> preStart: array<u32>;
+@group(0) @binding(4) var<storage, read> postd: array<u32>;
+@group(0) @binding(5) var<storage, read_write> wgt: array<f32>;
+@group(0) @binding(6) var<storage, read> Kpost: array<f32>;
+@group(0) @binding(7) var<storage, read> rid: array<u32>;
+@group(0) @binding(8) var<storage, read> alphaI: array<f32>;
+@group(0) @binding(9) var<storage, read> wRef: array<f32>;
+@group(0) @binding(10) var<uniform> RT: Rules;
+struct Rule { aP:f32, aM:f32, wmax:f32, wdep:f32,
+  trip:f32, het:f32, tin:f32, iEta:f32,
+  cons:f32, consW:f32, consP:f32, pad:f32 };
+struct Rules { r: array<Rule, 16> };
+fn softBound(wv: f32, delta: f32, wmax: f32, on: f32) -> f32 {
+  let a = abs(wv);
+  let away = (delta < 0.0) == (wv < 0.0);
+  let room = select(a/wmax, (wmax - a)/wmax, away);
+  return delta * mix(1.0, max(0.0, room), on);
+}
+@compute @workgroup_size(${DWG})
+fn plastArrive(@builtin(global_invocation_id) gid: vec3<u32>){
+  let k = gid.x;
+  if(k >= atomicLoad(&arrivals.count)){ return; }
+  let e = arrivals.list[k];
+  let i = e.x;
+  let h = e.y;
+  if(i < P.n0 || i >= P.n1){ return; }
+  let s0 = preStart[i] - P.base;
+  let s1 = preStart[i+1u] - P.base;
+  for(var s = s0; s < s1; s++){
+    let pd = postd[s];
+    if(((h >> (pd >> 27u)) & 1u) == 0u){ continue; }   // no spike of this cell arrives through this synapse now
+    let ri = (rid[s >> 2u] >> ((s & 3u) * 8u)) & 0x1fu;
+    if(ri == 0u){ continue; }
+    let R = RT.r[ri];
+    if(U.commit > 0.5 && R.consW > 0.0 && wRef[s] >= R.consW*0.9){ continue; }
+    let wj = wgt[s];
+    let j = pd & 0x7ffffffu;
+    if(wj > 0.0){ wgt[s] = min(R.wmax,
+      max(1e-4, wj - R.aM*Kpost[j]*mix(1.0, wj, R.wdep) + R.tin)); }
+    else {
+      let d = softBound(wj, -R.iEta*(Kpost[j] - alphaI[j]), R.wmax, R.wdep);
+      wgt[s] = max(-R.wmax, min(-1e-4, wj + d));
+    }
+  }
+}
+`;
+
 const SHADER_PLAST_IN = STEP_STRUCT + `
 struct Part { n0:u32, n1:u32, base:u32, sEnd:u32 };
 @group(0) @binding(0) var<uniform> U: Step;
@@ -327,7 +449,7 @@ struct Part { n0:u32, n1:u32, base:u32, sEnd:u32 };
 @group(0) @binding(4) var<storage, read> revSyn: array<u32>;
 @group(0) @binding(5) var<storage, read> revPre: array<u32>;
 @group(0) @binding(6) var<storage, read_write> wgt: array<f32>;
-// Kpre and the slow trace interleaved, two floats per neuron: [i*2] is the fast presynaptic trace, [i*2+1] the slow postsynaptic one for the triplet term.
+// Kpre, the slow trace, the cell's alpha and its spike history interleaved, four floats per neuron: [i*4] is the fast presynaptic trace, [i*4+1] the slow postsynaptic one for the triplet term, [i*4+2] the alpha the gate's set point is read from, [i*4+3] the history as an integer in a float (bit k for a spike k steps ago).
 // They share a binding because this pass is at the eight storage buffers WebGPU guarantees and the heterosynaptic reference weight needs one.
 // Kpost is not in here: it is the hot read in the outgoing pass, which has a slot free, so it stays a plain array.
 // The slow trace is read before the bump pass adds this spike, so potentiation is scaled by the postsynaptic history and not by the present spike, matching the reference.
@@ -358,11 +480,13 @@ fn plastIn(@builtin(global_invocation_id) gid: vec3<u32>){
   let e = spikes.list[k];
   if((e >> 24u) != 255u){ return; }            // a graded release is not a spike
   let i = e & 0xffffffu;
-  let z = ktr[i*2u + 1u];
+  let z = ktr[i*4u + 1u];
   // The gate is the slow trace against its value at the target rate, cubed, so competition engages when the neuron fires above its set point.
   // The pull fraction saturates at one: a synapse can return fully to its reference in one step but never overshoot it.
   // The gate is built from this neuron's trace and its set point, so it is shared; only the amplitude multiplying it is per rule.
-  let g = z/U.kRef;
+  // Under measured set points (kRefA above zero) the set point is the cell's own, recovered from its alpha in the interleave's third lane.
+  let kr = select(U.kRef, max(1e-6, ktr[i*4u + 2u]*U.kRefA), U.kRefA > 0.0);
+  let g = z/kr;
   let gate = g*g*g;
   for(var r = inStart[i]; r < inStart[i+1u]; r++){
     let s = revSyn[r];
@@ -372,7 +496,17 @@ fn plastIn(@builtin(global_invocation_id) gid: vec3<u32>){
     if(ri == 0u){ continue; }
     let R = RT.r[ri];
     if(U.commit > 0.5 && R.consW > 0.0 && wRef[sl] >= R.consW*0.9){ continue; }
-    let kp = ktr[revPre[r]*2u];
+    // the presynaptic cell and the synapse's delay, packed in revPre
+    let p = revPre[r] & 0x7ffffffu;
+    var kp = ktr[p*4u];
+    if(U.stdpAt == 1u){
+      // timed at the synapse: the pre trace as it was d steps ago, the spikes of the last d - 1 steps taken out and the rest brought forward by e^(d/tau+)
+      let d = revPre[r] >> 27u;
+      let hp = u32(ktr[p*4u + 3u]);
+      var sub = 0.0;
+      for(var q = 1u; q < d; q++){ if(((hp >> q) & 1u) != 0u){ sub = sub + U.ek[q >> 2u][q & 3u]; } }
+      kp = max(0.0, U.exd[d >> 2u][d & 3u]*(kp - sub));
+    }
     let wp = wgt[sl];
     if(wp > 0.0){
       // one clamp on the combined result, and the pull reads the weight from before this step's potentiation, both as the reference does
@@ -464,38 +598,56 @@ fn bump(@builtin(global_invocation_id) gid: vec3<u32>){
   let e = spikes.list[k];
   if((e >> 24u) != 255u){ return; }            // a graded release is not a spike
   let i = e & 0xffffffu;
-  ktr[i*2u] = ktr[i*2u] + 1.0;
+  ktr[i*4u] = ktr[i*4u] + 1.0;
   Kpost[i] = Kpost[i] + 1.0;
-  ktr[i*2u + 1u] = ktr[i*2u + 1u] + 1.0;
+  ktr[i*4u + 1u] = ktr[i*4u + 1u] + 1.0;
+  ktr[i*4u + 3u] = ktr[i*4u + 3u] + 1.0;    // this step's spike, bit 0 of the history (clear since the shift)
 }
 `;
 
 // Per-millisecond recovery of both short-term plasticity variables.
 // Exact exponentials rather than Euler, matching the reference, so the time constants hold whatever the step size.
-const SHADER_STP = STEP_STRUCT + `
+// One thread per cell and class, the class from the index (the state is at [c*n + i]); a class that is off is left alone.
+const SHADER_STP = STEP_STRUCT + STP_STRUCT + `
 @group(0) @binding(0) var<uniform> U: Step;
 @group(0) @binding(1) var<storage, read_write> stpX: array<f32>;
 @group(0) @binding(2) var<storage, read_write> stpR: array<f32>;
+@group(0) @binding(3) var<uniform> SC: StpClasses;
 @compute @workgroup_size(${WG})
 fn stpRecover(@builtin(global_invocation_id) gid: vec3<u32>){
-  let i = gid.x;
-  if(i >= U.n){ return; }
-  stpX[i] = 1.0 - (1.0 - stpX[i])*U.decX;
-  stpR[i] = U.stpU + (stpR[i] - U.stpU)*U.decR;
+  let k = gid.x;
+  let c = k / U.n;
+  if(c >= max(SC.count.x, 1u)){ return; }
+  if(SC.on[c >> 2u][c & 3u] == 0u){ return; }
+  let p = SC.par[c];
+  stpX[k] = 1.0 - (1.0 - stpX[k])*p.y;
+  stpR[k] = p.x + (stpR[k] - p.x)*p.z;
 }
 `;
 
+// The third lane of the interleave carries each cell's Vogels alpha, copied from alphaI here every step: the incoming pass reads the interleave and has no binding to spare, and from alpha it recovers the cell's own set point for the heterosynaptic gate (MODEL.md 4).
+// The fourth lane is the spike history, moved on here; a cell whose history meets the delays its synapses carry (dmask, bit d for a delay of d) has a spike arriving next step and is listed for the arrival pass when the rule is timed at the synapse.
 const SHADER_DECAY = STEP_STRUCT + `
 @group(0) @binding(0) var<uniform> U: Step;
 @group(0) @binding(1) var<storage, read_write> ktr: array<f32>;
 @group(0) @binding(2) var<storage, read_write> Kpost: array<f32>;
+@group(0) @binding(3) var<storage, read> alphaI: array<f32>;
+@group(0) @binding(4) var<storage, read> dmask: array<u32>;
+@group(0) @binding(5) var<storage, read_write> arrivals: Arrivals;
 @compute @workgroup_size(${WG})
 fn decay(@builtin(global_invocation_id) gid: vec3<u32>){
   let i = gid.x;
   if(i >= U.n){ return; }
-  ktr[i*2u] = ktr[i*2u] * U.decS;
+  ktr[i*4u] = ktr[i*4u] * U.decS;
   Kpost[i] = Kpost[i] * U.decM;
-  ktr[i*2u + 1u] = ktr[i*2u + 1u] * U.decY;
+  ktr[i*4u + 1u] = ktr[i*4u + 1u] * U.decY;
+  ktr[i*4u + 2u] = alphaI[i];
+  let h = (u32(ktr[i*4u + 3u]) << 1u) & 0x1ffffu;
+  ktr[i*4u + 3u] = f32(h);
+  if(U.stdpAt == 1u && (h & dmask[i]) != 0u){
+    let k = atomicAdd(&arrivals.count, 1u);
+    arrivals.list[k] = vec2<u32>(i, h);
+  }
 }
 `;
 
@@ -518,13 +670,17 @@ function updateDrive(){
     if(s !== p._s){ p._s = s; changed = true; }
   }
   if(!changed && S.driveValid && !S.extDirty) return false;
-  const d = S.driveHost, n = S.n, bias = S.bias;
-  for(let i=0;i<n;i++){ d[i*2] = bias[i]; d[i*2+1] = 0; }
+  // six lanes per cell: the DC drive, the noise amplitude, then the noise stimulus's decay, its complement, its shared fraction and its index (src/noisefold.js), the same floats the other engines fold
+  const d = S.driveHost, n = S.n, bias = S.bias, F = S.noise;
+  for(let i=0;i<n;i++){
+    d[i*6] = bias[i]; d[i*6+1] = 0;
+    d[i*6+2] = F ? F.a[i] : 0; d[i*6+3] = F ? F.k[i] : 0; d[i*6+4] = F ? F.c[i] : 0; d[i*6+5] = F && F.id[i] >= 0 ? F.id[i] : 0;
+  }
   for(const p of S.allProtos){
     if(!p._s) continue;
     // gain: the stimulus's per-cell multiplier (spread), as the other two engines read it
     const k = p.amp * p._s, off = p.mode === 3 ? 1 : 0, idx = p.idx, g = p.gain;
-    for(let q=0;q<idx.length;q++) d[idx[q]*2 + off] += g ? k*g[q] : k;
+    for(let q=0;q<idx.length;q++) d[idx[q]*6 + off] += g ? k*g[q] : k;
   }
   // framed input maps fold into the DC half of the drive array
   for(const im of (S.inputs || [])){
@@ -533,7 +689,7 @@ function updateDrive(){
     for(let c=0;c<NC;c++){
       const g = gains[c] * amp;
       if(!g) continue;
-      for(let k=chStart[c];k<chStart[c+1];k++) d[chIdx[k]*2] += g * chW[k];
+      for(let k=chStart[c];k<chStart[c+1];k++) d[chIdx[k]*6] += g * chW[k];
     }
   }
   S.extDirty = false;
@@ -548,6 +704,9 @@ function configure(m){
   S.eRevI = Number.isFinite(+m.eRevI) ? +m.eRevI : -70;
   if(Array.isArray(m.chanErev) || ArrayBuffer.isView(m.chanErev)) S.chanErev = Array.from(m.chanErev);
   if(!S.chanErev) S.chanErev = [];
+  // the magnesium block per channel, mM; 0 is no gate (MODEL.md 2)
+  if(Array.isArray(m.chanMg) || ArrayBuffer.isView(m.chanMg)) S.chanMg = Array.from(m.chanMg, x => x > 0 ? +x : 0);
+  if(!S.chanMg) S.chanMg = [];
   const tE = m.tauE > 0 ? m.tauE : 3, tI = m.tauI > 0 ? m.tauI : 8;
   S.decE = Math.exp(-1/tE); S.decI = Math.exp(-1/tI);
   // psc 0: peak current (NEST, Brian); psc 1: total charge; psc 2: the exact integral over the step, tau (1 - dec), matching the reference engine's configure (itauOf there)
@@ -555,6 +714,7 @@ function configure(m){
   const itauOf = (dec, tau) => S.psc === 2 ? tau*(1 - dec) : S.psc === 1 ? 1 - dec : 1;
   S.itauE = itauOf(S.decE, tE); S.itauI = itauOf(S.decI, tI);
   S.allProtos = (m.protocols || []).map(p => ({ ...p, _s:-1 }));
+  S.noise = foldNoise(S.allProtos, S.n);   // a noise stimulus's memory and shared part per cell, or null for the white draw (refuses conflicting stimuli)
   S.driveValid = false;
   if(m.inputs !== undefined){
     S.inputs = (m.inputs || []).map(im => ({ ...im,
@@ -589,15 +749,41 @@ function configure(m){
   S.stp = m.stp > 0 ? 1 : 0;
   S.stpU = m.stpU > 0 ? +m.stpU : 0.2;
   S.stpOrder = (m.stpOrder|0) === 1 ? 1 : 0;
+  S.stpScope = (m.stpScope|0) & 3;           // the release on every synapse (0), excitatory only (1) or inhibitory only (2)
+  // where the pair rule is timed (MODEL.md 4): 0 at the soma, 1 at the synapse, with the tables the reference engine uses
+  S.stdpAt = (m.stdpAt|0) === 1 ? 1 : 0;
   S.stpScale = (m.stpNorm|0) === 1 ? 1/(S.stpOrder ? S.stpU*(2 - S.stpU) : S.stpU) : 1;
   S.decX = Math.exp(-1/(m.stpTauD > 0 ? +m.stpTauD : 200));
   S.decR = Math.exp(-1/(m.stpTauF > 0 ? +m.stpTauF : 600));
+  // The class table (stpClassTable in nodes.js), as the uniform the delivery and recovery passes read; a network without it is one class, the checkpoint's.
+  {
+    const tbl = m.stpTable && m.stpClasses >= 1 ? m.stpTable
+      : [m.stp > 0 ? 1 : 0, m.stpU > 0 ? +m.stpU : 0.2, m.stpTauD > 0 ? +m.stpTauD : 200, m.stpTauF > 0 ? +m.stpTauF : 600];
+    const C = Math.max(1, Math.min(16, (tbl.length/4)|0));
+    const buf = new ArrayBuffer(STP_CLASS_BYTES), f = new Float32Array(buf), u = new Uint32Array(buf);
+    let any = 0;
+    for(let c = 0; c < C; c++){
+      const U = tbl[c*4 + 1] > 0 ? +tbl[c*4 + 1] : 0.2;
+      f[c*4] = U;
+      f[c*4 + 1] = Math.exp(-1/(tbl[c*4 + 2] > 0 ? +tbl[c*4 + 2] : 200));
+      f[c*4 + 2] = Math.exp(-1/(tbl[c*4 + 3] > 0 ? +tbl[c*4 + 3] : 600));
+      f[c*4 + 3] = (m.stpNorm|0) === 1 ? 1/(S.stpOrder ? U*(2 - U) : U) : 1;
+      u[64 + c] = tbl[c*4] > 0 ? 1 : 0; any |= u[64 + c];
+    }
+    const cls = m.stpCls || [];
+    for(let r = 0; r < 16; r++) u[80 + r] = cls[r] | 0;
+    u[96] = C;
+    // the state is per class: a change in the number of classes starts it again, as the reference engine reallocates it
+    if(S.stpC !== undefined && S.stpC !== C) S.stpSeed = true;
+    S.stpC = C; S.stpClassBuf = buf; S.stpClassDirty = true;
+    S.stp = any ? 1 : 0;
+  }
   // Triplet potentiation (Pfister and Gerstner 2006) and the transmitter drip.
   // Both ride on state the engine already keeps: tin is a constant in the outgoing pass, trip needs one more per-neuron trace.
   S.trip = m.trip > 0 ? +m.trip : 0;
   S.tin = m.tin > 0 ? +m.tin : 0;
   const tauY = m.tauY > 0 ? +m.tauY : 114;
-  S.decY = Math.exp(-1/tauY);
+  S.decY = Math.exp(-1/tauY); S.tauY = tauY;
   // Heterosynaptic competition and consolidation.
   // The gate is dimensionless, the slow trace against its value at the target rate, so het keeps one scale across targets and trace constants.
   // Both read the same per-synapse reference weight.
@@ -641,6 +827,8 @@ function configure(m){
   S.rhoMode = (m.rhoMode|0) === 1 ? 1 : 0;
   S.calMs = (m.calS > 0 ? m.calS : 10) * 1000;
   S.tauSv = tauS; S.tauMv = tauM;
+  S.ekS = Float32Array.from({ length:17 }, (_, k) => Math.exp(-k/tauS));
+  S.exdS = Float32Array.from({ length:17 }, (_, d) => Math.exp(d/tauS));
   if(S.plast && S.rhoMode === 1 && !S.rhoI){
     S.calibrating = true; S.calStart = S.t;
     if(S.spkAcc) S.spkAcc.fill(0);
@@ -730,6 +918,11 @@ function rebuildWRefGroups(){
     e(0, S.bufStep, { size:USIZE }), e(1, p.uni), e(2, S.bufSpikes),
     e(3, S.bufPre), e(4, p.postd), e(5, p.wgt), e(6, S.bufKpost), e(7, p.pm),
     e(8, S.bufAlpha), e(9, p.wRef || S.bufWRefNull), e(10, S.bufRules) ] }));
+  // the arrival pass binds the same, with the arrival list in place of the spikes
+  if(S.bglOut) S.bgPlastArrive = S.parts.map(p => device.createBindGroup({ layout:S.bglOut, entries:[
+    e(0, S.bufStep, { size:USIZE }), e(1, p.uni), e(2, S.bufArr),
+    e(3, S.bufPre), e(4, p.postd), e(5, p.wgt), e(6, S.bufKpost), e(7, p.pm),
+    e(8, S.bufAlpha), e(9, p.wRef || S.bufWRefNull), e(10, S.bufRules) ] }));
   S.bgPlastIn = S.parts.map(p => device.createBindGroup({ layout:S.bglIn, entries:[
     e(0, S.bufStep, { size:USIZE }), e(1, p.uni), e(2, S.bufSpikes),
     e(3, S.bufInStart), e(4, S.bufRevSyn), e(5, S.bufRevPre),
@@ -751,10 +944,13 @@ function ensurePlast(){
   for(let i=0;i<n;i++) inStart[i+1] += inStart[i];
   const cur = new Uint32Array(n),
         revSyn = new Uint32Array(m2), revPre = new Uint32Array(m2);
+  // the delay rides in the top five bits of revPre, as it does in postd, so the incoming pass at the synapse reads it with the presynaptic cell and binds nothing more
+  const dmask = new Uint32Array(n);
   for(let i=0;i<n;i++)
     for(let s=preStart[i]; s<preStart[i+1]; s++){
       const at = inStart[post[s]] + cur[post[s]]++;
-      revSyn[at] = s; revPre[at] = i;
+      revSyn[at] = s; revPre[at] = i | (S.delay[s] << 27);
+      dmask[i] |= 1 << S.delay[s];
     }
   const ST = GPUBufferUsage.STORAGE;
   const up = (usage, arr) => { const b = device.createBuffer({
@@ -763,6 +959,7 @@ function ensurePlast(){
   S.bufInStart = up(ST, inStart);
   S.bufRevSyn = up(ST, revSyn);
   S.bufRevPre = up(ST, revPre);
+  S.bufDmask = up(ST, dmask);
 
   const C = GPUShaderStage.COMPUTE;
   const sb = (binding, type) => ({ binding, visibility:C, buffer:{ type } });
@@ -795,12 +992,16 @@ function ensurePlast(){
   const bglBump = device.createBindGroupLayout({ entries:[
     sb(0,'storage'), sb(1,'storage'), sb(2,'storage') ] });
   const bglDecay = device.createBindGroupLayout({ entries:[ dynU,
-    sb(1,'storage'), sb(2,'storage') ] });
+    sb(1,'storage'), sb(2,'storage'), sb(3,'read-only-storage'), sb(4,'read-only-storage'), sb(5,'storage') ] });
+  const bglClearArr = device.createBindGroupLayout({ entries:[ sb(0,'storage') ] });
   const mkPipe = (code, entry, bgl) => device.createComputePipeline({
     layout: device.createPipelineLayout({ bindGroupLayouts:[bgl] }),
     compute:{ module: device.createShaderModule({ code }), entryPoint: entry } });
   S.pPlastOut = mkPipe(SHADER_PLAST_OUT, 'plastOut', bglOut);
+  S.pPlastArrive = mkPipe(SHADER_PLAST_ARRIVE, 'plastArrive', bglOut);
   S.pPlastIn = mkPipe(SHADER_PLAST_IN, 'plastIn', bglIn);
+  S.pClearArr = mkPipe(SHADER_CLEAR_ARR, 'clearArrivals', bglClearArr);
+  S.bgClearArr = device.createBindGroup({ layout:bglClearArr, entries:[ { binding:0, resource:{ buffer:S.bufArr } } ] });
   S.pBump = mkPipe(SHADER_BUMP, 'bump', bglBump);
   S.pDecay = mkPipe(SHADER_DECAY, 'decay', bglDecay);
   S.pScale = mkPipe(SHADER_SCALE, 'scalePass', bglScale);
@@ -828,7 +1029,7 @@ function ensurePlast(){
   S.bgBump = device.createBindGroup({ layout:bglBump, entries:[
     e(0, S.bufSpikes), e(1, S.bufKtr), e(2, S.bufKpost) ] });
   S.bgDecay = device.createBindGroup({ layout:bglDecay, entries:[
-    e(0, S.bufStep, { size:USIZE }), e(1, S.bufKtr), e(2, S.bufKpost) ] });
+    e(0, S.bufStep, { size:USIZE }), e(1, S.bufKtr), e(2, S.bufKpost), e(3, S.bufAlpha), e(4, S.bufDmask), e(5, S.bufArr) ] });
   S.revReady = true;
 }
 
@@ -871,7 +1072,7 @@ async function init(m){
   // CPU copies kept for query and getWeights
   S = { n, device, t:0, cur:0, watch:-1, seed:(m.seed>>>0) || 1,
         preStart:m.preStart, post:m.post, w:m.w, delay:m.delay,
-        bias:m.bias, driveHost:new Float32Array(2*n), driveValid:false,
+        bias:m.bias, driveHost:new Float32Array(6*n), driveValid:false,
         zeroN:new Uint32Array(n), zero1:new Uint32Array(1) };
   configure(m);
 
@@ -883,7 +1084,7 @@ async function init(m){
 
   S.bufAbcd = up(ST, abcd);
   S.bufState = up(ST | GPUBufferUsage.COPY_SRC, st);
-  S.bufDrive = B(ST | GPUBufferUsage.COPY_DST, 2*n*4);
+  S.bufDrive = B(ST | GPUBufferUsage.COPY_DST, 6*n*4);
   S.bufRing = B(ST | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, (2 + S.KX)*ROWS*n*4);   // E, I, then a row set per receptor channel
   S.bufSpikes = B(ST | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, (2+n)*4);
   S.bufFired = B(ST | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC, n*4);
@@ -901,13 +1102,16 @@ async function init(m){
   S.bufRefcnt = up(ST | GPUBufferUsage.COPY_DST, rcInit);
   // Always allocated, even with the term off, so the delivery bind group is built once and never rebuilt on a tune.
   // Two floats per neuron is nothing beside the synapse arrays.
-  S.bufStpX = B(ST | GPUBufferUsage.COPY_DST, n*4);
-  S.bufStpR = B(ST | GPUBufferUsage.COPY_DST, n*4);
+  // Sized for every class the table can hold (16), so a tune that adds a class needs no new buffer: 128 bytes a cell.
+  S.bufStpX = B(ST | GPUBufferUsage.COPY_DST, n*16*4);
+  S.bufStpR = B(ST | GPUBufferUsage.COPY_DST, n*16*4);
+  S.bufStpC = B(GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST, STP_CLASS_BYTES);
   S.stpSeed = true;
-  S.bufInd = B(ST | GPUBufferUsage.INDIRECT, 12);
-  S.bufKtr = B(ST | GPUBufferUsage.COPY_DST, n*8);   // Kpre, Kslow interleaved
+  S.bufInd = B(ST | GPUBufferUsage.INDIRECT, 24);   // two dispatch sizes: the spikes, then the arrivals
+  S.bufKtr = B(ST | GPUBufferUsage.COPY_DST, n*16);  // Kpre, Kslow, the cell's alpha and its spike history interleaved
   S.bufKpost = B(ST | GPUBufferUsage.COPY_DST, n*4);
-  device.queue.writeBuffer(S.bufKtr, 0, new Float32Array(2*n));
+  device.queue.writeBuffer(S.bufKtr, 0, new Float32Array(4*n));
+  S.bufArr = B(ST | GPUBufferUsage.COPY_DST, 8 + n*8);   // the arrival list: a count, then (cell, history) pairs
   device.queue.writeBuffer(S.bufKpost, 0, new Float32Array(n));
   S.bufStep = device.createBuffer({ size: MAX_BATCH*SLOT,
     usage: GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST });
@@ -957,16 +1161,18 @@ async function init(m){
   const bglPool = device.createBindGroupLayout({ entries:[
     { binding:0, visibility:C, buffer:{ type:'uniform', hasDynamicOffset:true, minBindingSize:USIZE } },
     sb(1,'storage') ] });
-  const bglInd = device.createBindGroupLayout({ entries:[ sb(0,'storage'), sb(1,'storage') ] });
+  const bglInd = device.createBindGroupLayout({ entries:[ sb(0,'storage'), sb(1,'storage'), sb(2,'storage') ] });
   const bglDeliver = device.createBindGroupLayout({ entries:[
     { binding:0, visibility:C, buffer:{ type:'uniform', hasDynamicOffset:true, minBindingSize:USIZE } },
     { binding:1, visibility:C, buffer:{ type:'uniform' } },
     sb(2,'storage'), sb(3,'storage'),
     sb(4,'read-only-storage'), sb(5,'read-only-storage'), sb(6,'read-only-storage'),
-    sb(7,'storage'), sb(8,'storage'), sb(9,'read-only-storage') ] });
+    sb(7,'storage'), sb(8,'storage'), sb(9,'read-only-storage'),
+    { binding:10, visibility:C, buffer:{ type:'uniform' } } ] });
   const bglStp = device.createBindGroupLayout({ entries:[
     { binding:0, visibility:C, buffer:{ type:'uniform', hasDynamicOffset:true, minBindingSize:USIZE } },
-    sb(1,'storage'), sb(2,'storage') ] });
+    sb(1,'storage'), sb(2,'storage'),
+    { binding:3, visibility:C, buffer:{ type:'uniform' } } ] });
 
   const mkPipe = (code, entry, bgl) => device.createComputePipeline({
     layout: device.createPipelineLayout({ bindGroupLayouts:[bgl] }),
@@ -988,14 +1194,14 @@ async function init(m){
   S.bgPool = device.createBindGroup({ layout:bglPool, entries:[
     e(0, S.bufStep, { size:USIZE }), e(1, S.bufRefcnt) ] });
   S.bgInd = device.createBindGroup({ layout:bglInd, entries:[
-    e(0, S.bufSpikes), e(1, S.bufInd) ] });
+    e(0, S.bufSpikes), e(1, S.bufInd), e(2, S.bufArr) ] });
   S.bgDeliver = S.parts.map(p => device.createBindGroup({ layout:bglDeliver, entries:[
     e(0, S.bufStep, { size:USIZE }),
     e(1, p.uni), e(2, S.bufSpikes), e(3, S.bufRing),
     e(4, S.bufPre), e(5, p.postd), e(6, p.wgt),
-    e(7, S.bufStpX), e(8, S.bufStpR), e(9, p.pm) ] }));
+    e(7, S.bufStpX), e(8, S.bufStpR), e(9, p.pm), e(10, S.bufStpC) ] }));
   S.bgStp = device.createBindGroup({ layout:bglStp, entries:[
-    e(0, S.bufStep, { size:USIZE }), e(1, S.bufStpX), e(2, S.bufStpR) ] });
+    e(0, S.bufStep, { size:USIZE }), e(1, S.bufStpX), e(2, S.bufStpR), e(3, S.bufStpC) ] });
 
   // readback staging (reused; ticks are strictly serialized)
   S.stFired = B(GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ, n*4);
@@ -1041,9 +1247,14 @@ function encodeSteps(count, slotBase){
     S.stepF32[36] = S.vmin;
     S.stepU32[37] = S.stpOrder ? 1 : 0;
     S.stepU32[38] = S.KX || 0;
+    S.stepF32[39] = S.rhoI ? S.tauY/(S.tauSv + S.tauMv) : 0;   // the per-cell set point in the gate, once calibration has measured them
     for(let x = 0; x < 6; x++){ S.stepF32[40 + x] = S.chanDec && x < S.chanDec.length ? S.chanDec[x] : 0; S.stepF32[46 + x] = S.chanItau && x < S.chanItau.length ? S.chanItau[x] : 0; }
     S.stepF32[52] = S.eRevE; S.stepF32[53] = S.eRevI;
     for(let x = 0; x < 6; x++) S.stepF32[54 + x] = S.chanErev && x < S.chanErev.length ? S.chanErev[x] : 0;
+    for(let x = 0; x < 6; x++) S.stepF32[60 + x] = S.chanMg && x < S.chanMg.length ? S.chanMg[x] : 0;
+    S.stepU32[66] = S.stp ? (S.stpScope || 0) : 0;
+    S.stepU32[67] = S.plast && S.stdpAt ? 1 : 0;
+    for(let q = 0; q < 17; q++){ S.stepF32[68 + q] = S.ekS ? S.ekS[q] : 0; S.stepF32[88 + q] = S.exdS ? S.exdS[q] : 0; }
     device.queue.writeBuffer(S.bufStep, k*SLOT, S.stepHost);
   }
   const enc = device.createCommandEncoder();
@@ -1061,6 +1272,19 @@ function encodeSteps(count, slotBase){
     }
     pass.setPipeline(S.pInd); pass.setBindGroup(0, S.bgInd);
     pass.dispatchWorkgroups(1);
+    // at the synapse, the spikes arriving this step depress their synapses before delivery and before the step's own passes, as the reference does at the start of its step; the list is cleared once walked
+    if(S.plast && S.revReady){
+      if(S.stdpAt && !S.calibrating){
+        S.weightsDirty = true;
+        pass.setPipeline(S.pPlastArrive);
+        for(const bg of S.bgPlastArrive){
+          pass.setBindGroup(0, bg, off);
+          pass.dispatchWorkgroupsIndirect(S.bufInd, 12);
+        }
+      }
+      pass.setPipeline(S.pClearArr); pass.setBindGroup(0, S.bgClearArr);
+      pass.dispatchWorkgroups(1);
+    }
     pass.setPipeline(S.pDeliver);
     for(const bg of S.bgDeliver){
       pass.setBindGroup(0, bg, off);
@@ -1069,10 +1293,13 @@ function encodeSteps(count, slotBase){
     if(S.plast){
       if(!S.calibrating){                    // measure first, change nothing
         S.weightsDirty = true;
-        pass.setPipeline(S.pPlastOut);
-        for(const bg of S.bgPlastOut){
-          pass.setBindGroup(0, bg, off);
-          pass.dispatchWorkgroupsIndirect(S.bufInd, 0);
+        // at the soma the outgoing half runs at the spike; at the synapse it ran above, at the arrivals
+        if(!S.stdpAt){
+          pass.setPipeline(S.pPlastOut);
+          for(const bg of S.bgPlastOut){
+            pass.setBindGroup(0, bg, off);
+            pass.dispatchWorkgroupsIndirect(S.bufInd, 0);
+          }
         }
         pass.setPipeline(S.pPlastIn);
         for(const bg of S.bgPlastIn){
@@ -1100,7 +1327,7 @@ function encodeSteps(count, slotBase){
     }
     if(S.stp){
       pass.setPipeline(S.pStp); pass.setBindGroup(0, S.bgStp, off);
-      pass.dispatchWorkgroups(wgN);
+      pass.dispatchWorkgroups(Math.ceil(S.n*(S.stpC || 1)/WG));
     }
   }
   pass.end();
@@ -1116,10 +1343,14 @@ async function tick(steps){
     rebuildWRefGroups();
   }
   // Seed the short-term plasticity state on the edge where the term turns on, which is where the reference allocates it: resources full, release probability at U.
+  if(S.stpClassDirty && S.bufStpC){ S.stpClassDirty = false; device.queue.writeBuffer(S.bufStpC, 0, S.stpClassBuf); }
   if(S.stp && S.stpSeed){
     S.stpSeed = false;
-    device.queue.writeBuffer(S.bufStpX, 0, new Float32Array(n).fill(1));
-    device.queue.writeBuffer(S.bufStpR, 0, new Float32Array(n).fill(S.stpU));
+    const C = S.stpC || 1, cf = new Float32Array(S.stpClassBuf);
+    device.queue.writeBuffer(S.bufStpX, 0, new Float32Array(n*C).fill(1));
+    const r0 = new Float32Array(n*C);
+    for(let c = 0; c < C; c++) r0.fill(cf[c*4], c*n, (c + 1)*n);
+    device.queue.writeBuffer(S.bufStpR, 0, r0);
   }
   device.queue.writeBuffer(S.bufFired, 0, S.zeroN);   // clear batch accumulator
   device.queue.writeBuffer(S.bufSpikes, 4, S.zero1);  // clear total

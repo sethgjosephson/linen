@@ -50,7 +50,6 @@ export function gpuMissing(net){
 //   balanced random      930k     4.13   0.53     5.00    4.96
 //   CA3                  674k     5.24   0.56     6.34    4.65
 //   cortical column    10.06M     1.76   0.54     2.07    2.51
-//   alphabet school 2 157.30M     0.163  0.441       -       -
 //
 // Fitting wall time per tick as fixed + steps * perStep on the column gives the gpu 2.71 ms fixed and 0.2425 ms per step, against 0.4774 ms per step on the cpu and no meaningful fixed cost.
 // So the gpu is already twice as fast per step; the round trip is the entire problem.
@@ -59,7 +58,7 @@ export function gpuMissing(net){
 //   steps * synCount * (perSynCpu - perSynGpu) > fixed
 //
 // and the measured constants put that boundary at 1.16e8.
-// It reproduces every point above: 0.93M never crosses inside the 20-step maximum (a tie at 20, as measured), the column crosses at 11.5 steps (measured between 8 and 16), and 157.30M crosses at well under one step, so alphabet school 2 takes the gpu at the default tick and runs 2.71x faster there.
+// It reproduces every point above: 0.93M never crosses inside the 20-step maximum (a tie at 20, as measured), and the column crosses at 11.5 steps (measured between 8 and 16).
 //
 // That last row is also the model's known weakness, in the safe direction.
 // Fitting per-step cost as proportional to synapse count predicted 1.5x on the 157M scene and the measured figure is 2.71x: the gpu scales better than linearly because a larger network occupies the device more fully, while the cpu came in close to prediction.

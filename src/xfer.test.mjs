@@ -1,7 +1,7 @@
 // The cross-modal learning measures against a world whose answer is known.
 //
 // Two drive sets, A (sight) and B (sound), each item driving its own cells in its own set.
-// The input geometry is built in as the confound the weaves have: presenting item k's sight also puts a little activity on the sound cells of a different item, sigma(k), through the wiring as wired, before anything is learned.
+// The input geometry is built in as a confound: presenting item k's sight also puts a little activity on the sound cells of a different item, sigma(k), through the wiring as wired, before anything is learned.
 // That is what makes the plain cross-decoder read below chance on a fixed confusion map with plasticity off.
 // A learned association is then planted: item k's sight reaching item k's own sound cells.
 // The other measures have to read nothing on the geometry alone and see the planted association; the plain decoder is checked to be fooled, so the test says why the other ones exist.

@@ -22,7 +22,7 @@ import { fileURLToPath } from 'node:url';
 import { NODE_DEFS, NEURON_TYPES, computeNode, setResolution, wireConnect, assembleConnect } from '../src/nodes.js';
 import { initMessage } from '../src/document.js';
 import { caseFromInit } from '../src/briancase.js';
-import { ALL_SCENARIOS } from '../src/experiments.js';
+import { ALL_SCENARIOS } from '../src/scenelist.js';
 import { cv, meanRate, populationSynchrony, mean } from '../src/spikestats.js';
 import { inProcessWorker } from './harness.mjs';
 import { splitTerms, applyOverrides } from './overrides.mjs';

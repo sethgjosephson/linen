@@ -11,9 +11,6 @@ This is the *what*. The companion documents cover the rest:
   page and the three engines, with the derivations that belong to the
   protocol (the Vogels target term, short-term plasticity across engines,
   committed synapses, feedback inhibition).
-- `RESULTS.md` is the replication of the Potjans and Diesmann 2014
-  microcircuit on these engines, set beside the same model on Brian 2.
-- `ANALYSIS.md` is the survey behind the measures in section 5.
 - `EXTENDING.md` says how to add a node, a mechanism or a measure, what is
   frozen and which gates a change has to pass.
 - The limitations page of the in-app docs (`limits` in `src/docs.js`) lists
@@ -274,7 +271,11 @@ The exponential synapse above has two conductances per cell, E with
 node declares up to six more channels, each a time constant, a sign and
 the transmitters that use it, and the connections file node gives every synapse
 whose transmitter the node names that channel and that sign; a
-transmitter the node does not name refuses the wiring. A synapse's channel
+transmitter the node does not name refuses the wiring. A channel can name
+populations instead (`from:L*s`, a tag or a pattern with one `*`): every
+synapse the connect node wires from a cell of that population takes the
+channel, and a population whose sign differs from the channel's refuses
+the wiring. A synapse's channel
 is the top three bits of its plasticity byte (the rule id is the low five,
 which could name 30 rules; the engine contract's rule table holds 16 rows, so
 at most 14 named rules), zero meaning by sign into E or I as before.
@@ -286,6 +287,20 @@ with `itau_c` following the `psc` convention like E and I. This is the
 kinetic difference between receptors: nicotinic acetylcholine and GABA-A
 currents decay in a few milliseconds, glutamate-gated chloride and GABA-B
 over tens (Hille 2001, Ion Channels of Excitable Membranes, 3rd ed.).
+
+A channel declared with a magnesium concentration (`mg:1` on its line,
+mM; `chanMg` on init and tune) carries the NMDA receptor's voltage
+dependence: its term is multiplied by
+
+    B(v) = 1 / (1 + [Mg]/3.57 · e^(−0.062 v))
+
+with `v` the step's opening potential in mV (Jahr and Stevens 1990, J
+Neurosci 10:3178; the constants are theirs at 1 mM, so `[Mg]` scales the
+block). At rest the gate passes a few percent of the current; on a
+depolarized cell it opens, which is what makes a slow glutamate channel
+with it a coincidence detector rather than a slow drive. In conductance
+mode the same factor multiplies `|g_c| (E_c − v)`. Implemented in all
+three engines and in the Brian transcription.
 Channels need exponential synapses (a kick has no time constant), are
 fixed at init in the WebGPU engine (the ring is sized by them), and are
 frozen with the rest of a graded cell's synapses. Implemented in all
@@ -297,7 +312,14 @@ three engines.
 `bias`, `stim`, `ext` and the noise draw). `stim_i` is evaluated per
 millisecond from the stimulus protocols by `scaleOf` and `updateAdd`
 (constant, pulse train, ramp, and a noise-amplitude protocol that sets
-`amp_i`).
+`amp_i`). `ξ` is the triangular draw of unit meaning (variance 1/6) for a
+white stimulus; a noise stimulus with a time constant `τ_n` filters it
+per cell as an Ornstein-Uhlenbeck process of the same variance, `z ← a z
++ √(1 − a²) ξ` with `a = e^(−1/τ_n)`, the form of a synaptic background
+in Destexhe, Rudolph, Fellous and Sejnowski (2001, Neuroscience
+107:13), and a shared fraction `c` mixes in a draw common to every cell
+of the stimulus, filtered the same way: `ξ_i ← √(1 − c) z_i + √c z_s`.
+In all three engines.
 
 | Term | Meaning |
 |---|---|
@@ -690,9 +712,12 @@ non-biological intervention.
 
 ## 4. Plasticity
 
-All rules are trace-based and online. No rule looks up a spike history.
+All rules are trace-based and online. Where the pair and inhibitory rules
+are timed is `stdpAt` on the checkpoint (`0` at the soma, `1` at the
+synapse, default `1` for new scenes; scenes saved before format 14 load with
+`0`).
 
-### Traces
+### Traces and arrival timing
 
 Each neuron carries three exponentially decaying traces, incremented by 1 at
 its own spike and decayed once per millisecond:
@@ -701,13 +726,48 @@ its own spike and decayed once per millisecond:
     K_post ← K_post · e^(−1/τ₋)          fast, postsynaptic role
     K_slow ← K_slow · e^(−1/τ_y)         slow, for the triplet and het terms
 
-`src/simworker.js`: the decay is the loop after the neuron loop in `step`
-and `stepExp` (`Kpre[i] *= decS`), the increments are the last lines of
-`plastOnSpike`. Increments happen at the end of the spike handler, so a
-spike never sees its own contribution. The slow trace `z` is read *before*
-the increment for the same reason: the triplet term potentiates by the
-postsynaptic history, not by the present spike. Two cells that spike in the
-same millisecond differ between engines: the reference handles spikes in
+`src/simworker.js`: `traceStep` (`Kpre[i] *= decS`), called after the neuron
+loop in `step` and `stepExp`. The slow trace `z` is always read before the
+current spike's increment, so the triplet term potentiates by the
+postsynaptic history rather than by the present spike.
+
+With `stdpAt` = 1 (timed at the synapse), a pairing between presynaptic cell
+`i` and postsynaptic cell `j` across a synapse of conduction delay `d =
+delay(i,j)` is timed from the presynaptic spike's arrival at the synapse, `d`
+steps after emission, with the dendritic delay set to 0:
+
+    Δt = t_post − (t_pre + d)
+
+(Izhikevich 2006, Neural Comput 18:245; the zero dendritic delay is NEST's
+convention, Morrison, Aertsen and Diesmann 2007, Neural Comput 19:1437, under
+which a back-propagating action potential reaches every synapse of its cell
+without lag). A postsynaptic spike of `j` at step `t` reads `K_pre` of `i` as
+it was `d` steps ago, `K_pre,i(t − d)`, recovered without per-synapse state
+from `K_pre[i]` and cell `i`'s 17-bit spike history `spkHist[i]` over the
+last `d − 1` steps:
+
+    K_pre,i(t − d) = max( 0,  e^(d/τ₊) · ( K_pre[i] − Σ_{k=1}^{d−1} h_{i,k} e^(−k/τ₊) ) )
+
+where `h_{i,k} ∈ {0, 1}` is bit `k` of `spkHist[i]`, 1 if cell `i` fired `k`
+steps ago (`src/simworker.js`, `kpreAtSynapse`). A spike emitted `d` steps
+ago arrives on step `t` with trace value 1, the peak of the potentiation
+window. Depression from a presynaptic spike of `i` emitted at `t₀` runs when
+that spike arrives at step `t₀ + d`, at the start of the step before any
+cell of that step fires, reading `K_post[j](t₀ + d)` (`src/simworker.js`,
+`plastArrivals` and `plastOutSyn`, gated per cell by `spkHist[i] &
+dmask[i]`). An arrival and a postsynaptic spike in the same step therefore
+read as pre before post: the arrival sees `K_post[j]` before the postsynaptic
+spike is added, and the postsynaptic spike sees the arrival at `K_pre,i(t −
+d) = 1`. Under `stdpAt` 1 the step's spikes are added to `K_pre`, `K_post`
+and `K_slow` at the end of the step in `traceStep`, before the decay and the
+shift of `spkHist`, so no read within a step depends on neuron index order
+in any engine.
+
+With `stdpAt` = 0 (timed at the soma), both traces are read at somatic spike
+emission: a presynaptic spike at `t₀` reads `K_post[j](t₀)` immediately, a
+postsynaptic spike at `t` reads `K_pre[i](t)`, and traces are incremented at
+the end of `plastOnSpike`. Under `stdpAt` 0 two cells that spike in the same
+millisecond differ between engines: the reference handles spikes in
 neuron-index order, so the later one reads the earlier one's incremented
 trace, while the WebGPU and CUDA engines run every update of a step before
 any increment, so both read the pre-increment traces.
@@ -717,22 +777,29 @@ any increment, so both read the pre-increment traces.
 | `τ₊` (`tauS`) | 16.8 ms | Bi and Poo 1998 report ≈ 17 ms |
 | `τ₋` (`tauM`) | 33.7 ms | Bi and Poo 1998 report ≈ 34 ms |
 | `τ_y` (`tauY`) | 114 ms | Pfister and Gerstner 2006 |
+| `stdpAt` | 1 (synapse) | 0 at the soma, 1 at the synapse after the axonal delay `d` with dendritic delay 0 |
 
 Setting `τ₊ = τ₋ = 20` recovers the symmetric window of Song, Miller and
 Abbott 2000, which the plastic scenes declare.
 
 ### Excitatory pair STDP, with triplet and heterosynaptic terms
 
-On a **presynaptic** spike, for each outgoing synapse (depression):
+On a **presynaptic** event (at arrival `t₀ + d` when `stdpAt` = 1, or at
+somatic emission `t₀` when `stdpAt` = 0), for each outgoing synapse
+(depression):
 
     w ← clamp( w − A₋ K_post[j] · (w if wdep else 1) + δ ,  1e-4,  wmax )
 
-On a **postsynaptic** spike, for each incoming synapse (potentiation):
+On a **postsynaptic** spike at `t`, for each incoming synapse (potentiation,
+with `K_pre^* = K_pre,i(t − d)` when `stdpAt` = 1 and `K_pre[i](t)` when
+`stdpAt` = 0):
 
-    w ← clamp( w + (A₊ + A₃ z) K_pre[i] − min(1, β g³) (w − w̃) ,  1e-4,  wmax )
+    w ← clamp( w + (A₊ + A₃ z) K_pre^* − min(1, β g³) (w − w̃) ,  1e-4,  wmax )
 
-`src/simworker.js`, `plastOnSpike`: the outgoing loop over `preStart`
-(depression) and the incoming loop over `inStart` (potentiation).
+`src/simworker.js`, `plastArrivals`, `plastOutSyn` and `plastOnSpike`: the
+outgoing depression (`plastOutSyn`, called from `plastArrivals` at `stdpAt`
+1 or the `preStart` loop of `plastOnSpike` at `stdpAt` 0) and the incoming
+loop over `inStart` (potentiation, calling `kpreAtSynapse` at `stdpAt` 1).
 
 | Symbol | Field | Default | Meaning and source |
 |---|---|---|---|
@@ -754,11 +821,11 @@ The heterosynaptic gate is
 project's stated adaptation of Zenke's `−β (w − w̃) z³`: normalizing by the
 trace at the target rate makes `β` dimensionless and comparable across
 scenes, and the saturation stops a burst from erasing a synapse in one step.
-`ρ` here is the global `iRho` in every engine, also under measured set
-points: the WebGPU incoming pass has no storage slot for a per-neuron
-value, and the engines have to agree. A neuron whose measured set point
-differs from `iRho` has its competition engage at the global rate, not its
-own (Terms in combination, below).
+`ρ` is the global `iRho`, or under measured set points each neuron's own
+`ρ_i`, read back from its Vogels target: `k_ref,i = α_i τ_y/(τ_+ + τ_-)`,
+which is `α_i = ρ_i (τ_+ + τ_-)/1000` inverted, so the WebGPU incoming
+pass needs no buffer beyond the per-neuron lane it already reads (Terms
+in combination, below).
 
 **Why weight-dependent depression is the default.** Additive depression with
 hard bounds has no interior fixed point, so with `A₋` above `A₊` and
@@ -770,21 +837,23 @@ which is stable and unimodal.
 
 Vogels et al. 2011, a rate controller on the postsynaptic cell.
 
-    on presynaptic spike:   Δw = −η ( K_post[j] − α )
-    on postsynaptic spike:  Δw = −η K_pre[i]
+    on presynaptic event:   Δw = −η ( K_post[j] − α )
+    on postsynaptic spike:  Δw = −η K_pre^*
 
     presynaptic:   w ← clamp( w + Δw′,  −wmax,  −1e-4 )
     postsynaptic:  w ← max( w + Δw′,  −wmax )
 
     Δw′ = softBound(w, Δw) when wdep is on, else Δw
 
-The postsynaptic change is never positive (η is at least 0 on the node and
-`K_pre` is a trace), so that half needs no upper clamp to keep `w` below
-zero.
+with the presynaptic event timed at arrival `t₀ + d` (`stdpAt` = 1) or
+somatic emission `t₀` (`stdpAt` = 0), and `K_pre^* = K_pre,i(t − d)` at
+`stdpAt` = 1 or `K_pre[i](t)` at `stdpAt` = 0. The postsynaptic change is
+never positive (η is at least 0 on the node and `K_pre` is a trace), so that
+half needs no upper clamp to keep `w` below zero.
 
-`src/simworker.js`, `plastOnSpike`: the `else` branch of the outgoing loop
-(on presynaptic) and of the incoming loop (on postsynaptic). The target
-enters through
+`src/simworker.js`, `plastOutSyn` (the `else` branch, called from
+`plastArrivals` at `stdpAt` 1 or `plastOnSpike` at `stdpAt` 0) and the `else`
+branch of the incoming loop in `plastOnSpike`. The target enters through
 
     α = ρ · 0.001 · (τ₊ + τ₋)
 
@@ -952,6 +1021,7 @@ once per millisecond after the neuron loop).
 | `τ_F` | `stpTauF` | 1 ms | decay of facilitation |
 | `s` | `stpNorm` | `stpNorm` 0, so `s` = 1 | `s` = 1 by default; `stpNorm` 1 sets `s` to the inverse of the rested release, `1/U` (or `1/(U(2 − U))` with `stpOrder` 1), so a rested synapse delivers exactly `w` |
 | | `stpOrder` | 0 | 0 releases before the facilitation step, as published; 1 facilitates first |
+| | `stpScope` | 0 | the synapses the release applies to: 0 every one, 1 excitatory only, 2 inhibitory only (the state still advances per cell) |
 
 The defaults are the checkpoint node's, the depressing class of Markram,
 Wang and Tsodyks (1998). An engine given an init without these fields
@@ -960,6 +1030,17 @@ always carries them.
 
 The published order is release, then facilitation (ENGINE.md 8). A scene
 tuned on the other order declares `stpOrder` 1 on its checkpoint.
+
+Per rule. A plasticity node can give its rule its own `U`, `τ_D` and `τ_F`,
+or turn the release off for its synapses, so one axon can depress onto one
+target and facilitate onto another (Reyes et al. 1998, Nat Neurosci 1:279;
+Markram, Wang and Tsodyks 1998). Every distinct setting is a class with its
+own `X` and `R` per presynaptic cell; rules with the same settings share a
+class, and class 0 is the checkpoint's. A spike releases from every class
+that is on, and each synapse delivers the release of its rule's class.
+`stpOrder`, `stpNorm` and `stpScope` are the checkpoint's for every class,
+with `s` computed per class. `stpClassTable` in `src/nodes.js` builds the
+classes; `stpFactor` in `src/simworker.js` picks a synapse's release.
 
 ### The rule table
 
@@ -1033,11 +1114,13 @@ multiplicative step the rest take for the same error.
 
 **The heterosynaptic gate and measured set points.** The gate is `g =
 z/k_ref` with `k_ref = τ_y ρ / 1000`, so `g = 1` when the neuron fires at
-`ρ`. Under `rhoMode` 1 the Vogels term and scaling use each neuron's own
-`ρ_i`, but `k_ref` is computed once from the global `iRho` in every engine.
-A neuron whose measured set point is a fifth of `iRho` has its competition
-engage at five times its own rate; one whose set point is four times `iRho`
-has it engage at a quarter of its own rate, which is always, so its
+`ρ`. Under `rhoMode` 1 the Vogels term, scaling and the gate all use each
+neuron's own `ρ_i`: `k_ref,i = α_i τ_y/(τ_+ + τ_-)`, computed from the
+per-neuron Vogels target every engine already holds. With a gate built on
+the global `iRho` instead, a neuron whose measured set point is a fifth of
+`iRho` has its competition engage at five times its own rate; one whose set
+point is four times `iRho` has it engage at a quarter of its own rate,
+which is always, so its
 synapses are regressed toward the reference on every spike.
 
 **Transmitter-induced potentiation needs a counterweight.** `δ` (`tin`)
@@ -1371,8 +1454,12 @@ it below 1 ms.
   modes currents are injected, so there is no
   driving-force dependence and no shunting inhibition in those modes.
 - No astrocytes, no neuromodulation as a signal, no gap junctions.
-- No axonal delay-dependent plasticity: STDP uses emission times, and delays
-  affect delivery only.
+- At `stdpAt` 1 the pair and inhibitory rules time each presynaptic spike at
+  its arrival after the axonal delay `d`, with the dendritic delay set to 0
+  (NEST's convention: a postsynaptic spike reaches every synapse of its cell
+  at once, with no back-propagation delay or distance-dependent attenuation).
+  At `stdpAt` 0 both traces are read at somatic emission time. Axonal delays
+  themselves are fixed at wiring time; no rule modifies a delay.
 - Synapse formation is distance-dependent at wiring time only. Existing
   synapses do not form or prune during a run.
 - The step is fixed at one millisecond and delays are whole milliseconds

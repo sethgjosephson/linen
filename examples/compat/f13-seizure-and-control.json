@@ -1,0 +1,541 @@
+{
+ "v": 1,
+ "format": 13,
+ "nextId": 16,
+ "view": {
+  "x": 0,
+  "y": 0,
+  "scale": 1
+ },
+ "viewSlots": {},
+ "activeView": null,
+ "scenarioName": "seizure and control",
+ "plugins": [],
+ "groups": [
+  {
+   "label": "volume",
+   "members": [
+    4
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "excitatory  RS at density",
+   "members": [
+    5
+   ],
+   "hue": 130,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "inhibitory  FS at density",
+   "members": [
+    6
+   ],
+   "hue": 205,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "random wiring and noise drive  as the balanced net",
+   "members": [
+    7,
+    8,
+    10
+   ],
+   "hue": 280,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "the block  inhibition silenced for 2 s",
+   "members": [
+    11
+   ],
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "readout",
+   "members": [
+    12,
+    13,
+    15
+   ],
+   "hue": 280,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  },
+  {
+   "label": "checkpoint",
+   "members": [
+    14
+   ],
+   "hue": 0,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   }
+  }
+ ],
+ "nodes": [
+  {
+   "id": 1,
+   "type": "note",
+   "x": -380,
+   "y": 20,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Seizure and control\n\nThis is the balanced random net, asynchronous at a few hertz, with its inhibitory cells silenced for two seconds starting three seconds in. Recruitment runs away until the population fires as fast as its refractory period allows, and when inhibition returns it settles back down within a second. The wiring is the same as the balanced net, and nothing is added for the seizure.",
+    "width": 340,
+    "near": ""
+   },
+   "inputs": []
+  },
+  {
+   "id": 2,
+   "type": "note",
+   "x": -380,
+   "y": 230,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Keep in mind that this shows a mechanism and is not a clinical simulation. It is a runaway of recurrent excitation once inhibition fails, which is one of the things an epileptic focus can be, and it says nothing about any patient. The block is a hyperpolarizing current on the inhibitory cells, which is the model's version of a GABA antagonist on a slice, and it takes 30 nA to hold a cell under threshold against the 597 synapses reaching it.",
+    "width": 340,
+    "near": "the block"
+   },
+   "inputs": []
+  },
+  {
+   "id": 3,
+   "type": "note",
+   "x": -380,
+   "y": 440,
+   "on": true,
+   "name": "",
+   "params": {
+    "text": "Something to try: change the block's width (two seconds) or its current (-30 nA), or weaken it to -6 nA, which leaves the interneurons firing at about 38 Hz and still lets the excitatory population run away: what holds the network down is the balance, not the amount of inhibition on its own. At full density the excitatory rate is 3.2 Hz before the block, 256 Hz during it, which is most of the ceiling the 2 ms refractory period allows, and 3.2 Hz again within a second of it ending. The chart draws the excitatory rate over the last ten seconds.",
+    "width": 340,
+    "near": "the block"
+   },
+   "inputs": []
+  },
+  {
+   "id": 4,
+   "type": "sphere",
+   "x": 40,
+   "y": 20,
+   "on": true,
+   "name": "exc + inh sphere",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 400
+   },
+   "inputs": []
+  },
+  {
+   "id": 5,
+   "type": "scatter",
+   "x": 40,
+   "y": 75,
+   "on": true,
+   "name": "exc",
+   "params": {
+    "fill": 1,
+    "density": 72000,
+    "count": 2000,
+    "type": 10,
+    "tag": "exc",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 4
+    }
+   ]
+  },
+  {
+   "id": 6,
+   "type": "scatter",
+   "x": 190,
+   "y": 75,
+   "on": true,
+   "name": "inh",
+   "params": {
+    "fill": 1,
+    "density": 18000,
+    "count": 2000,
+    "type": 13,
+    "tag": "inh",
+    "hue": -1,
+    "spacing": 0,
+    "pattern": 0,
+    "pitch": 40,
+    "jitter": 8,
+    "axis": 1,
+    "seed": 2
+   },
+   "inputs": [
+    {
+     "id": 4
+    }
+   ]
+  },
+  {
+   "id": 7,
+   "type": "gather",
+   "x": 115,
+   "y": 155,
+   "on": true,
+   "name": "exc + inh",
+   "params": {
+    "ports": 4
+   },
+   "inputs": [
+    {
+     "id": 5
+    },
+    {
+     "id": 6
+    },
+    null,
+    null
+   ]
+  },
+  {
+   "id": 8,
+   "type": "connect",
+   "x": 115,
+   "y": 220,
+   "on": true,
+   "name": "exc + inh wiring",
+   "params": {
+    "radius": 300,
+    "sigma": 3000,
+    "prob": 0.1,
+    "wExc": 50,
+    "wInh": -250,
+    "wdist": 1,
+    "wsigma": 1,
+    "cluster": 0,
+    "table": "",
+    "velocity": 100,
+    "density": 100,
+    "kscale": 100,
+    "nuE": 0,
+    "nuI": 0,
+    "seed": 1
+   },
+   "inputs": [
+    {
+     "id": 7
+    }
+   ]
+  },
+  {
+   "id": 9,
+   "type": "stimulus",
+   "x": 40,
+   "y": 280,
+   "on": true,
+   "name": "noise on exc",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 1800,
+    "tag": "exc",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "tauNoise": 0,
+    "common": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 8
+    },
+    null
+   ]
+  },
+  {
+   "id": 10,
+   "type": "stimulus",
+   "x": 190,
+   "y": 280,
+   "on": true,
+   "name": "noise on inh",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": 200,
+    "tag": "inh",
+    "mode": 3,
+    "period": 100,
+    "width": 10,
+    "t0": 0,
+    "duration": 0,
+    "tauNoise": 0,
+    "common": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 9
+    },
+    null
+   ]
+  },
+  {
+   "id": 11,
+   "type": "stimulus",
+   "x": 340,
+   "y": 280,
+   "on": true,
+   "name": "inhibition block",
+   "params": {
+    "center": [
+     0,
+     0,
+     0
+    ],
+    "radius": 100000,
+    "current": -30000,
+    "tag": "inh",
+    "mode": 1,
+    "period": 100000,
+    "width": 2000,
+    "t0": 3000,
+    "duration": 0,
+    "tauNoise": 0,
+    "common": 0,
+    "spread": 0,
+    "seedSpread": 1
+   },
+   "inputs": [
+    {
+     "id": 10
+    },
+    null
+   ]
+  },
+  {
+   "id": 12,
+   "type": "probe",
+   "x": 40,
+   "y": 400,
+   "on": true,
+   "name": "exc probe",
+   "params": {
+    "label": "exc",
+    "tag": "exc",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 11
+    },
+    null
+   ]
+  },
+  {
+   "id": 13,
+   "type": "probe",
+   "x": 190,
+   "y": 400,
+   "on": true,
+   "name": "inh probe",
+   "params": {
+    "label": "inh",
+    "tag": "inh",
+    "record": 0,
+    "view": 0,
+    "audio": 0,
+    "axis": 1,
+    "cols": 24,
+    "rows": 24
+   },
+   "inputs": [
+    {
+     "id": 12
+    },
+    null
+   ]
+  },
+  {
+   "id": 14,
+   "type": "checkpoint",
+   "x": 115,
+   "y": 460,
+   "on": true,
+   "name": "simulation",
+   "params": {
+    "steps": 2,
+    "engine": 0,
+    "liveHost": "ws://localhost:8801",
+    "syn": 0,
+    "tauE": 3,
+    "tauI": 8,
+    "eRevE": 0,
+    "eRevI": -70,
+    "psc": 0,
+    "refrac": 2,
+    "vmin": -90,
+    "plast": 0,
+    "aP": 0.008,
+    "aM": 0.001,
+    "tauS": 16.8,
+    "tauM": 33.7,
+    "trip": 0,
+    "tauY": 114,
+    "tin": 0,
+    "wmax": 30,
+    "wdep": 1,
+    "iEta": 0.002,
+    "rhoMode": 0,
+    "calS": 10,
+    "iRho": 5,
+    "scale": 0,
+    "sEta": 0.001,
+    "het": 0,
+    "cons": 0,
+    "consW": 0,
+    "consP": 10,
+    "tauCons": 20,
+    "consStep": 1.2,
+    "commit": 0,
+    "stpPreset": 0,
+    "stp": 0,
+    "stpU": 0.5,
+    "stpNorm": 0,
+    "stpOrder": 0,
+    "stpScope": 0,
+    "stpTauD": 800,
+    "stpTauF": 1,
+    "variants": [],
+    "trHours": 16,
+    "trCkptMin": 2,
+    "trBrainMin": 5,
+    "trKeep": 4,
+    "trReps": 1,
+    "trSweep": 0,
+    "trEngine": 0,
+    "trHost": "ws://localhost:8801",
+    "exportSecs": 2
+   },
+   "inputs": [
+    {
+     "id": 13
+    }
+   ]
+  },
+  {
+   "id": 15,
+   "type": "chart",
+   "x": 265,
+   "y": 520,
+   "on": true,
+   "name": "rate of exc",
+   "params": {
+    "plot": 7,
+    "pop": "exc",
+    "window": 10,
+    "smooth": 0,
+    "which": 0,
+    "field": "decode",
+    "bins": 40,
+    "height": 130,
+    "source": "",
+    "title": "",
+    "xText": "",
+    "yText": "",
+    "yMin": "",
+    "yMax": "",
+    "grid": 1,
+    "legend": 1,
+    "cmap": 0,
+    "preview": 0,
+    "format": 0,
+    "sizePreset": 0,
+    "figW": 180,
+    "figH": 100,
+    "dpi": 300,
+    "theme": 0,
+    "figFont": 0,
+    "fontPt": 8,
+    "linePt": 1,
+    "caption": 0
+   },
+   "inputs": [
+    {
+     "id": 14
+    }
+   ]
+  }
+ ]
+}

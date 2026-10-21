@@ -50,7 +50,7 @@ for(const s of jsSuites) run(s, node, [join(ROOT, s)]);
 if(!quick){
   // The cuda suites spawn the CUDA child (a built engine.exe and a GPU); the server test spawns a server for 58 s.
   // Full run only.
-  for(const f of ['ruletest.mjs', 'querytest.mjs'])
+  for(const f of ['ruletest.mjs', 'querytest.mjs', 'mgtest.mjs', 'stdpattest.mjs', 'stprulestest.mjs', 'noisetest.mjs'])
     if(existsSync(join(ROOT, 'cuda', f)))
       run(join('cuda', f), node, [join(ROOT, 'cuda', f)]);
   const py = process.platform === 'win32' ? 'python' : 'python3';

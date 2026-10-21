@@ -96,7 +96,7 @@ export const NODES = {
   receptor: { io:'points in, points out',
     blurb:'Declares receptor channels, each a synaptic time constant and sign that transmitters map onto.',
     params:{
-      table:'One channel per line: name, tau in ms, + or -, optional reversal in mV, then its transmitters; # starts a comment.' } },
+      table:'One channel per line: name, tau ms, + or -, optional reversal mV, transmitters; mg:1 adds a magnesium block, from:tag a population.' } },
   population: { io:'points in, points out',
     blurb:'Keeps one population of the incoming stream by its tag and drops the rest.',
     params:{
@@ -196,6 +196,8 @@ export const NODES = {
       width:'Pulse train only: pulse duration.',
       t0:'Onset delay from the start of the simulation.',
       duration:'Active time from the onset; 0 runs without end.',
+      tauNoise:'Noise mode: the drive\'s memory in ms, an Ornstein-Uhlenbeck process of the same variance; 0 draws afresh every millisecond.',
+      common:'Noise mode: the fraction of the drive every cell of this stimulus receives alike, as from shared afferents; 0 is independent per cell.',
       spread:'Per-neuron heterogeneity of the drive, as the sigma of a mean-preserving lognormal gain; 0 drives every neuron alike.',
       seedSpread:'Seed of the per-neuron gains, keyed to stable neuron identity.' } },
   plasticity: { io:'points in (place before connect)',
@@ -215,7 +217,12 @@ export const NODES = {
       tin:'Constant weight change at an active synapse on every presynaptic spike.',
       cons:'Rate of settling into a consolidated state.',
       consW:'Weight a consolidated synapse is drawn toward; at most the rule\'s weight limit.',
-      consP:'Depth of the consolidation well.' } },
+      consP:'Depth of the consolidation well.',
+      stp:'Short-term plasticity on this rule\'s synapses: the checkpoint\'s, none, or settings of its own.',
+      stpPreset:'A published synapse class that writes the three settings below.',
+      stpU:'Fraction of resources a rested synapse releases on a spike.',
+      stpTauD:'Recovery time constant of the released resources.',
+      stpTauF:'Decay time constant of the facilitated release probability.' } },
   project: { io:'source and target points in, both out with the projection (place before connect)',
     blurb:'Makes a pathway from one population to another for the connect node to wire.',
     params:{
@@ -423,6 +430,7 @@ export const NODES = {
       aM:'STDP depression amplitude per post-before-pre pairing.',
       tauS:'Presynaptic trace time constant, the potentiation window.',
       tauM:'Postsynaptic trace time constant, the depression window.',
+      stdpAt:'Where a pairing is timed: at the synapse a presynaptic spike counts when it arrives, after its delay; at the soma when it is fired.',
       wdep:'hard: clamps weights at the limit. soft: scales each update by the room left toward the bound.',
       wmax:'Upper limit on any weight magnitude under learning.',
       iEta:'Learning rate of the inhibitory homeostasis rule.',
@@ -434,11 +442,12 @@ export const NODES = {
       trip:'Triplet potentiation amplitude; 0 is the pair rule.',
       tauY:'Time constant of the slow postsynaptic trace read by the triplet and heterosynaptic terms.',
       het:'Heterosynaptic competition: pulls incoming weights toward their reference when a neuron fires above its set point.',
-      stp:'Short-term plasticity on every outgoing synapse; any value above 0 switches it on.',
+      stp:'Short-term plasticity on the synapses of the checkpoint rule and of every rule that inherits it; above 0 switches it on.',
       stpPreset:'A published synapse class that writes the three numbers below; custom writes nothing.',
       stpU:'Release probability of a rested synapse, and the fraction of resources each spike consumes.',
       stpNorm:'Whether a rested synapse releases U of its weight or exactly its weight.',
       stpOrder:'Order of the release and the facilitation jump at a spike.',
+      stpScope:'Which synapses the release applies to: every one, excitatory only, or inhibitory only.',
       stpTauD:'Recovery time constant of synaptic resources.',
       stpTauF:'Decay time constant of the raised release probability.',
       cons:'Consolidates the heterosynaptic reference through a double well; any value above 0 is on, and all such values run alike.',
@@ -565,11 +574,12 @@ title:'overview', html:`
 <tr><td class="k">size</td><td class="d">400 µm wide, 1.2 mm deep, four layer boxes.</td></tr>
 <tr><td class="k">cells</td><td class="d">About 14,000.</td></tr>
 <tr><td class="k">types</td><td class="d">Layer 5 pyramids intrinsically bursting; a tenth of layer 2/3 chattering.</td></tr>
-<tr><td class="k">interneurons</td><td class="d">Split per layer between fast spiking and low threshold spiking by cell type nodes.</td></tr>
-<tr><td class="k">wiring</td><td class="d">The 8 by 8 population pair table on the connect node; every probability as published.</td></tr>
+<tr><td class="k">interneurons</td><td class="d">Per layer, a fast spiking (PV, tag Lxi) and a low threshold spiking (SST, tag Lxs) population.</td></tr>
+<tr><td class="k">wiring</td><td class="d">The Potjans and Diesmann pair table on the connect node; both interneuron populations take the published inhibitory rows.</td></tr>
+<tr><td class="k">synapse classes</td><td class="d">Excitatory synapses onto PV cells depress and onto SST cells facilitate; SST inhibition decays over 20 ms.</td></tr>
 <tr><td class="k">drive</td><td class="d">Background per layer and class; a weak pulse train into layer 4 through its box as a mask.</td></tr>
-<tr><td class="k">excitatory rates</td><td class="d">0.34, 1.18, 2.30 and 0.92 Hz from layer 2/3 down, pulse off; inside de Kock and Sakmann 2009.</td></tr>
-<tr><td class="k">inhibitory</td><td class="d">Every population above its excitatory partner; the state is asynchronous.</td></tr>
+<tr><td class="k">excitatory rates</td><td class="d">0.64, 2.10, 2.88 and 1.21 Hz from layer 2/3 down, pulse off; inside de Kock and Sakmann 2009.</td></tr>
+<tr><td class="k">inhibitory</td><td class="d">Every PV and SST population above its excitatory partner; the state is asynchronous.</td></tr>
 </table>
 <h2>visual pathway</h2>
 <p>The early visual route as a wired circuit, from retina through thalamus to the column.</p>
@@ -684,111 +694,6 @@ title:'overview', html:`
 <tr><td class="k">readout</td><td class="d">Probes, analysis, the checkpoint with plasticity on, a chart.</td></tr>
 <tr><td class="k">size</td><td class="d">About 43,000 cells and 12 million synapses.</td></tr>
 <tr><td class="k">notes</td><td class="d">One per group, on what its nodes add.</td></tr>
-</table>
-<h2>experiment scenes</h2>
-<p>Learning experiments, not in the Tab menu.</p>
-<p>Load by name from the address bar, <code>?scenario=the weave</code>, or from the trainer.</p>
-<p>Built by cell count; alphabet school 2 is at mouse density.</p>
-<table>
-<tr><th>scene</th><th>cells</th><th>synapses</th><th>shows</th></tr>
-<tr><td class="k">learning lab</td><td class="v">60 E, 15 I (patch)</td><td class="v"></td><td class="d">Cross-modal completion at growing scale.</td></tr>
-<tr><td class="k">binding bench</td><td class="v">400 E, 100 I (association)</td><td class="v"></td><td class="d">Two senses converging on a learning area.</td></tr>
-<tr><td class="k">the weave</td><td class="v">800 E, 200 FS</td><td class="v"></td><td class="d">Two codes in one tissue.</td></tr>
-<tr><td class="k">the weave, letters</td><td class="v">1,600 E, 400 FS</td><td class="v"></td><td class="d">The weave with letters and spoken names.</td></tr>
-<tr><td class="k">mandelbulb</td><td class="v">5,000 E, 1,250 FS (core)</td><td class="v"></td><td class="d">Twelve bulbs and a core from two repeats.</td></tr>
-<tr><td class="k">PD microcircuit</td><td class="v">77,169</td><td class="v">300 M</td><td class="d">Potjans and Diesmann 2014 at their scale.</td></tr>
-<tr><td class="k">alphabet school 2</td><td class="v"></td><td class="v"></td><td class="d">The training scenario.</td></tr>
-</table>
-<h2>learning lab</h2>
-<p>A retina and a cochlea see the same item and project to one cortical patch.</p>
-<table>
-<tr><td class="k">patch</td><td class="d">About 60 excitatory and 15 inhibitory cells.</td></tr>
-<tr><td class="k">dropped modality</td><td class="d">Every fourth presentation, alternating which.</td></tr>
-<tr><td class="k">measure</td><td class="d">Whether one sense alone recreates the pattern both together produced.</td></tr>
-<tr><td class="k">scale</td><td class="d">Sheets, patch and in-degree grow together; the pair table divides probabilities by the scale.</td></tr>
-<tr><td class="k">in-degree</td><td class="d">Stays put while the populations grow.</td></tr>
-<tr><td class="k">plasticity</td><td class="d">Depression fixed point on the wired mean weight, as in alphabet school 2; synaptic scaling on.</td></tr>
-</table>
-<h2>binding bench</h2>
-<p>Two senses converge on one association area whose recurrent synapses learn.</p>
-<table>
-<tr><td class="k">senses</td><td class="d">A retinal sheet and a cochlear strip, each projecting with low convergence and strong weights onto its own area.</td></tr>
-<tr><td class="k">V1 and A1</td><td class="d">About half of each area fires for a given item; every item decodes at 1.0.</td></tr>
-<tr><td class="k">association</td><td class="d">400 excitatory, 100 inhibitory cells; about nine afferents per sense per cell, needing coincident input.</td></tr>
-<tr><td class="k">plasticity</td><td class="d">Feedforward frozen; recurrence under the pair rule with soft bounds and a low ceiling.</td></tr>
-<tr><td class="k">inhibition</td><td class="d">Held to 0.5 Hz by the Vogels rule.</td></tr>
-<tr><td class="k">mechanism</td><td class="d">Paired cells fire together and potentiate (Hebb 1949; Litwin-Kumar and Doiron 2014; Zenke, Agnes and Gerstner 2015).</td></tr>
-<tr><td class="k">measure</td><td class="d">Whether either sense alone evokes the other's pattern: cross classification (Kaplan, Man and Greening 2015).</td></tr>
-<tr><td class="k">background drive</td><td class="d">None; a probe evokes the stimulus pattern and nothing else.</td></tr>
-<tr><td class="k">timing</td><td class="d">250 ms presentations, 250 ms gaps; sight lags the tone by 10 ms.</td></tr>
-</table>
-<h2>the weave</h2>
-<p>Two codes woven through one tissue, told apart only by which cells an input touches.</p>
-<table>
-<tr><td class="k">tissue</td><td class="d">800 excitatory and 200 fast-spiking cells in one box; no sheets, areas or hierarchy.</td></tr>
-<tr><td class="k">codes</td><td class="d">Two noise fields each pick a scattered fifth of the excitatory cells; channel A drives one, B the other.</td></tr>
-<tr><td class="k">mappings</td><td class="d">A bins its cells in two dimensions, B in one; B arrives 10 ms after A.</td></tr>
-<tr><td class="k">overlap</td><td class="d">About a twentieth; almost no conjunctive cells.</td></tr>
-<tr><td class="k">readout</td><td class="d">Cross classification of one channel against the other channel's centroids.</td></tr>
-<tr><td class="k">plasticity</td><td class="d">Recurrence only, dense and flat, triplet and short-term terms on (Pokorny et al. 2019).</td></tr>
-<tr><td class="k">curriculum</td><td class="d">Blocks: each channel alone, then both; the one-channel probes run through every block.</td></tr>
-</table>
-<h2>the weave, letters</h2>
-<p>The weave with a letter for the spot and its spoken name for the tone.</p>
-<table>
-<tr><td class="k">tissue</td><td class="d">1,600 excitatory and 400 fast-spiking cells; recurrence the only plastic pathway.</td></tr>
-<tr><td class="k">channel A</td><td class="d">The letter through a retina reporting center-surround contrast.</td></tr>
-<tr><td class="k">channel B</td><td class="d">The name as formant structure with a consonant onset.</td></tr>
-<tr><td class="k">contrast coding</td><td class="d">Drops the mean pairwise similarity of the 26 items from 0.58 to 0.37 (letters school grid).</td></tr>
-<tr><td class="k">lesson set</td><td class="d">The five vowels, a control on the curriculum node.</td></tr>
-<tr><td class="k">channel size</td><td class="d">About thirty cells each, from a scattered third of the excitatory cells.</td></tr>
-<tr><td class="k">timing</td><td class="d">500 ms on, 500 ms off.</td></tr>
-<tr><td class="k">drive</td><td class="d">A quarter of the abstract scene's.</td></tr>
-<tr><td class="k">inhibitory set point</td><td class="d">1 Hz; the abstract scene uses 3.</td></tr>
-<tr><td class="k">measured 2026-09-03</td><td class="d">Over fifteen simulated minutes, selectivity fell from 0.49 to 0.24 at 3 Hz and rose from 0.46 to 0.73 at 1 Hz.</td></tr>
-<tr><td class="k">consolidation</td><td class="d">On; commit weight 1.2, committing after five simulated minutes.</td></tr>
-</table>
-<h2>mandelbulb</h2>
-<p>A bulb of bulbs: twelve bulbs on two tiers around a core, from three shapes and two repeats.</p>
-<table>
-<tr><td class="k">bulb</td><td class="d">A sphere of 1,200 excitatory and 300 fast-spiking cells with a bud of 300 more.</td></tr>
-<tr><td class="k">first repeat</td><td class="d">Six bulbs around the core.</td></tr>
-<tr><td class="k">second repeat</td><td class="d">The ring again, smaller by 0.62, turned 30 degrees, raised 760 µm.</td></tr>
-<tr><td class="k">tags</td><td class="d"><code>tier1.bulb1.RS</code> through <code>tier2.bulb6.bud</code>.</td></tr>
-<tr><td class="k">core</td><td class="d">5,000 excitatory and 1,250 fast-spiking cells.</td></tr>
-<tr><td class="k">surface</td><td class="d">A noise warp of 220 µm at a 380 µm feature size.</td></tr>
-<tr><td class="k">inputs</td><td class="d">Six in the lower tier: sight in odd bulbs, sound in even, no retina or cochlea between.</td></tr>
-<tr><td class="k">channels</td><td class="d">Eight per cell, contrast coded, no microsaccade; a channel keeps its cells for the whole run.</td></tr>
-<tr><td class="k">bulb to bud</td><td class="d">24 contacts per source.</td></tr>
-<tr><td class="k">lower to upper</td><td class="d">48 contacts per source, joining copy k to copy k plus one across the tier repeat.</td></tr>
-<tr><td class="k">projections</td><td class="d">Project nodes made once inside the bulb and carried by the repeats.</td></tr>
-<tr><td class="k">upper to core</td><td class="d">By proximity, 260 µm kernel; each bulb lands on the nearest face, six senses in six sectors.</td></tr>
-<tr><td class="k">recurrence</td><td class="d">Local, 180 µm kernel, never between bulbs.</td></tr>
-<tr><td class="k">class-key table</td><td class="d">E to E plastic; E to I and I to I frozen; I to E under the inhibitory rule.</td></tr>
-<tr><td class="k">curriculum</td><td class="d">The vowels, one second on and one off; a unimodal probe every fifth presentation.</td></tr>
-<tr><td class="k">probes</td><td class="d">Core, one sight bulb, one sound bulb, one upper bulb, one bud; the chart plots the core decode.</td></tr>
-</table>
-<h2>PD microcircuit</h2>
-<p>The cortical microcircuit of Potjans and Diesmann (2014) at their own scale, untuned.</p>
-<table>
-<tr><td class="k">populations</td><td class="d">Eight, at their sizes.</td></tr>
-<tr><td class="k">cells</td><td class="d">77,169 under a square millimeter.</td></tr>
-<tr><td class="k">synapses</td><td class="d">About 300 million; raise the synapse budget and allow a few minutes to wire.</td></tr>
-<tr><td class="k">parameters</td><td class="d">Their connection probabilities, synaptic strengths, delays and background; every number theirs.</td></tr>
-<tr><td class="k">cell type</td><td class="d">A row matched to their integrate and fire neuron.</td></tr>
-<tr><td class="k">record</td><td class="d">The replication in RESULTS.md.</td></tr>
-</table>
-<h2>alphabet school 2</h2>
-<p>The training scenario: one laminar block of cortex at mouse density.</p>
-<table>
-<tr><td class="k">territories</td><td class="d">Visual, association and auditory, in the plane, each with the verified Potjans and Diesmann layers.</td></tr>
-<tr><td class="k">beneath</td><td class="d">Thalamic relays and sensory surfaces.</td></tr>
-<tr><td class="k">senses</td><td class="d">Segregated until the association territory.</td></tr>
-<tr><td class="k">timing</td><td class="d">Sound leads sight by 15 ms through a weaker projection.</td></tr>
-<tr><td class="k">plasticity</td><td class="d">Gated to the two convergent projections and the association territory's layer 2/3 inhibition.</td></tr>
-<tr><td class="k">that inhibition</td><td class="d">Held toward a low fixed target.</td></tr>
-<tr><td class="k">bring-up</td><td class="d">The spots-and-tones set, visual map floored at 32 cells across.</td></tr>
-<tr><td class="k">blockamp, blockdrive</td><td class="d">On the training page; scale the sensory drive and the per-layer background.</td></tr>
 </table>` },
   { id:'scaling', title:'scaling & proxy', html:`
 <h1>scaling and the resolution slider</h1>
@@ -858,6 +763,7 @@ title:'overview', html:`
 <p>linen takes nodes and engines you write.</p>
 <h2>a node</h2>
 <p>A JavaScript module in the project's <i>nodes</i> folder. The object it receives carries <i>apiVersion</i>, 1 today, so a module written for a later interface can say so instead of failing partway.</p>
+<p>A module meant for every project goes in the desktop app's startup folder (Folders menu), where <i>init.js</i> is the conventional name, or in any folder added from the same menu; a server started by hand lists such folders with <i>--startup</i>. They load before the project's own, so a project's module of the same key wins.</p>
 <pre>export default function(linen){
   linen.registerNode('shiftx', {
     title:'shift x', cat:'arrange', color:'hsl(270,75%,65%)', inputs:1,
@@ -880,6 +786,15 @@ title:'overview', html:`
 </table>
 <pre>node tools/linen.mjs run examples/scenes/jitter.json --seconds 1</pre>
 <p>Runs the example scene for one simulated second.</p>
+<h2>where customization lives</h2>
+<p>Three places, from the narrowest to the widest.</p>
+<table>
+<tr><th>place</th><th>what goes there</th><th>reach</th></tr>
+<tr><td>the project's <i>nodes</i> folder</td><td>node modules</td><td>that project, and it travels with the project</td></tr>
+<tr><td>the startup folder, and the folders added to it (desktop app: Folders menu; server: <i>--startup DIR</i>)</td><td>node modules, <i>init.js</i> by convention</td><td>every project on this machine</td></tr>
+<tr><td>another checkout (desktop app: <i>--root DIR</i>)</td><td>the whole page, its engines and its server, edited</td><td>everything, without a build of the app</td></tr>
+</table>
+<p>A project's module loads last and wins on a shared key. The developer tools open on F12 in the desktop app.</p>
 <h2>an engine</h2>
 <p>Any program that listens on a WebSocket and speaks the engine messages.</p>
 <pre>python tools/engine_template.py 8890
@@ -897,12 +812,12 @@ node tools/enginecheck.mjs ws://localhost:8890</pre>
 <p>The equations are in <a href="https://github.com/sethgjosephson/linen/blob/main/MODEL.md">MODEL.md</a> in the repository.</p>
 <table>
 <tr><th>left out</th><th>what it costs</th><th>where measured</th></tr>
-<tr><td class="k">dendrites</td><td class="d">Every neuron is a point: input sums linearly at the soma, with no cable filtering and no local nonlinearity. A cell answers the sum of its inputs, not their order or place. A two-pulse timing test a dendrite would pass, a point neuron fails.</td><td>MODEL.md 1; the fly direction-selectivity result</td></tr>
+<tr><td class="k">dendrites</td><td class="d">Every neuron is a point: input sums linearly at the soma, with no cable filtering and no local nonlinearity. A cell answers the sum of its inputs, not their order or place. A two-pulse timing test a dendrite would pass, a point neuron fails.</td><td>MODEL.md 1</td></tr>
 <tr><td class="k">ion channels</td><td class="d">The membrane is the Izhikevich 2007 fit: a quadratic in the potential, a linear recovery variable, a capacitance, rest and threshold per type. It reproduces firing patterns, not channels: no channel pharmacology, no temperature dependence, no spike shape. Measured rows carry chapter 8's currents and capacitances; classic rows are the 2003 presets in the same form.</td><td>MODEL.md 1</td></tr>
 <tr><td class="k">steps below 1 ms</td><td class="d">Every engine advances in whole milliseconds: two membrane half steps, synaptic current held over the step. On the column against 0.05 ms on Brian 2: about 7% on the mean rate, up to 14% on one population. Excitatory populations run a little fast, inhibitory ones 5 to 11% slow, interval variability a few to 15% low. Classic rows: up to 80%. The exact convention on the checkpoint does not reduce it; the residual is the membrane of the fastest-firing populations, and only a smaller step would. Timing below a millisecond is not represented.</td><td>MODEL.md, what the one millisecond step costs; tools/steperr.mjs</td></tr>
 <tr><td class="k">delays past 16 ms</td><td class="d">A delay is distance over axon velocity, rounded to a whole millisecond and clamped to 1 to 16. A path past 1.6 mm at 100 &micro;m/ms cannot carry its own delay. The status line reports the count clamped.</td><td>MODEL.md 2, delays</td></tr>
-<tr><td class="k">receptor kinetics</td><td class="d">A spike delivers one exponential per channel, as a current or a conductance toward a reversal. No NMDA voltage dependence, no rise time. A kick synapse is a current for one step, its meaning tied to the millisecond.</td><td>MODEL.md 2, synapses</td></tr>
-<tr><td class="k">plasticity mechanisms</td><td class="d">Every rule is a trace rule from its published source: pair and triplet STDP, heterosynaptic and transmitter terms, inhibitory plasticity toward a target rate, short-term plasticity, scaling, consolidation. None models receptors, calcium or proteins; none acts on the axonal delay. Synapses form at wiring time from distance and never form or prune during a run.</td><td>MODEL.md 4; MODEL.md, what is not modeled</td></tr>
+<tr><td class="k">receptor kinetics</td><td class="d">A spike delivers one exponential per channel, as a current or a conductance toward a reversal. A channel can carry the NMDA receptor's magnesium block (mg: on its line in the receptors node); there is no rise time. A kick synapse is a current for one step, its meaning tied to the millisecond.</td><td>MODEL.md 2, synapses</td></tr>
+<tr><td class="k">plasticity mechanisms</td><td class="d">Every rule is a trace rule from its published source: pair and triplet STDP, heterosynaptic and transmitter terms, inhibitory plasticity toward a target rate, short-term plasticity, scaling, consolidation. None models receptors, calcium or proteins. Timed at the synapse, a pairing counts the axonal delay with a dendritic delay of zero, so a postsynaptic spike reaches every synapse of its cell at once, with no back-propagation lag or attenuation along a dendrite, and the delays themselves do not change during a run. Synapses form at wiring time from distance and never form or prune during a run.</td><td>MODEL.md 4; MODEL.md, what is not modeled</td></tr>
 <tr><td class="k">glia, neuromodulation, gap junctions</td><td class="d">No astrocytes, no modulatory signal changing a cell's or a rule's parameters during a run, no electrical coupling. Input arrives through a chemical synapse or a current node.</td><td>MODEL.md, what is not modeled</td></tr>
 <tr><td class="k">external synapses</td><td class="d">Background is a constant current plus per-millisecond noise drawn per cell from a seeded counter, identical in all three engines. It stands in for thousands of external synapses, with no synaptic time course and no correlation between cells.</td><td>MODEL.md 2, noise; the column's per-population drive</td></tr>
 <tr><td class="k">correlations below 100%</td><td class="d">Fewer cells, each cell's input mean and variance restored (van Albada, Helias and Diesmann 2015). Rates and the activity regime survive; correlations, synchrony and oscillation amplitudes do not. Training below 100 percent is refused.</td><td>MODEL.md 3, proxy downscaling; the scaling page</td></tr>
@@ -928,6 +843,11 @@ node tools/enginecheck.mjs ws://localhost:8890</pre>
 <p>Vogels, T. P., et al. (2011). Inhibitory plasticity balances excitation and inhibition in sensory pathways and memory networks. Science. The homeostasis rule.</p>
 <p>van Rossum, M. C. W., Bi, G. Q., Turrigiano, G. G. (2000). Stable Hebbian learning from spike timing-dependent plasticity. Journal of Neuroscience. Weight-dependent depression on the checkpoint node.</p>
 <p>Gutig, R., Aharonov, R., Rotter, S., Sompolinsky, H. (2003). Learning input correlations through nonlinear temporally asymmetric Hebbian plasticity. Journal of Neuroscience. Weight-dependent depression on the checkpoint node.</p>
+<p>Tsodyks, M. V., Markram, H. (1997). The neural code between neocortical pyramidal neurons depends on neurotransmitter release probability. PNAS 94(2), 719-723. Short-term plasticity.</p>
+<p>Markram, H., Wang, Y., Tsodyks, M. (1998). Differential signaling via the same axon of neocortical pyramidal neurons. PNAS 95(9), 5323-5328. The depressing and facilitating presets.</p>
+<p>Reyes, A., Lujan, R., Rozov, A., Burnashev, N., Somogyi, P., Sakmann, B. (1998). Target-cell-specific facilitation and depression in neocortical circuits. Nature Neuroscience 1(4), 279-285. Short-term plasticity per rule.</p>
+<p>Silberberg, G., Markram, H. (2007). Disynaptic inhibition between neocortical pyramidal cells mediated by Martinotti cells. Neuron 53(5), 735-746. Facilitating synapses onto the column's SST cells.</p>
+<p>Ali, A. B., Thomson, A. M. (2008). Synaptic alpha5 subunit-containing GABAA receptors mediate IPSPs elicited by dendrite-preferring cells in rat neocortex. Cerebral Cortex 18(6), 1260-1271. The column's slower SST channel.</p>
 <h2>cortical statistics</h2>
 <p>Schuz, A., Palm, G. (1989). Density of neurons and synapses in the cerebral cortex of the mouse. Journal of Comparative Neurology 286(4), 442-455. The density target: 9.2 x 10^4 neurons and 7.2 x 10^8 synapses per mm3, 8,200 synapses per neuron, 11 percent type II (mouse areas 8, 6 and 17).<br>
 <a href="https://onlinelibrary.wiley.com/doi/10.1002/cne.902860404">onlinelibrary.wiley.com</a></p>

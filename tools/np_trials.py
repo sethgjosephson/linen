@@ -1,7 +1,7 @@
 """Read a linen trial export into numpy, and into Neo.
 
 A training run writes `trials-<runTag>.npt` at each checkpoint: the per-trial,
-per-cell spike counts every measure in ANALYSIS.md is derived from. This turns
+per-cell spike counts every measure in MODEL.md section 5 is derived from. This turns
 that into arrays anyone can work with, and into Neo objects so the rest of the
 Python electrophysiology stack can read it.
 
@@ -59,7 +59,7 @@ def to_neo(head, pops):
 
     The counts are per trial rather than per millisecond, so a Segment here is
     one presentation and the signal is its response vector. That is the shape
-    the analyses in ANALYSIS.md want, and it is honest about what was saved:
+    the analyses in MODEL.md section 5 want, and it is honest about what was saved:
     the app keeps counts per presentation, not spike times, so nothing here
     invents a SpikeTrain it does not have.
     """
@@ -115,7 +115,7 @@ def summarise(head, pops):
             print(f"    fano (per cell, per item) {allff.mean():.3f} "
                   f"over {len(allff)} cell-items")
 
-        # lifetime sparseness of the mean response matrix, the other half of the pair ANALYSIS.md names: how few items each cell answers to
+        # lifetime sparseness of the mean response matrix, the other half of the pair MODEL.md section 5 names: how few items each cell answers to
         if len(base) >= 2 and len(items):
             resp = np.zeros((len(items), n_cells))
             for i in range(len(items)):

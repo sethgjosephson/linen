@@ -94,7 +94,7 @@ eng.postMessage({ cmd:'init', protocol:PROTOCOL, count:n, ntype, bias,
   trip:R.trip, tauY:R.tauY, het:R.het, tin:R.tin,
   cons:CONS, consW:0, consP:10,   // 0 = the scaled default, a tenth of wmax
   commit:COMMIT, tauCons:TAUCONS,
-  stp:STP, stpOrder:+(process.env.STPORDER || 0), stpU:0.2, stpTauD:200, stpTauF:600,
+  stp:STP, stpOrder:+(process.env.STPORDER || 0), stpScope:+(process.env.STPSCOPE || 0), stdpAt:+(process.env.STDPAT || 0), stpU:0.2, stpTauD:200, stpTauF:600,
   ...(pool ? { pool, poolK } : {}),
   inputs:[], preStart, post, w:w.slice(), delay, types:CLASSES,
   // the same initial state and seed dumpnet gave the reference (ESEED default 1)

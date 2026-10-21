@@ -3,7 +3,8 @@
 // Stimulus protocols (pulse train / ramp) are evaluated here per sim-ms so editing them never rebuilds the network.
 import { gradedArrays, freezeGraded } from './nodes.js';
 import { checkProtocol, helloReply, TERM_NAMES, OPTIONAL } from './protocol.js';
-import { noiseDraw } from './rand.js';
+import { noiseDraw, NOISE_SHARED } from './rand.js';
+import { foldNoise } from './noisefold.js';
 
 let S = null;
 // the stream switches are kept across an init: the trainer asks for latency before it sends the network, so a request that arrives with no network has to survive until one does
@@ -36,6 +37,8 @@ function configure(m){
   if(extra.length > 6) throw new Error('receptor channels: at most six beyond E and I');
   S.chanTau = extra;
   S.KX = extra.length;
+  // the magnesium block per channel, mM; 0 is no gate (MODEL.md 2)
+  S.chanMg = Float32Array.from({ length:extra.length }, (_, k) => { const mg = m.chanMg ? +m.chanMg[k] : (S.chanMg ? S.chanMg[k] : 0); return mg > 0 ? mg : 0; });
   S.chanDec = Float32Array.from(extra, t => Math.exp(-1/(t > 0 ? t : 3)));   // chanDec: decX is short-term plasticity's
   S.chanItau = Float32Array.from(S.chanDec, (d, k) => itauOf(S.psc, d, extra[k] > 0 ? extra[k] : 3));
   if(S.KX && (!S.gX || S.gX.length !== S.KX*S.n)){
@@ -45,6 +48,7 @@ function configure(m){
   for(const p of (m.protocols || []))
     (p.mode === 3 ? S.nprotos : S.protos).push({ ...p, _s: -1 });
   S.stim = null; S.namp = null;
+  S.noise = foldNoise(S.nprotos, S.n);         // a noise stimulus's memory and shared part per cell (src/noisefold.js), null for the white draw; conflicting stimuli are refused here
   // framed input maps (live encoders): per map, a channel -> neuron CSR; inputFrame messages set per-channel gains between frames
   if(m.inputs !== undefined){
     S.inputs = (m.inputs || []).map(im => ({ ...im,
@@ -73,6 +77,13 @@ function configure(m){
   S.rhoMode = (m.rhoMode|0) === 1 ? 1 : 0;
   S.calMs = (m.calS > 0 ? m.calS : 10) * 1000;
   S.tauSv = tauS; S.tauMv = tauM;
+  // Where the pair rule reads its traces (MODEL.md 4).
+  // 0: at the soma, both passes when the cell fires.
+  // 1: at the synapse, where a presynaptic spike counts when it arrives, d steps after it was fired: potentiation at a post spike reads the pre trace as it was d steps ago, e^(d/tau+) (Kpre - the spikes of the last d - 1 steps), and depression waits d steps and reads Kpost then.
+  // The dendritic part of the delay is 0, the NEST convention, so a post spike reaches every synapse of its cell at once.
+  S.stdpAt = (m.stdpAt|0) === 1 ? 1 : 0;
+  S.ekS = Float64Array.from({ length:17 }, (_, k) => Math.exp(-k/tauS));   // what a spike k steps ago contributes to Kpre
+  S.exdS = Float64Array.from({ length:17 }, (_, d) => Math.exp(d/tauS));   // the trace d steps ago from the trace now, once those spikes are taken out
   // Beyond the pair rule: the fast mechanism set of Zenke, Agnes and Gerstner 2015 (Nat Commun 6:6922), each grounded separately, each off by default so the committed pair rule is byte-identical without them. trip is the triplet LTP amplitude (Pfister and Gerstner 2006): potentiation at a postsynaptic spike becomes (aP + trip*Kslow) * Kpre, with Kslow the slow postsynaptic trace read before the current spike, which gives LTP the postsynaptic-rate dependence pair STDP cannot fit (Sjostrom, Turrigiano and Nelson 2001; Wang et al. 2005). tauY is the slow trace time constant in ms; 114 is the Pfister-Gerstner visual cortex fit. het is heterosynaptic regression of every incoming plastic excitatory weight toward its reference, gated by the cubed slow trace so only bursting engages it (Lynch et al. 1977; Chistiakova et al. 2014; implementation form of Zenke et al. 2015).
   // The reference is the weight vector at the moment het is switched on; after a resume that is the resumed state, a baseline that moves at checkpoint timescale. tin is transmitter-induced potentiation per presynaptic spike, the small non-Hebbian term that keeps low-rate synapses from silent collapse; the least measured of the set and stated so in the source.
   // Absolute refractory floor in ms, default 0.
@@ -104,8 +115,10 @@ function configure(m){
   S.decY = Math.exp(-1/tauY);
   S.het = m.het > 0 ? +m.het : 0;
   S.tin = m.tin > 0 ? +m.tin : 0;
-  // the heterosynaptic gate is the slow trace relative to its value at the homeostatic target rate, cubed: competition engages when the neuron fires above its set point, and the gate is dimensionless so het keeps one scale across targets and trace time constants
+  // The heterosynaptic gate is the slow trace relative to its value at the homeostatic target rate, cubed: competition engages when the neuron fires above its set point, and the gate is dimensionless so het keeps one scale across targets and trace time constants.
+  // Under measured set points each cell's own target is used: k_ref,i = alphaI[i] tauY/(tauS + tauM), the same arithmetic in every engine, which is alphaI's definition inverted (MODEL.md 4).
   S.kRef = Math.max(1e-6, tauY*(m.iRho || S.iRho || 5)/1000);
+  S.kRefA = tauY/(S.tauSv + S.tauMv);
   // Consolidation of the reference weight (Zenke, Agnes and Gerstner 2015, Nat Commun 6:6922, equation 16).
   // Without it wRef is a frozen snapshot of the weights at the moment plasticity switched on, so the heterosynaptic term is a permanent decay toward the initial state and opposes every learned change forever.
   //
@@ -116,15 +129,31 @@ function configure(m){
   // Short-term depression gives the effective input-output relation the curvature that puts a stable fixed point at intermediate rates, which is what the source says lets an assembly sit at an elevated rate without running away.
   //
   // stpOrder 0, as published (Tsodyks, Pawelzik and Markram 1998 eqs 2.1 to 2.3; Zenke et al. 2015 eqs 9 and 10 and their Auryn code): at a spike the released fraction is u times x, then x depletes and u jumps, u += U(1 - u), so a rested synapse releases U of its weight. stpOrder 1 jumps u before releasing, so a rested synapse releases U(2 - U); scenes tuned on that order declare it. stpNorm 1 multiplies every release by the inverse of the rested release, so a rested synapse delivers exactly w.
-  S.stp = m.stp > 0 ? 1 : 0;
-  S.stpU = m.stpU > 0 ? +m.stpU : 0.2;
   S.stpOrder = (m.stpOrder|0) === 1 ? 1 : 0;
-  S.stpScale = (m.stpNorm|0) === 1 ? 1/(S.stpOrder ? S.stpU*(2 - S.stpU) : S.stpU) : 1;
-  S.stpTauD = m.stpTauD > 0 ? +m.stpTauD : 200;   // ms, depression recovery
-  S.stpTauF = m.stpTauF > 0 ? +m.stpTauF : 600;   // ms, facilitation decay
-  if(S.stp && (!S.stpX || S.stpX.length !== S.n)){
-    S.stpX = new Float32Array(S.n).fill(1);
-    S.stpR = new Float32Array(S.n).fill(S.stpU);
+  S.stpScope = (m.stpScope|0) & 3;           // the release on every synapse (0), excitatory only (1) or inhibitory only (2)
+  // Per-rule short-term plasticity: a class per distinct set of settings (stpClassTable in nodes.js), state per presynaptic cell and class at [c*n + i], and each rule row mapped to its class.
+  // A network without the table is one class, the checkpoint's.
+  const tbl = m.stpTable && m.stpClasses >= 1 ? m.stpTable
+    : [m.stp > 0 ? 1 : 0, m.stpU > 0 ? +m.stpU : 0.2, m.stpTauD > 0 ? +m.stpTauD : 200, m.stpTauF > 0 ? +m.stpTauF : 600];
+  const C = Math.max(1, (tbl.length/4)|0);
+  S.stpC = C;
+  S.stpCls = m.stpCls ? Uint8Array.from(m.stpCls) : new Uint8Array(16);
+  // plain arrays, not Float32Array: U, the decays, the scale and the release are doubles, as the single-class engine always computed them (the state arrays are float32)
+  S.stpOn = new Uint8Array(C); S.stpUc = new Array(C); S.stpScaleC = new Array(C);
+  S.stpDx = new Array(C); S.stpDr = new Array(C);
+  for(let c = 0; c < C; c++){
+    const U = tbl[c*4 + 1] > 0 ? +tbl[c*4 + 1] : 0.2;
+    S.stpOn[c] = tbl[c*4] > 0 ? 1 : 0; S.stpUc[c] = U;
+    S.stpScaleC[c] = (m.stpNorm|0) === 1 ? 1/(S.stpOrder ? U*(2 - U) : U) : 1;
+    S.stpDx[c] = Math.exp(-1/(tbl[c*4 + 2] > 0 ? +tbl[c*4 + 2] : 200));   // depression recovery
+    S.stpDr[c] = Math.exp(-1/(tbl[c*4 + 3] > 0 ? +tbl[c*4 + 3] : 600));   // facilitation decay
+  }
+  S.stp = S.stpOn.some(x => x) ? 1 : 0;
+  S.stpRel = new Array(C).fill(1);
+  if(S.stp && (!S.stpX || S.stpX.length !== S.n*C)){
+    S.stpX = new Float32Array(S.n*C).fill(1);
+    S.stpR = new Float32Array(S.n*C);
+    for(let c = 0; c < C; c++) S.stpR.fill(S.stpUc[c], c*S.n, (c + 1)*S.n);
   }
   S.cons = m.cons > 0 ? +m.cons : 0;
   // The published upper fixed point is 0.5 against a wmax of 5, so the consolidated state sits at a tenth of maximum.
@@ -179,6 +208,11 @@ function configure(m){
     S.inStart = inStart; S.revSyn = revSyn; S.revPre = revPre;
     S.Kpre = new Float32Array(n); S.Kpost = new Float32Array(n);
     S.spkAcc = new Float32Array(n);          // spikes this scaling window
+    // each cell's spikes of the last 16 steps, bit k for k steps ago (bit 0 is this step, set as the cell fires and shifted out at the end of the step), and the delays its synapses carry, bit d for a delay of d: together they say when one of its spikes arrives somewhere
+    S.spkHist = new Uint32Array(n);
+    S.dmask = new Uint32Array(n);
+    for(let i=0;i<n;i++)
+      for(let s=S.preStart[i]; s<S.preStart[i+1]; s++) S.dmask[i] |= 1 << S.delay[s];
   }
   if(S.plast && S.rhoMode === 1 && !S.rhoI){
     S.calibrating = true; S.calStart = S.t;
@@ -245,10 +279,57 @@ function softBound(wv, delta, wmax){
     ? (wmax - a)/wmax : a/wmax;
   return delta * (room > 0 ? room : 0);
 }
+// The outgoing half for one synapse: depression against the postsynaptic trace, or the Vogels term on an inhibitory one.
+// At the soma it runs when the cell fires; at the synapse it runs when the spike arrives, with Kpost as it is then.
+function plastOutSyn(s, committed){
+  const { post, w, pmask, alphaI, Kpost, iAlpha, ruleTable:RT, RS } = S;
+  const rid = pmask ? (pmask[s] & 31) : 1;   // the rule is the low five bits; the channel the top three
+  if(!rid) return;                           // 0 is frozen
+  const o = rid*RS;
+  if(committed && committed(s, o)) return;
+  const wmax = RT[o+2], wdep = RT[o+3] !== 0;
+  const wj = w[s];
+  if(wj > 0) w[s] = Math.min(wmax, Math.max(1e-4,
+    wj - RT[o+1]*Kpost[post[s]]*(wdep ? wj : 1) + RT[o+6]));
+  else {
+    const al = alphaI ? alphaI[post[s]] : iAlpha;
+    let d = -RT[o+7]*(Kpost[post[s]] - al);
+    if(wdep) d = softBound(wj, d, wmax);
+    w[s] = Math.max(-wmax, Math.min(-1e-4, wj + d));
+  }
+}
+// which synapses of each rule are committed and so skipped by both halves, or null when nothing commits
+function committedTest(){
+  const { wRef, ruleTable:RT } = S;
+  return S.commit && wRef ? (s, o) => RT[o+9] > 0 && wRef[s] >= RT[o+9]*0.9 : null;
+}
+// Reading at the synapse, the pre trace a post spike at this step sees through a synapse of delay d: the spikes that have arrived are those d or more steps old, so the spikes of the last d - 1 steps are taken out of Kpre and the rest is brought forward by e^(d/tau+), which puts a spike exactly d steps old at 1, the peak of the window (dt 0 from its arrival).
+// Kpre holds no spike of this step here, since at the synapse the traces are bumped at the end of the step.
+function kpreAtSynapse(pre, d){
+  const h = S.spkHist[pre], ek = S.ekS;
+  let sub = 0;
+  for(let k=1;k<d;k++) if((h >> k) & 1) sub += ek[k];
+  const kp = S.exdS[d]*(S.Kpre[pre] - sub);
+  return kp > 0 ? kp : 0;
+}
+// At the synapse, the arrivals of this step: every cell with a spike d steps ago and synapses of delay d, each such synapse depressed now against Kpost as it stands at the start of the step, before any cell of this step fires.
+// A presynaptic arrival and a postsynaptic spike in the same step are read as pre before post: the arrival does not see the spike, and the spike's potentiation sees the arrival at the peak of its window.
+function plastArrivals(){
+  const { n, preStart, delay, spkHist, dmask } = S;
+  const committed = committedTest();
+  for(let i=0;i<n;i++){
+    const h = spkHist[i];
+    if(!(h & dmask[i])) continue;
+    for(let s=preStart[i], e=preStart[i+1]; s<e; s++)
+      if((h >> delay[s]) & 1) plastOutSyn(s, committed);
+  }
+}
 function plastOnSpike(i){
-  const { preStart, post, w, inStart, revSyn, revPre, pmask, alphaI,
-          Kpre, Kpost, iAlpha, Kslow, wRef, ruleTable:RT, RS } = S;
+  const { preStart, inStart, revSyn, revPre, delay, w, pmask, alphaI,
+          Kpre, Kpost, Kslow, wRef, ruleTable:RT, RS } = S;
+  const atSyn = S.stdpAt === 1;
   if(S.calibrating){                         // measure baselines, change nothing
+    if(atSyn) return;                        // the traces are bumped at the end of the step
     Kpre[i] += 1; Kpost[i] += 1;
     if(Kslow) Kslow[i] += 1;
     if(S.spkAcc) S.spkAcc[i] += 1;
@@ -257,29 +338,14 @@ function plastOnSpike(i){
   // the slow trace is read before this spike is added: the triplet term potentiates by the postsynaptic history, not by the present spike
   const z = Kslow ? Kslow[i] : 0;
   // The heterosynaptic gate is dimensionless and shared, since it is built from this neuron's trace and its set point; only the amplitude het multiplying it is per rule, so the cube is computed once here.
-  // The set point in the gate is the global one even under measured set points: the WebGPU incoming pass has no storage slot left for a per-neuron value, and the engines have to agree (MODEL.md 4, terms in combination).
-  const g = z/S.kRef, gate = g*g*g;
+  // Under measured set points the set point is this cell's own, read back from its Vogels alpha.
+  const kr = alphaI ? Math.max(1e-6, alphaI[i]*S.kRefA) : S.kRef;
+  const g = z/kr, gate = g*g*g;
   // The rule byte is read per synapse and the row is read from it.
   // When no plasticity node exists every plastic synapse carries 1 and every read lands on the same row: one global rule, arrived at by the same path rather than by a separate branch.
-  const committed = S.commit && wRef
-    ? (s, o) => RT[o+9] > 0 && wRef[s] >= RT[o+9]*0.9
-    : null;
-  for(let s=preStart[i], e=preStart[i+1]; s<e; s++){
-    const rid = pmask ? (pmask[s] & 31) : 1;   // the rule is the low five bits; the channel the top three
-    if(!rid) continue;                       // 0 is frozen
-    const o = rid*RS;
-    if(committed && committed(s, o)) continue;
-    const wmax = RT[o+2], wdep = RT[o+3] !== 0;
-    const wj = w[s];
-    if(wj > 0) w[s] = Math.min(wmax, Math.max(1e-4,
-      wj - RT[o+1]*Kpost[post[s]]*(wdep ? wj : 1) + RT[o+6]));
-    else {
-      const al = alphaI ? alphaI[post[s]] : iAlpha;
-      let d = -RT[o+7]*(Kpost[post[s]] - al);
-      if(wdep) d = softBound(wj, d, wmax);
-      w[s] = Math.max(-wmax, Math.min(-1e-4, wj + d));
-    }
-  }
+  const committed = committedTest();
+  // at the soma the outgoing half runs now; at the synapse it runs when each spike arrives (plastArrivals)
+  if(!atSyn) for(let s=preStart[i], e=preStart[i+1]; s<e; s++) plastOutSyn(s, committed);
   for(let k=inStart[i], ke=inStart[i+1]; k<ke; k++){
     const s = revSyn[k];
     const rid = pmask ? (pmask[s] & 31) : 1;   // the rule is the low five bits; the channel the top three
@@ -287,7 +353,7 @@ function plastOnSpike(i){
     const o = rid*RS;
     if(committed && committed(s, o)) continue;
     const wmax = RT[o+2], wdep = RT[o+3] !== 0, het = RT[o+5];
-    const wp = w[s], kp = Kpre[revPre[k]];
+    const wp = w[s], kp = atSyn ? kpreAtSynapse(revPre[k], delay[s]) : Kpre[revPre[k]];
     if(wp > 0){
       let nw = wp + (RT[o+0] + RT[o+4]*z)*kp;
       if(het > 0) nw -= Math.min(1, het*gate)*(wp - wRef[s]);
@@ -299,29 +365,67 @@ function plastOnSpike(i){
       w[s] = Math.max(-wmax, wp + d);
     }
   }
+  if(atSyn) return;                          // the traces are bumped at the end of the step
   Kpre[i] += 1; Kpost[i] += 1;
   if(Kslow) Kslow[i] += 1;
   if(S.spkAcc) S.spkAcc[i] += 1;
 }
+// The end of a step for the traces: at the synapse, the spikes of this step are added here (so every read within the step saw the traces as of the end of the step before), then every trace decays and the spike history moves on.
+// Written as the two float32 stores the soma path makes (the bump, then the decay), so the two readings keep the same rounding.
+function traceStep(){
+  const { n, Kpre, Kpost, decS, decM, spkHist } = S;
+  const atSyn = S.stdpAt === 1;
+  for(let i=0;i<n;i++){
+    const h = spkHist ? spkHist[i] : 0;
+    if(atSyn && (h & 1)){
+      Kpre[i] += 1; Kpost[i] += 1;
+      if(S.Kslow) S.Kslow[i] += 1;
+      if(S.spkAcc) S.spkAcc[i] += 1;
+    }
+    Kpre[i] *= decS; Kpost[i] *= decM;
+    if(spkHist) spkHist[i] = (h << 1) & 0x1FFFF;
+  }
+  if(S.Kslow){ const Ks = S.Kslow, dY = S.decY;
+    for(let i=0;i<n;i++) Ks[i] *= dY; }
+}
 
 // Tsodyks-Markram release at a presynaptic spike, normalized so a rested synapse delivers its full weight.
 // Returns the scale factor for every outgoing synapse of neuron i.
+// With several classes each one's release is written to S.stpRel and the class 0 release is returned; a class that is off releases 1.
 function stpRelease(i){
-  const X = S.stpX, R = S.stpR, U = S.stpU;
-  if(S.stpOrder) R[i] = R[i] + U*(1 - R[i]);   // stpOrder 1: facilitation before release
-  const rel = R[i]*X[i];
-  X[i] = X[i] - rel;                       // depletion
-  if(!S.stpOrder) R[i] = R[i] + U*(1 - R[i]);  // as published: facilitation after release
-  return rel*S.stpScale;
+  const X = S.stpX, R = S.stpR, n = S.n;
+  let first = 1;
+  for(let c = 0; c < S.stpC; c++){
+    let f = 1;
+    if(S.stpOn[c]){
+      const U = S.stpUc[c], k = c*n + i;
+      if(S.stpOrder) R[k] = R[k] + U*(1 - R[k]);   // stpOrder 1: facilitation before release
+      const rel = R[k]*X[k];
+      X[k] = X[k] - rel;                       // depletion
+      if(!S.stpOrder) R[k] = R[k] + U*(1 - R[k]);  // as published: facilitation after release
+      f = rel*S.stpScaleC[c];
+    }
+    S.stpRel[c] = f;
+    if(c === 0) first = f;
+  }
+  return first;
 }
+// The release factor of synapse s at the spike just released, by its rule's class and the scope's sign.
+const stpFactor = (s, w) => {
+  const f = S.stpRel[S.stpCls[S.pmask ? (S.pmask[s] & 31) : 1]];
+  return w > 0 ? (S.stpScope === 2 ? 1 : f) : (S.stpScope === 1 ? 1 : f);
+};
 
 // Per-millisecond recovery of both state variables, exact exponential rather than Euler so the time constants hold at any step size.
 function stpStep(){
-  const X = S.stpX, R = S.stpR, U = S.stpU, n = S.n;
-  const dx = Math.exp(-1/S.stpTauD), dr = Math.exp(-1/S.stpTauF);
-  for(let i=0;i<n;i++){
-    X[i] = 1 - (1 - X[i])*dx;
-    R[i] = U + (R[i] - U)*dr;
+  const X = S.stpX, R = S.stpR, n = S.n;
+  for(let c = 0; c < S.stpC; c++){
+    if(!S.stpOn[c]) continue;
+    const U = S.stpUc[c], dx = S.stpDx[c], dr = S.stpDr[c], o = c*n;
+    for(let i=o, e=o+n;i<e;i++){
+      X[i] = 1 - (1 - X[i])*dx;
+      R[i] = U + (R[i] - U)*dr;
+    }
   }
 }
 
@@ -433,6 +537,7 @@ onmessage = (e) => {
     try { G = gradedArrays(m.ntype, T); }
     catch(e){ postMessage({ cmd:'error', message:'simworker: ' + e.message }); return; }
     S = { n, a, b, c, d, v, u, C7, k7, vr7, vt7, vp7,
+      nz:new Float32Array(n), nzs:new Float32Array(n),   // the two noise filter states per cell, zero at the start (MODEL.md 2)
       grd:G ? G.grd : null, gthr:G ? G.thr : null, gslp:G ? G.slope : null,
       seed: ((m.seed|0) || 1) >>> 0,   // noise draws and the initial jitter
       preStart:m.preStart, post:m.post, w:m.w, delay:m.delay,
@@ -532,6 +637,22 @@ function scanQuery(budget){
 }
 
 // Per-millisecond noise is noiseDraw in rand.js: counter based, a pure function of (neuron, t, seed), shared with the WebGPU and CUDA copies.
+// A noise stimulus with a time constant filters the cell's draw as an Ornstein-Uhlenbeck process of the same variance, and one with a shared fraction mixes in the stimulus's own draw, filtered the same way (MODEL.md 2).
+// The states are kept in f32, as the other engines keep them; the arithmetic between is this engine's.
+function noiseAt(i){
+  let d = noiseDraw(i, S.t, S.seed);
+  const F = S.noise;
+  if(!F) return d;
+  const a = F.a[i];
+  if(a > 0){ S.nz[i] = a*S.nz[i] + F.k[i]*d; d = S.nz[i]; }
+  const c = F.c[i];
+  if(c > 0){
+    let s = noiseDraw(NOISE_SHARED + F.id[i], S.t, S.seed);
+    if(a > 0){ S.nzs[i] = a*S.nzs[i] + F.k[i]*s; s = S.nzs[i]; }
+    d = Math.sqrt(1 - c)*d + Math.sqrt(c)*s;
+  }
+  return d;
+}
 
 // Feedback inhibition: what each pool delivers this millisecond is its kick per spike times the spikes it fired last millisecond, on the inhibitory path (the input current in kick mode, the I conductance in exp mode).
 // The counts of this millisecond become last millisecond's at the end of the step.
@@ -551,9 +672,11 @@ function step(fired, lat, sIdx){
   const poolIn = pool ? poolDrive() : null;
   const row = cur*n;
   let count = 0, watchSpiked = false;
+  // at the synapse, the spikes arriving this step depress their synapses before any cell fires
+  if(S.plast && S.stdpAt === 1 && !S.calibrating) plastArrivals();
   for(let i=0;i<n;i++){
     const I = ring[row+i] + bias[i] + (stim ? stim[i] : 0) + (ext ? ext[i] : 0)
-      + (namp ? namp[i]*noiseDraw(i, S.t, S.seed) : 0) + (pool ? poolIn[pool[i]] : 0);
+      + (namp ? namp[i]*noiseAt(i) : 0) + (pool ? poolIn[pool[i]] : 0);
     let vi = v[i], ui = u[i];
     if(S.refCnt && S.refCnt[i] > 0){
       // absolute refractoriness: the membrane is held at reset and the threshold cannot be reached, whatever the drive
@@ -594,17 +717,19 @@ function step(fired, lat, sIdx){
       if(pool) S.poolNext[pool[i]]++;
       if(i===S.watch) watchSpiked = true;
       const sf = S.stp ? stpRelease(i) : 1;
-      for(let s=preStart[i], e1=preStart[i+1]; s<e1; s++)
-        ring[((cur+delay[s])%ROWS)*n + post[s]] += w[s]*sf;
-      if(S.plast) plastOnSpike(i);
+      // the release applies to the synapses in scope: every one, or one sign of weight (stpScope)
+      const sfE = S.stpScope === 2 ? 1 : sf, sfI = S.stpScope === 1 ? 1 : sf;
+      if(S.stpC > 1 && S.stp){
+        for(let s=preStart[i], e1=preStart[i+1]; s<e1; s++)
+          ring[((cur+delay[s])%ROWS)*n + post[s]] += w[s]*stpFactor(s, w[s]);
+      } else for(let s=preStart[i], e1=preStart[i+1]; s<e1; s++)
+        ring[((cur+delay[s])%ROWS)*n + post[s]] += w[s]*(w[s] > 0 ? sfE : sfI);
+      if(S.plast){ if(S.spkHist) S.spkHist[i] |= 1; plastOnSpike(i); }
     }
     v[i] = vi; u[i] = ui;
   }
   if(S.plast){
-    const { Kpre, Kpost, decS, decM } = S;
-    for(let i=0;i<n;i++){ Kpre[i] *= decS; Kpost[i] *= decM; }
-    if(S.Kslow){ const Ks = S.Kslow, dY = S.decY;
-      for(let i=0;i<n;i++) Ks[i] *= dY; }
+    traceStep();
     if(S.anyCons && ++S.consAcc >= S.consStep){ S.consAcc = 0; consolidate(); }
   }
   if(S.stp) stpStep();
@@ -618,10 +743,12 @@ function step(fired, lat, sIdx){
 function stepExp(fired, lat, sIdx){
   const { n, v, u, a, b, c, d, ring, ring2, gE, gI, decE, decI, itauE, itauI,
           cur, ROWS, bias, stim, namp, ext, preStart, post, w, delay, pool, vmin,
-          C7, k7, vr7, vt7, vp7, grd, gthr, gslp, KX, gX, ringX, chanDec, chanItau, pmask, cond, eRevE, eRevI, chanErev } = S;
+          C7, k7, vr7, vt7, vp7, grd, gthr, gslp, KX, gX, ringX, chanDec, chanItau, chanMg, pmask, cond, eRevE, eRevI, chanErev } = S;
   const poolIn = pool ? poolDrive() : null;
   const row = cur*n;
   let count = 0, watchSpiked = false;
+  // at the synapse, the spikes arriving this step depress their synapses before any cell fires
+  if(S.plast && S.stdpAt === 1 && !S.calibrating) plastArrivals();
   // a synapse's ring: by the channel in its plasticity byte, else by sign
   const ringOf = (s, wt) => { const ch = pmask ? pmask[s] >> 5 : 0; return ch >= 2 ? null : (wt > 0 ? ring : ring2); };
   for(let i=0;i<n;i++){
@@ -631,10 +758,13 @@ function stepExp(fired, lat, sIdx){
     // current-based: g times the scale; conductance-based: |g| (E - v)
     let I = (cond ? Math.abs(ge)*(eRevE - v0) + Math.abs(gi)*(eRevI - v0) : ge*itauE + gi*itauI)
       + bias[i] + (stim ? stim[i] : 0) + (ext ? ext[i] : 0)
-      + (namp ? namp[i]*noiseDraw(i, S.t, S.seed) : 0);
+      + (namp ? namp[i]*noiseAt(i) : 0);
     if(KX) for(let x=0;x<KX;x++){
       const at = x*n + i, g = gX[at]*chanDec[x] + ringX[(x*ROWS + cur)*n + i];
-      gX[at] = g; I += cond ? Math.abs(g)*(chanErev[x] - v0) : g*chanItau[x];
+      gX[at] = g;
+      // the magnesium block (Jahr and Stevens 1990): B(v) = 1/(1 + [Mg]/3.57 exp(-0.062 v)), the fraction of the channel's current the voltage lets through
+      const bI = chanMg[x] > 0 ? 1/(1 + (chanMg[x]/3.57)*Math.exp(-0.062*v0)) : 1;
+      I += bI*(cond ? Math.abs(g)*(chanErev[x] - v0) : g*chanItau[x]);
     }
     let vi = v[i], ui = u[i];
     if(S.refCnt && S.refCnt[i] > 0){
@@ -677,20 +807,19 @@ function stepExp(fired, lat, sIdx){
       if(pool) S.poolNext[pool[i]]++;
       if(i===S.watch) watchSpiked = true;
       const sf = S.stp ? stpRelease(i) : 1;
+      // the release applies to the synapses in scope: every one, or one sign of weight (stpScope)
+      const sfE = S.stpScope === 2 ? 1 : sf, sfI = S.stpScope === 1 ? 1 : sf;
       for(let s=preStart[i], e1=preStart[i+1]; s<e1; s++){
-        const wt = w[s]*sf, slot = (cur+delay[s])%ROWS, at = slot*n + post[s];
+        const wt = w[s]*(S.stpC > 1 && S.stp ? stpFactor(s, w[s]) : (w[s] > 0 ? sfE : sfI)), slot = (cur+delay[s])%ROWS, at = slot*n + post[s];
         const rg = ringOf(s, wt);
         if(rg) rg[at] += wt; else ringX[(((pmask[s] >> 5) - 2)*ROWS + slot)*n + post[s]] += wt;
       }
-      if(S.plast) plastOnSpike(i);
+      if(S.plast){ if(S.spkHist) S.spkHist[i] |= 1; plastOnSpike(i); }
     }
     v[i] = vi; u[i] = ui; gE[i] = ge; gI[i] = gi;
   }
   if(S.plast){
-    const { Kpre, Kpost, decS, decM } = S;
-    for(let i=0;i<n;i++){ Kpre[i] *= decS; Kpost[i] *= decM; }
-    if(S.Kslow){ const Ks = S.Kslow, dY = S.decY;
-      for(let i=0;i<n;i++) Ks[i] *= dY; }
+    traceStep();
     if(S.anyCons && ++S.consAcc >= S.consStep){ S.consAcc = 0; consolidate(); }
   }
   if(S.stp) stpStep();

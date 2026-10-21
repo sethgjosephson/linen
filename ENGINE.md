@@ -115,8 +115,12 @@ Requests (main thread to engine):
   integral; section 3), `tauM` (depression trace time constant; section
   3), `stpNorm` (short-term plasticity delivery scale; section 8),
   `stpOrder` (0 release then facilitation, 1 the reverse; section 8),
+  `stpScope` (0 every synapse, 1 excitatory only, 2 inhibitory only;
+  section 8), `stdpAt` (where the pair rule is timed: 0 at the soma, 1
+  at the synapse; section 3),
   `protocols` (list of `{ idx, amp, mode, period, width, t0, duration,
-  gain }`; mode 0 constant, 1 pulse train, 2 ramp, 3 noise amplitude;
+  gain, tau, common }`; mode 0 constant, 1 pulse train, 2 ramp, 3 noise
+  amplitude, with `tau` and `common` on mode 3 only (section 9);
   `gain`, optional, is a Float32Array aligned with `idx` that multiplies
   `amp` per cell, the stimulus's spread; the CUDA engine runs constant and
   noise protocols only and refuses a pulse or ramp), `ruleTable`
@@ -216,10 +220,13 @@ Replies (engine to main thread):
   `psc:1` and `psc:2` the two other exp conventions, `refrac`, `vmin`,
   `protocols:0` to `protocols:3` the four stimulus modes, `inputs` input
   maps, `graded` graded rows, `plast` pair STDP with the inhibitory rule
-  (`aP`, `aM`, `tauS`, `tauM`, `wmax`, `wdep`, `iEta`, `iRho`), `rhoMode`,
+  (`aP`, `aM`, `tauS`, `tauM`, `wmax`, `wdep`, `iEta`, `iRho`), `stdpAt`
+  (the pair rule timed at the synapse), `rhoMode`,
   `scale`, `trip`, `het`, `tin`, `cons`, `commit`, `ruleTable` (named
-  plasticity rules), `stp`, `stpNorm`, `stpOrder`, `chanTau` (receptor
-  channels) and `pool` (feedback inhibition). The optional queries are
+  plasticity rules), `stp`, `stpNorm`, `stpOrder`, `stpScope`, `stpRules`
+  (short-term plasticity per rule, more than one class), `chanTau`
+  (receptor channels), `chanMg` (the magnesium block) and `pool`
+  (feedback inhibition). The optional queries are
   `watch`, `sendV`, `sendT`, `query` and `getWeights`; `host/host.mjs`
   adds `host` (the run controller, section 7) to its engine's reply, and
   `src/remoteworker.js` adds `url`, the address the reply came from. The
@@ -280,9 +287,10 @@ Large arrays move by transfer, never copy.
 - Conductance mode (MODEL.md section 2): `syn` 2 is the exponential
   synapse with `I = Σ |g_c| (E_c − v)`; `eRevE`, `eRevI` and `chanErev`
   (one per receptor channel) travel with init and tune. The WebGPU Step
-  struct carries the eight reversals (256 bytes; the dynamic-offset slot
-  is 256); the CUDA tune frame carries eE at 148, eI at 152 and six
-  channel reversals from 156 (section 13).
+  struct carries the eight reversals and the six magnesium concentrations
+  (272 bytes in a 512-byte dynamic-offset slot); the CUDA tune frame
+  carries eE at 148, eI at 152, six channel reversals from 156 and six
+  magnesium concentrations from 184 (section 13).
 - Receptor channels (MODEL.md section 2): `chanTau` on init and tune,
   the time constants of channels 2 and up (at most six). Each synapse's
   channel is the top three bits of its plasticity byte (section 1), zero
@@ -291,10 +299,24 @@ Large arrays move by transfer, never copy.
   after E and I, the Step struct carries the six decays and scales, and
   the delivery pass binds the packed plasticity bytes to route each
   synapse. The CUDA tune frame carries u32 count at 120 and six f32 taus
-  from 124. Channels need exponential synapses and every engine refuses
-  them under kick.
+  from 124. `chanMg` (one per channel, mM, 0 for none) gives a channel
+  the NMDA receptor's magnesium block, the fraction 1/(1 + [Mg]/3.57
+  exp(-0.062 v)) of its current passing at the step's opening voltage
+  (Jahr and Stevens 1990), in every engine. Channels need exponential
+  synapses and every engine refuses them under kick.
 - Input current per neuron per ms: ring-buffer delivery + bias +
-  protocol DC + noise `amp * (U(0,1) + U(0,1) - 1)` per ms.
+  protocol DC + noise `amp * d` per ms, where `d` is the triangular draw
+  `U(0,1) + U(0,1) - 1` for a white stimulus. A noise protocol with
+  `tau` above 0 filters the draw per cell as an Ornstein-Uhlenbeck
+  process of the same variance, `z = a z + sqrt(1 - a^2) d` with `a =
+  exp(-1/tau)`, and with `common` above 0 mixes in a draw shared by
+  every cell of the stimulus (keyed on `NOISE_SHARED + its index`,
+  filtered the same way), `d = sqrt(1 - common) z_own + sqrt(common)
+  z_shared` (section 9). The decay, its complement, the shared fraction
+  and the stimulus index fold per cell beside the amplitude in every
+  engine's host, in JavaScript, so the three carry the same floats; the
+  two filter states are per cell and start at zero. Two noise stimuli
+  with different `tau` or `common` on one cell are refused.
 - Spike at v >= the row's vpeak (graded rows never spike): v = c,
   u += d, deliveries scheduled at t + delay per synapse.
 - `vmin`: membrane floor in mV, default -90 (the potassium reversal
@@ -338,7 +360,24 @@ Large arrays move by transfer, never copy.
   both, and setting the two equal recovers that. The battery's window
   group checks that depression decays more slowly than potentiation at
   the defaults. Plus homeostatic inhibitory plasticity (Vogels et al.
-  2011). Its target term is alpha = rho (tauS + tauM) with rho in kHz,
+  2011). Where the rule is timed is `stdpAt` (MODEL.md 4). 0 reads both
+  traces at the soma, when the cell fires: the outgoing pass depresses
+  every synapse of a cell that fires against Kpost as it is then, and the
+  incoming pass potentiates against Kpre as it is then. 1 times every
+  pairing from the presynaptic spike's arrival, d steps after it was
+  fired, with the dendritic part of the delay 0 (NEST's convention, so a
+  postsynaptic spike reaches every synapse of its cell at once):
+  potentiation at a postsynaptic spike reads the pre trace as it was d
+  steps ago, e^(d/tauS) (Kpre minus the pre cell's spikes of the last
+  d - 1 steps, kept as a 17-bit history per cell), and depression waits d
+  steps and reads Kpost then, at the start of that step, before any cell
+  of the step fires. An arrival and a postsynaptic spike in the same
+  step read as pre before post. At the synapse the traces take the step's
+  spikes at the end of the step, so no read within a step depends on
+  cell order. Every engine keeps the per-cell history (bit k for a spike
+  k steps ago) and a per-cell mask of the delays its synapses carry, and
+  walks the cells whose history meets their mask once per step; nothing
+  is kept per synapse. Its target term is alpha = rho (tauS + tauM) with rho in kHz,
   which is the published 2 rho tau when the constants are equal. The
   generalization follows from the rule's fixed point: per unit time the
   pre-spike term contributes rho_pre (rho_post tauM - alpha) and the
@@ -515,12 +554,18 @@ whether or not plasticity is enabled. `stpScale` is 1 with `stpNorm` 0,
 the default, so a rested synapse releases U of its weight as published;
 `stpNorm` 1 sets it to the inverse of the rested release (1/U, or
 1/(U(2 - U)) with `stpOrder` 1) so a rested synapse delivers exactly `w`,
-an adaptation not in the source. State is seeded full and at `U` the
+an adaptation not in the source. `stpScope` confines the release to one
+sign of weight: 1 leaves inhibitory synapses delivering `w` as if the
+term were off, 2 excitatory ones (Mongillo, Barak and Tsodyks 2008 carry
+the trace on excitatory synapses only); the state still advances per
+presynaptic cell, and a graded release is outside the scope on every
+engine. State is seeded full and at `U` the
 first time the term is on, on every engine; a later re-enable resumes
 from the state the term was switched off with.
 
 Tunables: `stp` (0/1), `stpU`, `stpTauD`, `stpTauF`, `stpNorm`,
-`stpOrder`. The checkpoint node's defaults are the Markram 1998
+`stpOrder`, and for rules of their own `stpClasses`, `stpTable` and
+`stpCls` (below). The checkpoint node's defaults are the Markram 1998
 depressing class, U 0.5, tauD 800 ms, tauF 1 ms, and a computed network
 always carries its values; an init that omits them gets each engine's
 fallback, U 0.2, tauD 200 ms, tauF 600 ms. On the CUDA tune frame the
@@ -539,9 +584,33 @@ reach zero and a zero must not be read as inhibitory. Per-millisecond
 recovery is its own dispatch (`stpRecover`) after delivery and
 plasticity.
 
+Per rule. A plasticity rule can carry its own settings (`stpOwn` 2 on
+the rule, or 1 for off). Every distinct setting is a class, and rules
+with the same settings share one; class 0 is the checkpoint's own.
+`stpClassTable` in `src/nodes.js` builds three fields from the rules:
+`stpClasses` (C, at most 16), `stpTable` (Float32Array, 4 floats per
+class: on, U, tauD, tauF) and `stpCls` (Uint8Array(16), the class of each
+rule row; rows 0 and 1 are class 0). State is per presynaptic cell and
+class, at `c*n + i`; at a spike every class that is on releases from its
+own state, and a synapse delivers by the class of its rule
+(`pmask & 31`). `stpNorm`, `stpOrder` and `stpScope` stay global, and
+the scale is per class. `stp` is on when any class is. With one class
+an engine takes the single-class path above, byte for byte. The hello
+names the term `stpRules`, required when C is above 1.
+
+On the WebGPU engine the classes are a 400-byte uniform
+(`StpClasses`: 16 vec4 of U, depletion decay, facilitation decay and
+scale, then the on flags, the class map and the count, each packed four
+to a vec4), binding 10 of the delivery pass and binding 3 of
+`stpRecover`, which runs one thread per state entry. The CUDA tune frame
+carries them after the rule table (section 13).
+
 Gated by two checks in the cross-engine equivalence group: parity with
 the term on, and a rate that moves when the term is switched on. Parity
-alone passes when every engine ignores the term.
+alone passes when every engine ignores the term. The per-rule form has
+the same two checks, and `src/stprules.test.mjs` and
+`cuda/stprulestest.mjs` hold the depressing and facilitating releases to
+the reference delivery by delivery.
 
 ## 8b. Committed synapses
 
@@ -615,7 +684,8 @@ section 4 has the equations):
 - `het`: heterosynaptic regression. At a postsynaptic spike every
   incoming plastic excitatory weight is pulled toward its reference by
   the fraction min(1, het*(Kslow/kRef)^3), kRef being Kslow's steady
-  state at the homeostatic target rate, so competition engages when the
+  state at the homeostatic target rate (the cell's own under measured
+  set points), so competition engages when the
   neuron fires above its set point and the pull saturates at a full
   return to baseline (Lynch et al. 1977; Chistiakova et al. 2014;
   implementation form of Zenke, Agnes and Gerstner 2015). The reference
@@ -695,7 +765,7 @@ Commands and replies:
     1 INIT   (frame below)          -
     2 TUNE   (frame below)          -
     3 EXT    f32[n]                 -
-    4 NAMP   f32[n]                 -
+    4 NAMP   f32 amp[n], f32 a[n], f32 k[n], f32 c[n], i32 id[n]   -
     5 TICK   u32 steps              100 STATE
     6 GETW                          101 WEIGHTS: f32 w[m], then f32 rho[n]
                                         when set points are measured
@@ -718,7 +788,7 @@ computes the expected length from n, m and poolCount and exits with a
 message if the frame differs, so a host and a child built either side of
 a protocol change fail at init rather than run on invented state.
 
-TUNE frame, 184 bytes without a rule table (`_plastStruct` in
+TUNE frame, 208 bytes without a rule table (`_plastStruct` in
 `host/cudaengine.mjs`):
 
 | byte | field |
@@ -732,12 +802,14 @@ TUNE frame, 184 bytes without a rule table (`_plastStruct` in
 | 80, 84 | f32 scale, sEta |
 | 88, 92 | f32 rhoMode, calS |
 | 96 | f32 tauM |
-| 100 | f32 stpNorm + 2 stpOrder |
+| 100 | f32 stpNorm + 2 stpOrder + 4 stpScope (4 excitatory only, 8 inhibitory only) + 16 stdpAt |
 | 104 to 112 | f32 commit, tauCons, consStep |
 | 116 | f32 vmin |
 | 120 | u32 receptor channel count, then six f32 channel taus from 124 |
 | 148, 152 | f32 eRevE, eRevI, then six f32 channel reversals from 156 |
-| 184 | optional: u32 rowCount, then rows of 11 floats from 188 |
+| 184 | six f32 channel magnesium concentrations, mM, 0 for no gate |
+| 208 | optional: u32 rowCount, then rows of 11 floats from 212 |
+| after the rows | optional: u32 class count C, 16 u8 (the class of each rule row), then C rows of f32 on, U, tauD, tauF |
 
 The child reads the rule table behind a length guard and builds row 1
 from the scalars when none is sent.
@@ -831,7 +903,7 @@ use the same framing. `src/frame.js` is the codec the page uses, and
 
 1. `{ cmd:'hello' }` arrives first. The reply is `{ cmd:'hello', protocol,
    engine, terms, optional }` (section 2): `protocol` is the contract
-   number this engine implements (`PROTOCOL` in `src/protocol.js`, 3),
+   number this engine implements (`PROTOCOL` in `src/protocol.js`, 7),
    `engine` a short name the status line shows, `terms` the terms beyond
    the baseline it implements, `optional` the optional queries it
    answers. The page refuses an engine of another contract, and sends

@@ -7,13 +7,7 @@ import { engineConfig, NODE_DEFS, NEURON_TYPES, computeNode, setResolution, setC
   buildRuleTable, RULE_STRIDE, engineTypes } from './nodes.js';
 import { PROTOCOL } from './protocol.js';
 import { initState } from './rand.js';
-import { ALL_SCENARIOS, setFootprint, getFootprint,
-  setLabScale, setLabAmp, setLabSeed,
-  setBlockAmp, setBlockDrive, setBlockLayers,
-  setBlockXl4ei, setBlockXrelay, setBlockXdrive,
-  setBlockBalance, setBlockLag, setBlockXrec, setBlockXrecp, setBlockXrecw, setBlockXdisp, setBlockXl23rec, setBlockUrelay, setBlockXsigma,
-  setBlockXshare, setBlockXprob, setBlockSpread,
-  setBlockRelay } from './experiments.js';
+import { ALL_SCENARIOS, applyScenarioQuery } from './scenelist.js';
 import { buildWeightsFile, buildPlasticFile, weightFileBytes, plasticFileBytes,
   plasticCount, parseBrainFile, applyBrainWeights } from './brain.js';
 import { IORuntime } from './io.js';
@@ -51,9 +45,7 @@ const KEEP_BYTES = Math.max(0.5, +Q.get('keepgb') || 6) * 1073741824;
 // Plasticity starts after the network has settled.
 // Switching it on at t=0 lets the first synchronous transient, when every neuron is near reset and the background current hits them together, set the weights: inhibitory plasticity reads that burst as a layer far above target and drives inhibition up several fold.
 // If it silences the layer's interneurons too, nothing can undo it, because the Vogels depression term needs presynaptic inhibitory spikes that no longer happen. brain=<run>/<file> or brain=latest resumes from a saved checkpoint.
-// The curriculum scheduler is a pure function of simulated time, so restoring the clock restores the lesson position exactly and nothing else has to be bookkept for it. footprint=0.25 builds a quarter square millimeter of cortical surface at unchanged density, distances and delays.
-// Population counts are per square millimeter, so this is a smaller piece of the same tissue rather than a coarser model of the whole one, and each footprint carries its own tuned background drive.
-const FOOTPRINT = Math.max(0.05, Math.min(1, +Q.get('footprint') || 1));
+// The curriculum scheduler is a pure function of simulated time, so restoring the clock restores the lesson position exactly and nothing else has to be bookkept for it.
 const BRAIN = Q.get('brain');
 // brainurl=<path> loads a brain file over HTTP instead of out of browser storage.
 // Storage is per browser, so a checkpoint written by one browser cannot be evaluated in another without this; a downloaded file served from the project folder can.
@@ -260,7 +252,6 @@ async function writeStatus(phase, extra){
   try {
     await writeFile(statusDir, P.RUN_STATUS, JSON.stringify({
       run:RUN_TAG, phase, at:new Date().toISOString(), resumedFrom:RESUMED_FROM,
-      footprint:FOOTPRINT,
       wallMin:+((performance.now() - START_WALL)/60000).toFixed(2),
       error:lastError, ...extra }, null, 1));
   } catch(e){ /* status is best effort, never break the run for it */ }
@@ -306,34 +297,8 @@ async function main(){
       throw new Error('this brain file carries no graph');
   }
   log(`network: ${LIVE_GRAPH ? 'the graph on screen, ' + LIVE_GRAPH.nodes.length + ' nodes'
-    : sc.name} · engine ${ENGINE} · ${(TOTAL_MS/3600000).toFixed(2)} sim-hours · checkpoints every ${(CKPT_MS/60000).toFixed(1)} sim-min` +
-    (FOOTPRINT < 1 ? ` · footprint ${FOOTPRINT} mm2` : ''));
-  setFootprint(FOOTPRINT);
-  if(Q.get('labscale')) setLabScale(+Q.get('labscale'));
-  if(Q.get('labamp')) setLabAmp(+Q.get('labamp'));
-  if(Q.get('labseed')) setLabSeed(+Q.get('labseed'));
-  if(Q.get('blockamp')) setBlockAmp(+Q.get('blockamp'));
-  if(Q.get('blockdrive')) setBlockDrive(+Q.get('blockdrive'));
-  // blocklayers=L2/3,L4,L5,L6 multiplies the tuned background drive per layer
-  if(Q.get('blocklayers')) setBlockLayers(Q.get('blocklayers'));
-  // binding architecture switches: plastic E/I at the convergence site, and the unfrozen L4 to L2/3 relay in the association territory
-  if(Q.get('xl4ei')) setBlockXl4ei(+Q.get('xl4ei'));
-  if(Q.get('xrelay')) setBlockXrelay(+Q.get('xrelay'));
-  if(Q.get('xdrive')) setBlockXdrive(+Q.get('xdrive'));
-  setBlockXrecp(Q.get('xrecp'));
-  setBlockXrecw(Q.get('xrecw'));
-  setBlockXdisp(Q.get('xdisp'));
-  setBlockXl23rec(Q.get('xl23rec'));
-  setBlockUrelay({ p:Q.get('urelayp'), w:Q.get('urelayw') });
-  setBlockXsigma(Q.get('xsigma'));
-  setBlockBalance({ vamp:Q.get('vamp'), aamp:Q.get('aamp'),
-    xvw:Q.get('xvw'), xaw:Q.get('xaw') });
-  if(Q.get('lag') !== null && Q.get('lag') !== '') setBlockLag(+Q.get('lag'));
-  if(Q.get('xrec')) setBlockXrec(+Q.get('xrec'));
-  if(Q.get('xshare')) setBlockXshare(+Q.get('xshare'));
-  if(Q.get('xprob')) setBlockXprob(+Q.get('xprob'));
-  if(Q.get('spread')) setBlockSpread(+Q.get('spread'));
-  if(Q.get('relay')) setBlockRelay(+Q.get('relay'));
+    : sc.name} · engine ${ENGINE} · ${(TOTAL_MS/3600000).toFixed(2)} sim-hours · checkpoints every ${(CKPT_MS/60000).toFixed(1)} sim-min`);
+  for(const line of applyScenarioQuery(Q)) log(line);
   const ed = fakeEditor();
   ed.suggestResolution = 0;
   if(LIVE_GRAPH){
@@ -828,7 +793,7 @@ async function main(){
     const out = { neurons:nN, trials:both.n, probeTrials:rec.trials.length - both.n };
     // How many single-sense probes evoke nothing at all in this population.
     // A trial with no spikes carries no pattern to compare, so the decoders skip it and every accuracy below is a fraction of the trials that did respond.
-    // That denominator is a result in itself: a third of sound-alone probes leave the association area silent (measured 2026-09-03), and a rule change that moves the silent fraction moves what the accuracy is an accuracy of.
+    // That denominator is a result in itself: a rule change that moves the silent fraction moves what the accuracy is an accuracy of.
     {
       const cnt = [0, 0, 0], sil = [0, 0, 0];
       for(const tr of rec.trials){
@@ -1051,7 +1016,7 @@ async function main(){
           perItem:(x.perItem || []).map(q => `${q.own}/${q.best}`).join(' '),
           n:x.n, trialAcc:+tx.acc.toFixed(3), trialN:tx.n,
           trialSe:+tx.se.toFixed(3) };
-        // The field's forms of the same questions (ANALYSIS.md section 12): cross-classification both ways with a permutation null and the within-modality accuracies beside it, representational similarity between the modalities and across them, and population sparseness.
+        // The field's forms of the same questions: cross-classification both ways with a permutation null and the within-modality accuracies beside it, representational similarity between the modalities and across them, and population sparseness.
         const pk1 = rec.pack(1), pk2 = rec.pack(2);
         const xd = crossDecode(pk1, pk2, nI, nN, AN.nPerm, 1);
         out.crossDecode = xd;
@@ -1113,7 +1078,7 @@ async function main(){
     // Never mid-sweep.
     // The sweep's trials are the conjunctive baseline and they accumulate across all three passes, so a checkpoint landing inside it would reset the recorder and throw the earlier passes away, leaving the calibration the tail after the checkpoint rather than anything the sweep had presented.
     // Cross-modal learning, measured where the input does not reach.
-    // The decoders above compare whole response patterns, which on the weaves are set by which cells each input drives directly, so they read the geometry of the two codes with plasticity off as with it on.
+    // The decoders above compare whole response patterns, which can be set by which cells each input drives directly, so they read the geometry of the two codes with plasticity off as with it on.
     // Here: on a trial presenting one sense alone, the response in the other sense's cells for the same item against the other items', where only the recurrent synapses can carry anything, as its change from the same number at the calibration sweep.
     // The weight form of the same question is itemCoupling at each readback.
     if(sightSet && soundSet && popKey){

@@ -48,6 +48,8 @@ export function noiseDraw(i, t, seed){
   const h = (i ^ Math.imul(t, 2654435761) ^ seed) >>> 0;
   return unif(h) + unif((h ^ 0x9e3779b9) >>> 0) - 1;
 }
+// The draw a noise stimulus shares among its cells is keyed on the stimulus, not a cell: its index plus this base, above any cell index (ENGINE.md section 9), in every engine.
+export const NOISE_SHARED = 0x40000000;
 
 // Computed here on the host from one xorshift stream keyed by the seed and sent in the init message, so the reference engine, the WebGPU worker and the CUDA child start from the same bytes rather than each seeding its own generator (ENGINE.md sections 2 and 4). c, vr and b are rounded to f32 first, as the engines hold them.
 // The initial membrane state, the same bytes on every engine: v at the row's rest plus up to 10 mV (under half the rest-to-threshold gap, so a row with a 10 mV gap, the fly's graded relays, never starts a cell on the unstable point), and u = b (v - vr), the recovery variable measured from the rest as the 2007 form has it.

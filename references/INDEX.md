@@ -120,5 +120,5 @@ postsynaptic spike times, which is the basal rule. The apical rule
 needs synapse position on a dendrite and a local coactivity term,
 which a point neuron does not have.
 
-The 2016 theory paper, the 2025 Science paper and the fly T4 result
-(direction selectivity does not appear with point neurons) all point at the same missing piece, a dendritic compartment.
+The 2016 theory paper and the 2025 Science paper point at the same
+missing piece, a dendritic compartment.

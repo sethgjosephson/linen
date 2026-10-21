@@ -97,6 +97,23 @@ export async function loadProjectPlugins(st, importText){
   return out;
 }
 
+// Modules the server lists under /startup: the folders a person keeps for every project (the desktop app's startup folder beside its settings, and any folder added to it; a server started by hand names them with --startup).
+// Loaded before the project's own, so a project's module of the same key wins; a server without the route, or the browser-storage fallback, lists none. fetchJson(url) and fetchText(url) are the page's fetches; each record carries from, the folder's index, and dir, its path.
+export async function loadStartupPlugins(fetchJson, fetchText, importText){
+  let listed;
+  try { listed = await fetchJson('/startup/list'); } catch(e){ return []; }
+  if(!listed || !listed.ok || !Array.isArray(listed.entries)) return [];
+  const out = [];
+  for(const e of listed.entries){
+    if(!/\.m?js$/.test(e.name)) continue;
+    let text;
+    try { text = await fetchText('/startup/file/' + (e.from|0) + '/' + encodeURIComponent(e.name)); }
+    catch(err){ out.push({ module:e.name, hash:'', keys:[], error:e.name + ' could not be read from ' + e.dir, changed:true, from:e.from, dir:e.dir }); continue; }
+    out.push({ ...(await loadPlugin(e.name, text, importText)), from:e.from, dir:e.dir });
+  }
+  return out;
+}
+
 // A module from a URL, kept in the project: it is fetched, loaded, and written into the nodes folder under its own name, so it loads with the project from then on, the same text every time, with or without the network.
 // A module that does not load is not written.
 // The fetchText argument is (url) => the text; the page passes one built on fetch, and its own address as base, so a path on the site (examples/nodes/jitter.js) is a URL too.

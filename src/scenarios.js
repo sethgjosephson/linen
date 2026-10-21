@@ -74,12 +74,28 @@ export function pdTable(){
   }
   return lines.join('\n');
 }
+// The same table with each layer's interneurons split into fast spiking (tag Lxi) and low threshold spiking (tag Lxs) cells.
+// Both halves take the published probabilities of the one inhibitory population, so every cell keeps its in-degree, and the excitatory synapses onto each half name a rule: pv onto the fast spiking cells and sst onto the low threshold spiking ones.
+// The argument scales the rested weight of the depressing synapses onto the fast spiking cells, which run at roughly half their rested weight at the column's rates.
+export function pdSplitTable(pvW = 1){
+  const lines = [];
+  const both = tag => tag.endsWith('i') ? [tag, tag.slice(0, -1) + 's'] : [tag];
+  for(let t=0;t<8;t++) for(let s=0;s<8;s++){
+    const pm = (PD_CONN[t][s]/0.05).toFixed(3);
+    for(const pre of both(PD_TAGS[s])) for(const post of both(PD_TAGS[t])){
+      const rule = pre.endsWith('e') && post.endsWith('i') ? ' pv' : pre.endsWith('e') && post.endsWith('s') ? ' sst' : '';
+      const wm = (s === 2 && t === 0) ? 2 : rule === ' pv' ? pvW : 1;
+      lines.push(pre + ' ' + post + ' ' + pm + (rule || wm !== 1 ? ' ' + wm : '') + rule);
+    }
+  }
+  return lines.join('\n');
+}
 
 export function corticalColumn(ed){
   const { add, wire, note, group } = api(ed);
-  note(20, 'Mouse cortical column\n\nFour layer bands are stacked at their real cortical depths and filled at the population proportions of the reference microcircuit (Potjans and Diesmann 2014). Layer 5 pyramids are intrinsically bursting, a tenth of layer 2/3 chatters, and every layer splits its interneurons between fast spiking and low threshold spiking. Every cell is one of the measured rows of Izhikevich 2007 chapter 8, so it carries a capacitance in picofarads and a rest in millivolts, and every current in the scene is in picoamps.');
-  note(170, 'The connect node carries the 8 by 8 population pair table from the same paper, so every layer to layer connection probability is the published one. A pulse train drives layer 4, the input layer, through a geometry mask, as two nodes: the same current is five times the voltage step on a 20 pF interneuron that it is on a 100 pF pyramid, so the pulse is set per cell class.', 340, 'local wiring');
-  note(320, 'The background drive is tuned layer by layer. With the thalamic pulse off, the spontaneous rates sit inside the bands that de Kock and Sakmann (2009) recorded: layer 2/3 excitatory cells at 0.67 Hz (band 0.2 to 1), layer 4 at 2.20 (0.5 to 3), layer 5 at 2.76 (2 to 4) and layer 6 at 1.22 (0.3 to 2). Every inhibitory population fires faster than its excitatory partner, at 4.22, 7.97, 12.52 and 12.14 Hz, and the population Fano factor per thousand cells is 0.1, which means the firing is asynchronous. The validation battery checks all of this.', 340, 'L2/3 drive');
+  note(20, 'Mouse cortical column\n\nFour layer bands are stacked at their real cortical depths and filled at the population proportions of the reference microcircuit (Potjans and Diesmann 2014). Layer 5 pyramids are intrinsically bursting, a tenth of layer 2/3 chatters, and every layer splits its interneurons between fast spiking (PV, tag Lxi) and low threshold spiking (SST, tag Lxs) cells. Every cell is one of the measured rows of Izhikevich 2007 chapter 8, so it carries a capacitance in picofarads and a rest in millivolts, and every current in the scene is in picoamps.');
+  note(170, 'The connect node carries the 8 by 8 population pair table from the same paper, so every layer to layer connection probability is the published one; the PV and SST cells of a layer share its inhibitory rows. Excitatory synapses onto PV cells depress and onto SST cells facilitate (Reyes et al. 1998; Silberberg and Markram 2007), and SST inhibition decays over 20 ms on its own receptor channel. A pulse train drives layer 4, the input layer, through a geometry mask, as two nodes: the same current is five times the voltage step on a 20 pF interneuron that it is on a 100 pF pyramid, so the pulse is set per cell class.', 340, 'local wiring');
+  note(320, 'The background drive is tuned layer by layer. With the thalamic pulse off, the spontaneous rates sit inside the bands that de Kock and Sakmann (2009) recorded: layer 2/3 excitatory cells at 0.64 Hz (band 0.2 to 1), layer 4 at 2.10 (0.5 to 3), layer 5 at 2.88 (2 to 4) and layer 6 at 1.21 (0.3 to 2). Every interneuron population fires faster than its excitatory partner, the PV cells at 5.40, 8.39, 19.79 and 18.39 Hz and the SST cells at 2.18, 5.83, 3.08 and 1.59, and the population Fano factor per thousand cells is 0.13, which means the firing is asynchronous. The validation battery checks all of this.', 340, 'L2/3 drive');
   // 400x400 µm column, 1.2 mm deep; ~14k neurons at PD-2014 layer proportions
   const layers = [
     { name:'L2/3', c:[0,900,0], s:[400,300,400], e:3750, eType:RS07, chFrac:0.10, i:1060, ltsFrac:0.35 },
@@ -102,18 +118,21 @@ export function corticalColumn(ed){
       eOut = add('celltype', x, 130, { row:(L.chType || CH07) + 1, frac:L.chFrac });
       wire(eOut, 0, se);
     }
-    const si = add('scatter', x+150, 75, { count:L.i, type:FS07, seed:k*2+2, tag:L.name+'i',
+    // the fast spiking (PV) and low threshold spiking (SST) interneurons are two populations, so the pair table can give the synapses onto each their own short-term plasticity
+    const si = add('scatter', x+150, 75, { count:Math.round(L.i*(1 - L.ltsFrac)), type:FS07, seed:k*2+2, tag:L.name+'i',
       spacing:10 });
     wire(si, 0, box);
-    const iOut = add('celltype', x+150, 130, { row:(LTS07) + 1, frac:L.ltsFrac });
-    wire(iOut, 0, si);
-    group(L.name, [box, se, eOut, si, iOut], 205);
-    streams.push(eOut, iOut);
+    const ss = add('scatter', x+150, 130, { count:Math.round(L.i*L.ltsFrac), type:LTS07, seed:k + 20, tag:L.name+'s',
+      spacing:10 });
+    wire(ss, 0, box);
+    group(L.name, [box, se, eOut, si, ss], 205);
+    streams.push(eOut, si, ss);
   });
-  const m1 = add('gather', 190, 210), m2 = add('gather', 490, 265), m3 = add('gather', 640, 320);
-  streams.slice(0,4).forEach((s,i) => wire(m1, i, s));
-  wire(m2, 0, m1); streams.slice(4,7).forEach((s,i) => wire(m2, i+1, s));
-  wire(m3, 0, m2); wire(m3, 1, streams[7]);
+  const m1 = add('gather', 190, 210, { ports:5 }), m2 = add('gather', 490, 265, { ports:5 }), m3 = add('gather', 640, 320, { ports:4 });
+  for(const g of [m1, m2, m3]) while(g.inputs.length < g.params.ports) g.inputs.push(null);
+  streams.slice(0,5).forEach((s,i) => wire(m1, i, s));
+  wire(m2, 0, m1); streams.slice(5,9).forEach((s,i) => wire(m2, i+1, s));
+  wire(m3, 0, m2); streams.slice(9).forEach((s,i) => wire(m3, i+1, s));
   // PD probabilities are distance independent within the column, so the kernel is made effectively flat (sigma far above the column diagonal) and base prob 0.05 makes each table multiplier reproduce the PD value.
   // Weights scaled to the in-degree, and inhibition at 4.67 times excitation: a synapse has to be small relative to the distance to threshold when a neuron has hundreds of inputs.
   // On the measured rows the weights are 70 and -298 pA, a synapse a small fraction of the way to threshold on a 100 pF RS07 pyramid.
@@ -121,7 +140,7 @@ export function corticalColumn(ed){
   // The 20 pF interneurons feel five times the jump the pyramids do from the same 70 pA (a small cell is depolarized more by the same synaptic current), and it is why the drive below is set per population and not per layer.
   const cn = add('connect', 490, 380,
     { radius:1400, sigma:4000, prob:0.05, wExc:70, wInh:-298, velocity:300, seed:1,
-      table: pdTable() });
+      table: pdSplitTable(1.8) });
   wire(cn, 0, m3);
   // Background drive per layer.
   // In the reference microcircuit the external input is thousands of excitatory Poisson synapses per neuron, which is a positive mean current plus fluctuations; a zero-mean noise term alone cannot hold an inhibition-dominated column depolarized, and the network falls silent after its onset transient.
@@ -134,10 +153,11 @@ export function corticalColumn(ed){
   // Each layer is driven to the band de Kock and Sakmann 2009 report for it, at full density with the pulse off.
   // Per-layer operating point: the K_bg ratios fix the balance inside a layer, but each layer sits in a different amount of recurrent inhibition and one global scale cannot place them all.
   // Spontaneous rates on these drives, measured 2026-09-24 with the pulse off over 11.5 s at full density, against the de Kock and Sakmann 2009 bands: L2/3e 0.67 (0.2 to 1), L4e 2.20 (0.5 to 3), L5e 2.76 (2 to 4), L6e 1.22 (0.3 to 2), every inhibitory population above its excitatory partner at 4.22 / 7.97 / 12.52 / 12.14, L5e the highest excitatory rate, population Fano per thousand 0.1 and an ISI CV of 0.6 to 1.1.
+  // With the interneurons split into PV and SST and their synapse classes, measured 2026-10-20 the same way: L2/3e 0.64, L4e 2.10, L5e 2.88, L6e 1.21, PV 5.40 / 8.39 / 19.79 / 18.39, SST 2.18 / 5.83 / 3.08 / 1.59, population Fano per thousand 0.13.
   // The noise term is left alone: it sets fluctuation rather than the operating point, and scaling it with the steady current drops the column straight into silence.
   // The column is bistable, so the margin above these currents is not large: a quarter more layer 2/3 excitatory drive than the tuned value flips the whole column into the synchronized state at 7 to 12 Hz.
   // Layer 5 is the odd one out, at four and a half times as much current on the excitatory side as on the inhibitory one, because its pyramids are IB07 at 150 pF against FS07 at 20.
-  const driveE = [210, 225, 540, 330];
+  const driveE = [222, 225, 540, 330];
   const driveI = [78, 96, 122, 90];
   let prev = cn;
   layers.forEach((L, k) => {
@@ -171,11 +191,23 @@ export function corticalColumn(ed){
     const pb = add('probe', 40 + k*150, 620, { label:L.name + 'e', tag:L.name + 'e' });
     wire(pb, 0, prb); prb = pb; probes.push(pb);
   });
-  const out = add('checkpoint', 490, 690, { steps:2, syn:1, psc:1, tauE:3, tauI:8 });
+  // stpNorm 1: a rested synapse releases its full weight, so the short-term plasticity below changes how the weight moves with use and not the weight the drive was tuned on
+  const out = add('checkpoint', 490, 690, { steps:2, syn:1, psc:1, tauE:3, tauI:8, stpNorm:1 });
   wire(out, 0, prb);
   const cha = add('chart', 490, 750, { plot:7, pop:'L4e', window:5, height:130 });
   wire(cha, 0, out);
-  group('gather: eight populations into one stream', [m1, m2, m3], 280);
+  // Excitatory synapses onto fast spiking interneurons depress and onto low threshold spiking ones facilitate (Reyes et al. 1998; Silberberg and Markram 2007).
+  // The rules carry no learning, only short-term plasticity; the pair table's fifth column names them.
+  const pv = add('plasticity', 640, 345, { name:'pv', aP:0, aM:0, iEta:0, stp:2, stpPreset:1, stpU:0.5, stpTauD:800, stpTauF:1 }, 'pv');
+  wire(pv, 0, m3);
+  const sst = add('plasticity', 640, 360, { name:'sst', aP:0, aM:0, iEta:0, stp:2, stpPreset:2, stpU:0.03, stpTauD:130, stpTauF:530 }, 'sst');
+  wire(sst, 0, pv);
+  // SST cells inhibit pyramidal dendrites with slower currents than the perisomatic inhibition from PV cells (Ali and Thomson 2008); under psc 1 a weight is a charge, so the slower channel spreads the same charge over a longer time
+  const rc = add('receptor', 640, 375, { table:'sst 20 - from:L*s' }, 'receptors');
+  wire(rc, 0, sst);
+  wire(cn, 0, rc);
+  group('gather: twelve populations into one stream', [m1, m2, m3], 280);
+  group('synapse classes  PV depressing, SST facilitating', [pv, sst, rc], 140);
   group('local wiring  Potjans-Diesmann pair table', [cn], 130);
   group('thalamic pulse into L4', [th, thI], 55);
   group('readout  a rate per layer', [...probes, cha], 25);
@@ -617,18 +649,6 @@ function visualPathway(ed){
   group('checkpoint  the simulation and its plasticity', [out], 0);
 }
 
-// Alphabet school: the visual pathway with an ear added.
-// One cortical column at full Potjans-Diesmann density, both senses converging on it.
-//
-// Why full density matters here rather than being an ambition.
-// A synapse in cortex is tiny relative to threshold: the reference microcircuit uses a 0.15 mV post-synaptic potential against roughly 15 mV of distance to threshold, so a neuron fires only on the coordinated arrival of many inputs and the network settles into a smooth balanced regime.
-// A reduced column carrying full-size weights has the opposite character: a handful of coincident spikes fires a cell, activity is fluctuation-dominated, and layers either burst or fall silent with nothing in between.
-// The weights below are derived from the real in-degrees (about 1,900 to 4,700 recurrent inputs per neuron) rather than tuned by hand.
-//
-// Both senses reach the same column the way they reach cortex: a sensory sheet projects through its own thalamic relay, each relay sits inside a reticular shell that holds it in burst mode, and the radiation lands in layer 4.
-// Retina and cochlea therefore converge on one piece of tissue, which is the minimal substrate for binding a letter's shape to its spoken name.
-// In an animal these are separate areas converging downstream; one column standing in for that is the simplification, and it is stated rather than hidden.
-
 // Sound localization by delay lines (Jeffress 1948; Carr and Konishi 1990 for the owl's nucleus laminaris).
 // Two ears, a row of coincidence detectors between them, and axons whose conduction time is their length: a detector fires only where the two volleys arrive together, and the place that fires moves with the interaural time difference.
 // At 100 um/ms a detector x micrometers from the middle needs the right ear to lead by 2x/100 ms, so a 4 ms difference puts the peak 200 um off center.
@@ -799,7 +819,6 @@ function gammaPatch(ed){
 }
 
 // The Tab menu: the tutorial and the tissue scenes.
-// The experiment scenes (the training blocks, the learning lab, the bench, the weaves, the mandelbulb) live in experiments.js and load by name from the address bar (?scenario=) and from the trainer, not from the menu.
 // Every node type in one scene, apart from the ones that take a file or a device (footage, live, mesh, points file, connections file), as one structure: a balanced core, six arms around it that each fork into three buds, and the whole crown repeated into three tiers that shrink and turn as they rise.
 // Every arrange node shapes an arm (a flat ribbon, so a twist shows), the buds come from a noise field, repeat is used three times and nests (tier2.ray4.fork1.bud), population picks the tiers apart, and move tilts a ray and the top tier.
 // The numbers in the core follow the balanced net's.

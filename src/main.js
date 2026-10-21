@@ -17,14 +17,14 @@ const applyOverrides = (spec, nodes = editor.nodes, onEdit = n => editor.markDir
 setProjectHandleSource(rememberedProjectDir);
 import { renderRuns, listRunTags, readRunMetrics, listSweepTags, readSweep } from './runlist.js';
 import * as P from './project.js';
-import { loadProjectPlugins, addPluginFromUrl, importer, scenePluginsMissing } from './plugins.js';
+import { loadProjectPlugins, loadStartupPlugins, addPluginFromUrl, importer, scenePluginsMissing } from './plugins.js';
 import { engineConfig, engineTypes, lockHues, tagMatch, NEURON_TYPES, NODE_DEFS, computeNode, setComputeProgress, setResolution, setRateHint,
   tagHues, hueCss, hueRgb, buildRuleTable, RULE_STRIDE, deviceSynLimit, sameTag,
   setFileReader, forgetMesh, forgetPoints, forgetConnections } from './nodes.js';
 import { initState } from './rand.js';
 import { expandPopulations, collapsePopulations } from './expand.js';
 import { SCENARIOS, guidedTour } from './scenarios.js';
-import { ALL_SCENARIOS } from './experiments.js';
+import { ALL_SCENARIOS } from './scenelist.js';
 import { ACTIONS, GROUPS, binding, isCustom, setBinding, resetBindings,
   eventToBinding, matches as keyMatches } from './keymap.js';
 import { RemoteEngine } from './remoteworker.js';
@@ -1732,9 +1732,14 @@ projDlg.onclick = ev => { if(ev.target === projDlg) projDlg.style.display = 'non
 const importModule = importer();
 let nodeModules = [];                    // one record per file in the open project's nodes folder
 async function refreshNodeModules(){
+  // the startup modules first (the folders kept for every project, served under /startup), then the project's own, which win on a shared key
+  let startup = [];
+  try { startup = await loadStartupPlugins(async u => { const r = await fetch(u); return r.ok ? r.json() : null; }, async u => { const r = await fetch(u); if(!r.ok) throw new Error(r.status); return r.text(); }, importModule); }
+  catch(e){ status('startup modules: ' + (e.message || e), true); }
   let recs;
   try { recs = await loadProjectPlugins(await store(), importModule); }
   catch(e){ status('node modules: ' + (e.message || e), true); return []; }
+  recs = [...startup, ...recs];
   nodeModules = recs;
   const changed = new Set(recs.filter(r => r.changed && !r.error).flatMap(r => r.keys));
   const hit = editor.nodes.filter(n => changed.has(n.type));
@@ -1822,10 +1827,10 @@ document.getElementById('projbtn').onclick = async ev => {
   if(brains.length > 8) items.push({ head:(brains.length - 8) + ' older ones are in the project folder' });
   items.push({ label:'from a file...', run: pickBrainFile });
   // the node modules in the project's nodes folder, each with what it registered or why it did not load (a click puts the whole message in the status line)
-  items.push(null, { head:'node modules (nodes folder)' });
-  for(const r of nodeModules) items.push({ label:r.module,
+  items.push(null, { head:'node modules (startup folders, then nodes folder)' });
+  for(const r of nodeModules) items.push({ label:r.module + (r.dir ? ' (startup)' : ''),
     note: r.error ? 'not loaded' : r.keys.join(', '),
-    run: () => status(r.error || r.module + ' registers ' + r.keys.join(', ') + ', in the Tab menu', !!r.error) });
+    run: () => status(r.error || r.module + ' registers ' + r.keys.join(', ') + ', in the Tab menu' + (r.dir ? ' (from ' + r.dir + ')' : ''), !!r.error) });
   items.push({ label:'reload node modules', note:'after a file in nodes/ changed', run: reloadNodeModules });
   items.push({ label:'add a node module from a URL...', note:'copied into nodes/', run: showNodeModDlg });
   const recent = served ? recentProjects().filter(p => !st || p !== st.root) : [];
@@ -3701,7 +3706,7 @@ document.getElementById('trGo').onclick = async () => {
 };
 
 // A replicate sweep: the same graph run several times per condition, one run after another, each with its own curriculum seed and engine noise seed.
-// One run is one draw of a chaotic system and its trials share that draw (measured 2026-09-02: a same-seed replicate went from 0.159 to 0.023 and a scrambled control scored 0.17), so the sweep tabulates per-run results and the spread across them is the evidence.
+// One run is one draw of a chaotic system and its trials share that draw, so the sweep tabulates per-run results and the spread across them is the evidence.
 let sweepRows = [];
 async function runSweep(q, p, variants = []){
   const reps = Math.max(1, p.trReps | 0);
@@ -4052,6 +4057,14 @@ function initGraph(){
 // disk is not written over: the graph is loaded without becoming the open scene's content until something is edited by hand.
 const URL_Q = new URLSearchParams(location.search);
 // A scene carried in the fragment (the scene menu's link): loaded the way a ?scenario= graph is, on screen and not written over the open file.
+// A training run started from the address bar: the computation has to finish before a run can take the network, and the dialog's own start does the rest.
+function startTrainingWhenComputed(out){
+  const tryStart = () => {
+    if(!doc.curNet || doc.curNet.kind !== 'net'){ setTimeout(tryStart, 500); return; }
+    openTrainDialog(out).then(() => document.getElementById('trGo').click());
+  };
+  setTimeout(tryStart, 1500);
+}
 // The project's node modules load before any scene does, since a scene may hold their nodes.
 const nodeModulesReady = refreshNodeModules();
 if(/(^|[#&])scene=/.test(location.hash)){
@@ -4065,6 +4078,12 @@ if(/(^|[#&])scene=/.test(location.hash)){
     editor.load(d); assignDefaultSlots(); showProps(null); recompute();
     editor.frameAll();
     status('scene from the link: ' + d.nodes.length + ' nodes at ' + (d.resolution || 100) + '% resolution; it is not the open file, save as to keep it');
+    // ?train=1 with a scene link starts a training run on the scene's first checkpoint, every setting (hours, engine, host, plasticity) read from that checkpoint
+    if(URL_Q.get('train') === '1'){
+      const out = editor.nodes.find(n => n.type === 'checkpoint');
+      if(out) startTrainingWhenComputed(out);
+      else status('the link has no checkpoint to train', true);
+    }
   }).catch(e => status('the link does not open: ' + e.message, true));
 }
 else if(URL_Q.get('scenario')){
@@ -4086,12 +4105,7 @@ else if(URL_Q.get('scenario')){
         if(URL_Q.get('ckptmin')) out.params.trCkptMin = +URL_Q.get('ckptmin');
         const eng = { gpu:0, cpu:1, cuda:2 }[URL_Q.get('engine') || ''];
         if(eng !== undefined) out.params.trEngine = eng;
-        // the computation has to finish before a run can take the network; the dialog's own start does the rest
-        const tryStart = () => {
-          if(!doc.curNet || doc.curNet.kind !== 'net'){ setTimeout(tryStart, 500); return; }
-          openTrainDialog(out).then(() => document.getElementById('trGo').click());
-        };
-        setTimeout(tryStart, 1500);
+        startTrainingWhenComputed(out);
       }
     }
   }

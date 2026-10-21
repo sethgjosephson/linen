@@ -4,6 +4,7 @@
 // A case is plain JSON: arrays of numbers, no typed arrays.
 // For a large network the per-protocol factor arrays are one float per cell each, and the synapse arrays are one entry per synapse, so a ten million synapse scene is a file of a few hundred megabytes; the export says so.
 import { RULE_FIELDS, gradedArrays } from './nodes.js';
+import { foldNoise } from './noisefold.js';
 
 const RS = RULE_FIELDS.length;
 // the floor the engine resolves from what init sends (simworker.js configure)
@@ -35,6 +36,9 @@ export function caseFromInit(init, extra = {}){
     eRevI:Number.isFinite(+init.eRevI) ? +init.eRevI : -70,
     chanDec:[...chanDec], chanItau:[...Float32Array.from(chanDec, (d, k) => itau(d, (init.chanTau || [])[k] > 0 ? init.chanTau[k] : 3))],
     chanErev:[...Float32Array.from(init.chanErev || [])],
+    chanMg:[...Float32Array.from(init.chanMg || [])],
+    // a noise stimulus's memory and shared part per cell, the same fold every engine's host makes (src/noisefold.js); absent for the white draw
+    ...(F => F ? { noise:{ a:[...F.a], k:[...F.k], c:[...F.c], id:[...F.id] } } : {})(foldNoise(init.protocols, init.count)),
     stim:asList(protos.filter(p => p.mode !== 3)), noiseProtocols:asList(protos.filter(p => p.mode === 3)),
     seed:((init.seed|0) || 1) >>> 0 };
   if(init.pool) Object.assign(out, { pool:[...init.pool], poolK:[...Float32Array.from(init.poolK)] });
@@ -70,7 +74,10 @@ export function caseFromInit(init, extra = {}){
     const hasRef = anyHet > 0 || anyCons > 0;
     const tauCons = r.tauCons > 0 ? +r.tauCons : 1200000, consStep = r.consStep > 0 ? +r.consStep : 1200;
     const calMs = (r.calS > 0 ? r.calS : 10)*1000;
-    out.plast = { rules:rows, kRef:Math.max(1e-6, tauY*iRho/1000), iAlpha:iRho*0.001*(tauS + tauM),
+    // where the pair rule is timed (stdpAt 1: at the synapse), with the engine's own tables: what a spike k steps ago contributes to the pre trace, and the factor that brings the trace d steps back
+    out.plast = { rules:rows, kRef:Math.max(1e-6, tauY*iRho/1000), kRefA:tauY/(tauS + tauM), iAlpha:iRho*0.001*(tauS + tauM),
+      stdpAt:(r.stdpAt|0) === 1 ? 1 : 0,
+      ek:Array.from({ length:17 }, (_, k) => Math.exp(-k/tauS)), exd:Array.from({ length:17 }, (_, d) => Math.exp(d/tauS)),
       decS:Math.exp(-1/tauS), decM:Math.exp(-1/tauM), decY:Math.exp(-1/tauY),
       hasSlow:(anyTrip > 0 || anyHet > 0) ? 1 : 0, commitOn:((r.commit|0) === 1 && hasRef) ? 1 : 0,
       sEta:r.sEta > 0 ? r.sEta : 0.001, iRho, scaleOn:(r.scale|0) === 1 ? 1 : 0,
@@ -80,9 +87,19 @@ export function caseFromInit(init, extra = {}){
   if(r.stp){
     const U = r.stpU > 0 ? +r.stpU : 0.2;
     const order = (r.stpOrder|0) === 1 ? 1 : 0;
-    out.stp = { U, order, scale:(r.stpNorm|0) === 1 ? 1/(order ? U*(2 - U) : U) : 1,
+    out.stp = { U, order, scope:(r.stpScope|0) & 3, scale:(r.stpNorm|0) === 1 ? 1/(order ? U*(2 - U) : U) : 1,
       dx:Math.exp(-1/(r.stpTauD > 0 ? +r.stpTauD : 200)),
       dr:Math.exp(-1/(r.stpTauF > 0 ? +r.stpTauF : 600)), R0:Math.fround(U) };
+    // per-rule short-term plasticity: every class with its own state, and the class of each rule row (stpClassTable in nodes.js)
+    if(r.stpTable && (r.stpClasses|0) > 1){
+      out.stp.classes = Array.from({ length:r.stpClasses|0 }, (_, c) => {
+        const Uc = r.stpTable[c*4 + 1] > 0 ? +r.stpTable[c*4 + 1] : 0.2;
+        return { on:r.stpTable[c*4] > 0 ? 1 : 0, U:Uc, scale:(r.stpNorm|0) === 1 ? 1/(order ? Uc*(2 - Uc) : Uc) : 1,
+          dx:Math.exp(-1/(r.stpTable[c*4 + 2] > 0 ? +r.stpTable[c*4 + 2] : 200)),
+          dr:Math.exp(-1/(r.stpTable[c*4 + 3] > 0 ? +r.stpTable[c*4 + 3] : 600)), R0:Math.fround(Uc) };
+      });
+      out.stp.cls = Array.from(r.stpCls || new Uint8Array(16));
+    }
   }
   if(init.preStart){
     Object.assign(out, { pre:[...init.preStart], post:[...init.post], w:[...init.w], delay:[...init.delay],

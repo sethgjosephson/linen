@@ -3,7 +3,7 @@
 // Writes, the directory browser, the picker and the host launch answer loopback only, whatever address the server is bound to.
 // The desktop app starts it in process (startServer) with its own folder picker and launches the host through its own binary; on its own it is a second dev server:
 //
-//   node desktop/serve.mjs [port] [--project PATH] [--host ADDR]
+//   node desktop/serve.mjs [port] [--project PATH] [--host ADDR] [--startup DIR ...]
 //
 // tools/servetest.py runs against either server (NPTEST_SERVER names the command), which is what keeps the two answering alike.
 import http from 'node:http';
@@ -107,11 +107,13 @@ const stamp = () => { const d = new Date(), p = x => String(x).padStart(2, '0');
 // The root is the checkout the page is served from, the project is the project folder, port 0 takes a free one, and host is the bind address.
 // The pick({ start, title }) callback resolves to a chosen folder, '' for cancelled; without it /project/pick says there is no picker.
 // The hostLaunch { exe, env } is the process that runs host/host.mjs, the vendored or PATH node by default (the desktop app passes its own binary as node).
-// The host's log goes to host/host.log under the root, or into logDir when given.
+// The host's log goes to host/host.log under the root, or into logDir when given. startupDirs, an array or a function returning one, names the folders of node modules served to every project under /startup (the desktop app's startup folder and the folders added to it).
 // Resolves with { server, port, project(), setProject(p) } once listening.
-export function startServer({ root, project, port = 0, host = '127.0.0.1', pick = null, hostLaunch = null, logDir = null, log = () => {} }){
+const MODULE_NAME = /^[A-Za-z0-9_.-]+\.m?js$/;
+export function startServer({ root, project, port = 0, host = '127.0.0.1', pick = null, hostLaunch = null, logDir = null, startupDirs = [], log = () => {} }){
   root = path.resolve(root);
   let PROJECT = path.resolve(project);
+  const startup = () => (typeof startupDirs === 'function' ? startupDirs() : startupDirs) || [];
   const HOST_LOG = logDir ? path.join(path.resolve(logDir), 'host.log') : path.join(root, 'host', 'host.log');
   const json = (res, code, obj) => {
     const body = Buffer.from(JSON.stringify(obj));
@@ -183,6 +185,35 @@ export function startServer({ root, project, port = 0, host = '127.0.0.1', pick 
       if(parent === full) parent = '';
       const { ok, why } = looksLikeProject(full);
       return json(res, 200, { ok:true, path:full, parent, dirs:names, adoptable:ok, why });
+    }
+    // the startup modules: every .js in each startup folder, by folder index, read one at a time; a name is a plain file name, so nothing here can leave a folder
+    if(urlPath === '/startup/list'){
+      if(!localOnly(req, res)) return;
+      const out = [];
+      startup().forEach((d, k) => {
+        let names;
+        try { names = fs.readdirSync(d).sort(); } catch(e){ return; }
+        for(const name of names){
+          let isFile = false;
+          try { isFile = fs.statSync(path.join(d, name)).isFile(); } catch(e){}
+          if(MODULE_NAME.test(name) && isFile) out.push({ name, from:k, dir:d });
+        }
+      });
+      return json(res, 200, { ok:true, entries:out });
+    }
+    if(urlPath.startsWith('/startup/file/')){
+      if(!localOnly(req, res)) return;
+      let p;
+      try { p = decodeURIComponent(urlPath); } catch(e){ return plain(res, 404, 'not found'); }
+      const m = /^\/startup\/file\/(\d+)\/([A-Za-z0-9_.-]+\.m?js)$/.exec(p);
+      const dirs = startup();
+      if(!m || +m[1] >= dirs.length) return plain(res, 404, 'not found');
+      const full = path.join(dirs[+m[1]], m[2]);
+      let st;
+      try { st = fs.statSync(full); } catch(e){ st = null; }
+      if(!st || !st.isFile()) return plain(res, 404, 'not found');
+      res.writeHead(200, { 'Content-Type':'application/octet-stream', 'Content-Length':st.size, 'Cache-Control':'no-store' });
+      return fs.createReadStream(full).pipe(res);
     }
     if(urlPath === '/project/list' || urlPath.startsWith('/project/list/')){
       if(!localOnly(req, res)) return;
@@ -353,14 +384,16 @@ if(process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.met
   const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
   const argv = process.argv.slice(2);
   let project = path.join(ROOT, 'project'), host = '127.0.0.1';
+  const startupDirs = [];
   let i = argv.indexOf('--project');
   if(i >= 0){ project = path.resolve(argv[i + 1]); argv.splice(i, 2); }
   i = argv.indexOf('--host');
   if(i >= 0){ host = argv[i + 1]; argv.splice(i, 2); }
+  while((i = argv.indexOf('--startup')) >= 0){ startupDirs.push(path.resolve(argv[i + 1])); argv.splice(i, 2); }
   // a positional port wins; otherwise the PORT environment variable, otherwise 8173
   const port = argv[0] ? parseInt(argv[0], 10) : parseInt(process.env.PORT || '8173', 10);
   fs.mkdirSync(project, { recursive:true });
-  const s = await startServer({ root:ROOT, project, port, host, log:m => console.log(m) });
+  const s = await startServer({ root:ROOT, project, port, host, startupDirs, log:m => console.log(m) });
   console.log('project folder: ' + project);
   console.log('listening on ' + host + ':' + s.port + (host === '127.0.0.1' ? ' (loopback only)' : ''));
 }

@@ -10,19 +10,19 @@
   "scatter",
   "celltype",
   "scatter",
-  "celltype",
+  "scatter",
   "box",
   "scatter",
   "scatter",
-  "celltype",
+  "scatter",
   "box",
   "scatter",
   "scatter",
-  "celltype",
+  "scatter",
   "box",
   "scatter",
   "scatter",
-  "celltype",
+  "scatter",
   "gather",
   "gather",
   "gather",
@@ -46,7 +46,10 @@
   "probe",
   "probe",
   "checkpoint",
-  "chart"
+  "chart",
+  "plasticity",
+  "plasticity",
+  "receptor"
  ],
  "nodes": [
   {
@@ -59,14 +62,14 @@
   {
    "type": "note",
    "x": -589,
-   "y": 872,
+   "y": 1142,
    "built": 1,
    "inputs": []
   },
   {
    "type": "note",
    "x": -587,
-   "y": 1025,
+   "y": 1425,
    "built": 2,
    "inputs": []
   },
@@ -105,12 +108,12 @@
    ]
   },
   {
-   "type": "celltype",
+   "type": "scatter",
    "x": -45,
    "y": 345,
    "built": 7,
    "inputs": [
-    6
+    3
    ]
   },
   {
@@ -139,12 +142,12 @@
    ]
   },
   {
-   "type": "celltype",
+   "type": "scatter",
    "x": 521,
    "y": 339,
    "built": 11,
    "inputs": [
-    10
+    7
    ]
   },
   {
@@ -173,12 +176,12 @@
    ]
   },
   {
-   "type": "celltype",
+   "type": "scatter",
    "x": 967,
    "y": 349,
    "built": 15,
    "inputs": [
-    14
+    11
    ]
   },
   {
@@ -207,12 +210,12 @@
    ]
   },
   {
-   "type": "celltype",
+   "type": "scatter",
    "x": 1637,
    "y": 336,
    "built": 19,
    "inputs": [
-    18
+    15
    ]
   },
   {
@@ -234,16 +237,16 @@
   {
    "type": "connect",
    "x": -146,
-   "y": 905,
+   "y": 1175,
    "built": 23,
    "inputs": [
-    20
+    70
    ]
   },
   {
    "type": "stimulus",
    "x": -119,
-   "y": 1044,
+   "y": 1314,
    "built": 24,
    "inputs": [
     21,
@@ -253,7 +256,7 @@
   {
    "type": "stimulus",
    "x": -140,
-   "y": 1188,
+   "y": 1458,
    "built": 25,
    "inputs": [
     22,
@@ -263,7 +266,7 @@
   {
    "type": "stimulus",
    "x": -140,
-   "y": 1332,
+   "y": 1602,
    "built": 26,
    "inputs": [
     23,
@@ -273,7 +276,7 @@
   {
    "type": "stimulus",
    "x": -133,
-   "y": 1466,
+   "y": 1736,
    "built": 27,
    "inputs": [
     24,
@@ -283,7 +286,7 @@
   {
    "type": "stimulus",
    "x": -122,
-   "y": 1610,
+   "y": 1880,
    "built": 28,
    "inputs": [
     25,
@@ -293,7 +296,7 @@
   {
    "type": "stimulus",
    "x": -105,
-   "y": 1754,
+   "y": 2024,
    "built": 29,
    "inputs": [
     26,
@@ -303,7 +306,7 @@
   {
    "type": "stimulus",
    "x": -130,
-   "y": 1898,
+   "y": 2168,
    "built": 30,
    "inputs": [
     27,
@@ -313,7 +316,7 @@
   {
    "type": "stimulus",
    "x": -113,
-   "y": 2042,
+   "y": 2312,
    "built": 31,
    "inputs": [
     28,
@@ -323,7 +326,7 @@
   {
    "type": "stimulus",
    "x": -98,
-   "y": 2186,
+   "y": 2456,
    "built": 32,
    "inputs": [
     29,
@@ -333,7 +336,7 @@
   {
    "type": "stimulus",
    "x": -94,
-   "y": 2345,
+   "y": 2615,
    "built": 33,
    "inputs": [
     30,
@@ -343,7 +346,7 @@
   {
    "type": "stimulus",
    "x": -90,
-   "y": 2489,
+   "y": 2759,
    "built": 34,
    "inputs": [
     31,
@@ -353,7 +356,7 @@
   {
    "type": "stimulus",
    "x": -109,
-   "y": 2633,
+   "y": 2903,
    "built": 35,
    "inputs": [
     32,
@@ -363,7 +366,7 @@
   {
    "type": "stimulus",
    "x": -99,
-   "y": 2773,
+   "y": 3043,
    "built": 36,
    "inputs": [
     33,
@@ -373,7 +376,7 @@
   {
    "type": "stimulus",
    "x": 190,
-   "y": 2773,
+   "y": 3043,
    "built": 37,
    "inputs": [
     34,
@@ -383,7 +386,7 @@
   {
    "type": "probe",
    "x": -44,
-   "y": 2921,
+   "y": 3191,
    "built": 38,
    "inputs": [
     35,
@@ -393,7 +396,7 @@
   {
    "type": "probe",
    "x": -61,
-   "y": 3065,
+   "y": 3335,
    "built": 39,
    "inputs": [
     36,
@@ -403,7 +406,7 @@
   {
    "type": "probe",
    "x": -68,
-   "y": 3209,
+   "y": 3479,
    "built": 40,
    "inputs": [
     37,
@@ -413,7 +416,7 @@
   {
    "type": "probe",
    "x": -72,
-   "y": 3353,
+   "y": 3623,
    "built": 41,
    "inputs": [
     38,
@@ -423,7 +426,7 @@
   {
    "type": "checkpoint",
    "x": -88,
-   "y": 3495,
+   "y": 3765,
    "built": 42,
    "inputs": [
     39
@@ -432,7 +435,7 @@
   {
    "type": "chart",
    "x": -76,
-   "y": 3641,
+   "y": 3911,
    "built": 43,
    "inputs": [
     40
@@ -447,8 +450,8 @@
    },
    "inputs": [
     5,
+    6,
     7,
-    null,
     null
    ]
   },
@@ -461,8 +464,8 @@
    },
    "inputs": [
     9,
+    10,
     11,
-    null,
     null
    ]
   },
@@ -475,8 +478,8 @@
    },
    "inputs": [
     13,
+    14,
     15,
-    null,
     null
    ]
   },
@@ -489,8 +492,8 @@
    },
    "inputs": [
     17,
+    18,
     19,
-    null,
     null
    ]
   },
@@ -551,7 +554,7 @@
   {
    "type": "pin",
    "x": 241,
-   "y": 1024,
+   "y": 1294,
    "params": {},
    "inputs": [
     51
@@ -560,7 +563,7 @@
   {
    "type": "pin",
    "x": 244,
-   "y": 1162,
+   "y": 1432,
    "params": {},
    "inputs": [
     52
@@ -569,7 +572,7 @@
   {
    "type": "pin",
    "x": 246,
-   "y": 1310,
+   "y": 1580,
    "params": {},
    "inputs": [
     53
@@ -587,7 +590,7 @@
   {
    "type": "pin",
    "x": 748,
-   "y": 1423,
+   "y": 1693,
    "params": {},
    "inputs": [
     55
@@ -596,7 +599,7 @@
   {
    "type": "pin",
    "x": 748,
-   "y": 1572,
+   "y": 1842,
    "params": {},
    "inputs": [
     56
@@ -605,7 +608,7 @@
   {
    "type": "pin",
    "x": 750,
-   "y": 1712,
+   "y": 1982,
    "params": {},
    "inputs": [
     57
@@ -614,7 +617,7 @@
   {
    "type": "pin",
    "x": 761,
-   "y": 2755,
+   "y": 3025,
    "params": {},
    "inputs": [
     58
@@ -632,7 +635,7 @@
   {
    "type": "pin",
    "x": 1312,
-   "y": 1918,
+   "y": 2188,
    "params": {},
    "inputs": [
     60
@@ -641,7 +644,7 @@
   {
    "type": "pin",
    "x": 1315,
-   "y": 2047,
+   "y": 2317,
    "params": {},
    "inputs": [
     61
@@ -650,7 +653,7 @@
   {
    "type": "pin",
    "x": 1322,
-   "y": 2192,
+   "y": 2462,
    "params": {},
    "inputs": [
     62
@@ -668,7 +671,7 @@
   {
    "type": "pin",
    "x": 1896,
-   "y": 2347,
+   "y": 2617,
    "params": {},
    "inputs": [
     64
@@ -677,7 +680,7 @@
   {
    "type": "pin",
    "x": 1897,
-   "y": 2485,
+   "y": 2755,
    "params": {},
    "inputs": [
     65
@@ -686,10 +689,37 @@
   {
    "type": "pin",
    "x": 1899,
-   "y": 2640,
+   "y": 2910,
    "params": {},
    "inputs": [
     66
+   ]
+  },
+  {
+   "type": "plasticity",
+   "x": -126,
+   "y": 850,
+   "built": 44,
+   "inputs": [
+    20
+   ]
+  },
+  {
+   "type": "plasticity",
+   "x": -126,
+   "y": 940,
+   "built": 45,
+   "inputs": [
+    68
+   ]
+  },
+  {
+   "type": "receptor",
+   "x": -126,
+   "y": 1030,
+   "built": 46,
+   "inputs": [
+    69
    ]
   }
  ],
@@ -828,7 +858,7 @@
    ]
   },
   {
-   "label": "merge: eight populations into one stream",
+   "label": "merge: twelve populations into one stream",
    "hue": 280,
    "z": 0,
    "pad": {
@@ -900,6 +930,22 @@
    },
    "members": [
     40
+   ]
+  },
+  {
+   "label": "synapse classes  PV depressing, SST facilitating",
+   "hue": 140,
+   "z": 0,
+   "pad": {
+    "l": 0,
+    "t": 0,
+    "r": 0,
+    "b": 0
+   },
+   "members": [
+    68,
+    69,
+    70
    ]
   }
  ]

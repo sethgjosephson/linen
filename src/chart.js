@@ -1,6 +1,6 @@
 // Drawing for the chart node: a line plot, a raster, a histogram and a matrix.
 //
-// Everything ANALYSIS.md lists is one of these shapes: decode against time and rate against time are line plots, the weight and interval distributions are histograms, and the response matrix, the confusion matrix and the sorted weight matrix are all matrices drawn as heat maps.
+// Every measure in MODEL.md section 5 is one of these shapes: decode against time and rate against time are line plots, the weight and interval distributions are histograms, and the response matrix, the confusion matrix and the sorted weight matrix are all matrices drawn as heat maps.
 // So there is a function per shape rather than one per measure, and adding a measure is a matter of handing one of them the numbers.
 //
 // Canvas rather than SVG on screen because a response matrix is thousands of cells and an SVG rect each is not a reasonable thing to ask a browser for.
@@ -484,7 +484,7 @@ export function drawCaption(ctx, x, y, lines, S){
   lines.forEach((ln, i) => ctx.fillText(ln, x, y + S.fontPx*(1.2 + i*1.45)));
 }
 
-// A histogram of arbitrary values, since every distribution in ANALYSIS.md arrives as a flat array and has to be binned before it can be drawn.
+// A histogram of arbitrary values, since every distribution the measures produce arrives as a flat array and has to be binned before it can be drawn.
 export function bin(values, nBins, lo, hi){
   const vals = values || [];
   if(lo === undefined || hi === undefined){

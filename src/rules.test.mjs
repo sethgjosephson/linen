@@ -114,7 +114,7 @@ const probOf = (T, pre, post) => T.probMul[pre * T.G + post];
   ok('a resolvable table reports nothing', buildPairLUT(pts, 'a.e a.i 2.0 1 0', []).ruleWarn.length === 0);
 }
 
-// The preset selector writes the terms of a published rule and the name the pair table refers to, and the name is the part that can do damage: a table row already says 'weavei weave inh', so replacing a name someone chose would silently unbind the rule from the pathway it governs.
+// The preset selector writes the terms of a published rule and the name the pair table refers to, and the name is the part that can do damage: a table row already says 'ci ce inh', so replacing a name someone chose would silently unbind the rule from the pathway it governs.
 {
   const def = NODE_DEFS.plasticity.params.find(p => p.k === 'preset');
   const nameAfter = (name, i) => { const q = { name }; def.apply(q, i); return q.name; };

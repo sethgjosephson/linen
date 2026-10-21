@@ -1,4 +1,4 @@
-// The field's cross-modal measures (ANALYSIS.md section 12) on synthetic data with a known answer: shared and unshared representations, so each measure has to separate the two.
+// The field's cross-modal measures on synthetic data with a known answer: shared and unshared representations, so each measure has to separate the two.
 // Run: node src/xmodal.test.mjs
 import assert from 'node:assert/strict';
 import { rng } from './rand.js';

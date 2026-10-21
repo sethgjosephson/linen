@@ -2,7 +2,7 @@ import { layoutSlug, layoutRecord, applyLayoutRecord, markBuilt, builtTypes, lay
 import { NODE_DEFS } from './nodes.js';
 import { ok, report } from '../tools/harness.mjs';
 
-ok('a slug is lower case with dashes', layoutSlug('CA3 pattern completion') === 'ca3-pattern-completion' && layoutSlug('the weave, letters') === 'the-weave-letters');
+ok('a slug is lower case with dashes', layoutSlug('CA3 pattern completion') === 'ca3-pattern-completion' && layoutSlug('mouse cortical column, wide') === 'mouse-cortical-column-wide');
 
 function mkEditor(){
   return { nodes:[], nextId:1, groups:[],

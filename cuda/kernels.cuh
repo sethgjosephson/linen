@@ -5,6 +5,34 @@
 
 #define ROWS 18
 
+// Short-term plasticity per rule, as classes (stpClassTable in src/nodes.js): per class U, the depression and facilitation decays and the release scale, its on flag, and the class of each rule row.
+// The state is per presynaptic cell and class at [c*n + i]; with one class the kernels take the single-class path they always had.
+#define STP_CMAX 16
+__constant__ float4 cStpP[STP_CMAX];
+__constant__ int cStpOn[STP_CMAX];
+__constant__ unsigned char cStpCls[32];
+__constant__ int cStpC;
+// Every class's release at a spike of cell i into rc, matching stpRelease() in src/simworker.js; a class that is off releases 1.
+__device__ inline void stpReleaseC(int i, int n, float* stpX, float* stpR, int stpOrder, float* rc){
+  for(int c = 0; c < cStpC; c++){
+    float f = 1.0f;
+    if(cStpOn[c]){
+      const size_t k = (size_t)c*n + i;
+      const float U = cStpP[c].x;
+      if(stpOrder) stpR[k] = stpR[k] + U*(1.0f - stpR[k]);
+      float rel = stpR[k]*stpX[k];
+      stpX[k] = stpX[k] - rel;
+      if(!stpOrder) stpR[k] = stpR[k] + U*(1.0f - stpR[k]);
+      f = rel*cStpP[c].w;
+    }
+    rc[c] = f;
+  }
+}
+// The release a synapse takes: its rule's class from the entry's per-class amplitudes, or the entry's one amplitude.
+__device__ __forceinline__ float stpAmpOf(const float* dlvAmpC, unsigned int k, const unsigned char* pm, int s, float a){
+  return dlvAmpC ? dlvAmpC[(size_t)k*STP_CMAX + cStpCls[pm[s] & 31]] : a;
+}
+
 // Per-millisecond noise, counter based: the draw for a neuron is a pure function of (neuron, t, seed), the same PCG hash and pair-of-uniforms construction as rand.js noiseDraw and the WebGPU shader, computed in f32 so all three engines draw the same bits.
 // Triangular on [-1, 1].
 __device__ inline unsigned int pcgH(unsigned int x){
@@ -17,10 +45,27 @@ __device__ inline float noiseDraw(unsigned int i, unsigned int t, unsigned int s
   unsigned int h = i ^ (t*2654435761u) ^ seed;
   return unifH(h) + unifH(h ^ 0x9e3779b9u) - 1.0f;
 }
+// The cell's draw with its stimulus's memory and shared part (MODEL.md 2): an Ornstein-Uhlenbeck filter per cell when the decay nA is above zero, and a fraction nC of a draw keyed on the stimulus (NOISE_SHARED + its id), filtered the same way; nz and nzs are the two states.
+#define NOISE_SHARED 0x40000000u
+__device__ inline float noiseAt(int i, unsigned int t, unsigned int seed,
+    const float* nA, const float* nK, const float* nC, const int* nId, float* nz, float* nzs){
+  float d = noiseDraw((unsigned int)i, t, seed);
+  if(!nA) return d;
+  const float a = nA[i];
+  if(a > 0.0f){ float z = a*nz[i] + nK[i]*d; nz[i] = z; d = z; }
+  const float c = nC[i];
+  if(c > 0.0f){
+    float s = noiseDraw(NOISE_SHARED + (unsigned int)nId[i], t, seed);
+    if(a > 0.0f){ float zs = a*nzs[i] + nK[i]*s; nzs[i] = zs; s = zs; }
+    d = sqrtf(1.0f - c)*d + sqrtf(c)*s;
+  }
+  return d;
+}
 
 __global__ void stepKick(int n, int cur,
     const float* a, const float* b, const float* c, const float* d,
     const float* bias, const float* ext, const float* namp,
+    const float* nA, const float* nK, const float* nC, const int* nId, float* nz, float* nzs,
     unsigned int t, unsigned int seed, float* v, float* u, float* ring,
     const int* preStart, const int* post, const float* w,
     const unsigned char* delay, unsigned char* fired,
@@ -33,7 +78,7 @@ __global__ void stepKick(int n, int cur,
     const float* C7, const float* k7, const float* vr7, const float* vt7, const float* vp7,
     const unsigned char* grd, const float* gthr, const float* gslp,
     unsigned int* spk, unsigned int* nSpk,
-    unsigned int* dlv, float* dlvAmp, unsigned int* nDlv){
+    unsigned int* dlv, float* dlvAmp, unsigned int* nDlv, float* dlvAmpC){
   int i = blockIdx.x*blockDim.x + threadIdx.x;
   if(i >= n) return;
   // Izhikevich 2007 (MODEL.md 1): u is measured from the rest, the membrane is k (v - vr)(v - vt) over C, the spike at the row's vpeak
@@ -48,7 +93,7 @@ __global__ void stepKick(int n, int cur,
   // feedback inhibition: the pool's kick per spike times the spikes it fired last millisecond, from the half of the table the last step wrote
   if(pool){ unsigned short g = pool[i];
     if(g) I += poolK[g]*(float)poolCnt[(par ^ 1u)*poolG + g]; }
-  if(namp && namp[i] != 0.0f) I += namp[i]*noiseDraw((unsigned int)i, t, seed);
+  if(namp && namp[i] != 0.0f) I += namp[i]*noiseAt(i, t, seed, nA, nK, nC, nId, nz, nzs);
   float vi = v[i], ui = u[i];
     const float Ci = C7[i], ki = k7[i], vri = vr7[i], vti = vt7[i];
     if(grd && grd[i]){
@@ -68,7 +113,7 @@ __global__ void stepKick(int n, int cur,
   // a graded cell (MODEL.md 1): no spike, no reset, no refractory period; each millisecond its synapses carry a spike of amplitude r, delivered by the delivery pass from the list
   if(grd && grd[i]){
     float r = fminf(1.0f, fmaxf(0.0f, (vi - gthr[i])/gslp[i]));
-    if(r > 0.0f){ unsigned int k = atomicAdd(nDlv, 1u); dlv[k] = (unsigned int)i; dlvAmp[k] = r; }
+    if(r > 0.0f){ unsigned int k = atomicAdd(nDlv, 1u); dlv[k] = (unsigned int)i; dlvAmp[k] = -r; }   // negative: a graded release, outside short-term plasticity's scope
     v[i] = vi; u[i] = ui; fired[i] = 0;
     return;
   }
@@ -86,14 +131,18 @@ __global__ void stepKick(int n, int cur,
     // Tsodyks-Markram release: as published (stpOrder 0) the probability times the resources is released, then the probability jumps; stpOrder 1 jumps first. stpScale is 1, or the inverse of the rested release so a rested synapse delivers its full weight.
     // Matches stpRelease() in src/simworker.js
     float sf = 1.0f;
+    float rc[STP_CMAX];
     if(stpX){
-      if(stpOrder) stpR[i] = stpR[i] + stpU*(1.0f - stpR[i]);
-      float rel = stpR[i]*stpX[i];
-      stpX[i] = stpX[i] - rel;
-      if(!stpOrder) stpR[i] = stpR[i] + stpU*(1.0f - stpR[i]);
-      sf = rel*stpScale;
+      if(cStpC <= 1){
+        if(stpOrder) stpR[i] = stpR[i] + stpU*(1.0f - stpR[i]);
+        float rel = stpR[i]*stpX[i];
+        stpX[i] = stpX[i] - rel;
+        if(!stpOrder) stpR[i] = stpR[i] + stpU*(1.0f - stpR[i]);
+        sf = rel*stpScale;
+      } else { stpReleaseC(i, n, stpX, stpR, stpOrder, rc); sf = rc[0]; }
     }
     unsigned int k = atomicAdd(nDlv, 1u); dlv[k] = (unsigned int)i; dlvAmp[k] = sf;   // delivered by deliverKick from the list
+    if(stpX && cStpC > 1 && dlvAmpC) for(int c = 0; c < cStpC; c++) dlvAmpC[(size_t)k*STP_CMAX + c] = rc[c];
   }
   v[i] = vi; u[i] = ui; fired[i] = f;
 }
@@ -101,17 +150,28 @@ __global__ void stepKick(int n, int cur,
 // Delivery, a warp per entry of the step's list (a spiking cell with its release, or a graded cell with its amplitude): the 32 lanes stride over that cell's synapses, each adding its weight times the amplitude into the ring row its delay lands on.
 // Every delay is at least one step, so no entry writes the row the step just read, and the pass runs after the membrane step and before the learning passes, as the per-neuron form delivered inside the step.
 // Sums into the ring are atomic and land in whatever order the warps run, as before.
+// The scope (stpScope) confines a spike's release factor to one sign of weight (1 excitatory, 2 inhibitory); a graded release (a negative amplitude in the list) is not short-term plasticity and applies to every synapse.
+__device__ __forceinline__ void ampBySign(float a, int stpScope, float& aE, float& aI){
+  if(a < 0.0f){ aE = aI = -a; return; }
+  aE = stpScope == 2 ? 1.0f : a;
+  aI = stpScope == 1 ? 1.0f : a;
+}
+// With more than one short-term class (dlvAmpC given) a spike's synapse takes its own rule's class; a graded entry (negative) is one amplitude for every synapse.
 __global__ void deliverKick(const unsigned int* dlv, const float* dlvAmp, const unsigned int* nDlv,
     int n, int cur, float* ring,
-    const int* preStart, const int* post, const float* w, const unsigned char* delay){
+    const int* preStart, const int* post, const float* w, const unsigned char* delay, int stpScope,
+    const float* dlvAmpC, const unsigned char* pmS){
   const unsigned int lane = threadIdx.x & 31u;
   const unsigned int warps = (gridDim.x*blockDim.x) >> 5;
   const unsigned int count = *nDlv;
   for(unsigned int k = (blockIdx.x*blockDim.x + threadIdx.x) >> 5; k < count; k += warps){
     const int i = (int)dlv[k];
-    const float amp = dlvAmp[k];
-    for(int s = preStart[i] + (int)lane, e = preStart[i+1]; s < e; s += 32)
-      atomicAdd(&ring[((cur + delay[s]) % ROWS)*n + post[s]], w[s]*amp);
+    float aE, aI; ampBySign(dlvAmp[k], stpScope, aE, aI);
+    const float* ac = dlvAmp[k] >= 0.0f ? dlvAmpC : nullptr;
+    for(int s = preStart[i] + (int)lane, e = preStart[i+1]; s < e; s += 32){
+      if(ac) ampBySign(stpAmpOf(ac, k, pmS, s, 0.0f), stpScope, aE, aI);
+      atomicAdd(&ring[((cur + delay[s]) % ROWS)*n + post[s]], w[s]*(w[s] > 0.0f ? aE : aI));
+    }
   }
 }
 
@@ -119,6 +179,7 @@ __global__ void stepExp(int n, int cur, float decE, float decI,
     float itauE, float itauI,
     const float* a, const float* b, const float* c, const float* d,
     const float* bias, const float* ext, const float* namp,
+    const float* nA, const float* nK, const float* nC, const int* nId, float* nz, float* nzs,
     unsigned int t, unsigned int seed, float* v, float* u, float* ring, float* ring2,
     float* gE, float* gI,
     const int* preStart, const int* post, const float* w,
@@ -132,9 +193,9 @@ __global__ void stepExp(int n, int cur, float decE, float decI,
     const float* C7, const float* k7, const float* vr7, const float* vt7, const float* vp7,
     const unsigned char* grd, const float* gthr, const float* gslp,
     int KX, float* gX, float* ringX, const float* decX, const float* itauX, const unsigned char* pmask,
-    int cond, float eE, float eI, const float* erevX,
+    int cond, float eE, float eI, const float* erevX, const float* mgX,
     unsigned int* spk, unsigned int* nSpk,
-    unsigned int* dlv, float* dlvAmp, unsigned int* nDlv){
+    unsigned int* dlv, float* dlvAmp, unsigned int* nDlv, float* dlvAmpC){
   int i = blockIdx.x*blockDim.x + threadIdx.x;
   if(i >= n) return;
   const float uRef = vr7[i];               // u is measured from the rest (2007)
@@ -142,11 +203,13 @@ __global__ void stepExp(int n, int cur, float decE, float decI,
   float ge = gE[i]*decE + ring[cur*n + i];
   float gi = gI[i]*decI + ring2[cur*n + i];
   // receptor channels 2 and up (MODEL.md 2): their own decay, their own ring;
-  // conductance mode drives |g| (E - v) with the step's opening v
+  // conductance mode drives |g| (E - v) with the step's opening v, and a channel with a magnesium concentration passes the fraction B(v) = 1/(1 + [Mg]/3.57 exp(-0.062 v)) (Jahr and Stevens 1990)
   float Ix = 0.0f;
   for(int x = 0; x < KX; x++){
     float g = gX[x*n + i]*decX[x] + ringX[((size_t)x*ROWS + cur)*n + i];
-    gX[x*n + i] = g; Ix += cond ? fabsf(g)*(erevX[x] - v0) : g*itauX[x];
+    gX[x*n + i] = g;
+    float bI = mgX[x] > 0.0f ? 1.0f/(1.0f + (mgX[x]/3.57f)*expf(-0.062f*v0)) : 1.0f;
+    Ix += bI*(cond ? fabsf(g)*(erevX[x] - v0) : g*itauX[x]);
   }
   // feedback inhibition, on the inhibitory conductance like any I delivery
   if(pool){ unsigned short g = pool[i];
@@ -159,7 +222,7 @@ __global__ void stepExp(int n, int cur, float decE, float decI,
     return;
   }
   float I = (cond ? fabsf(ge)*(eE - v0) + fabsf(gi)*(eI - v0) : ge*itauE + gi*itauI) + Ix + bias[i] + (ext ? ext[i] : 0.0f);
-  if(namp && namp[i] != 0.0f) I += namp[i]*noiseDraw((unsigned int)i, t, seed);
+  if(namp && namp[i] != 0.0f) I += namp[i]*noiseAt(i, t, seed, nA, nK, nC, nId, nz, nzs);
   float vi = v[i], ui = u[i];
     const float Ci = C7[i], ki = k7[i], vri = vr7[i], vti = vt7[i];
     if(grd && grd[i]){
@@ -178,7 +241,7 @@ __global__ void stepExp(int n, int cur, float decE, float decI,
     const float vpk = vp7[i];
   if(grd && grd[i]){
     float r = fminf(1.0f, fmaxf(0.0f, (vi - gthr[i])/gslp[i]));
-    if(r > 0.0f){ unsigned int k = atomicAdd(nDlv, 1u); dlv[k] = (unsigned int)i; dlvAmp[k] = r; }   // delivered by deliverExp from the list
+    if(r > 0.0f){ unsigned int k = atomicAdd(nDlv, 1u); dlv[k] = (unsigned int)i; dlvAmp[k] = -r; }   // delivered by deliverExp from the list; negative marks a graded release, outside short-term plasticity's scope
     v[i] = vi; u[i] = ui; gE[i] = ge; gI[i] = gi; fired[i] = 0;
     return;
   }
@@ -194,14 +257,18 @@ __global__ void stepExp(int n, int cur, float decE, float decI,
       firstMs[i] = (unsigned char)(stepIdx < 254 ? stepIdx : 254);
     atomicAdd(total, 1ull);
     float sf = 1.0f;
+    float rc[STP_CMAX];
     if(stpX){
-      if(stpOrder) stpR[i] = stpR[i] + stpU*(1.0f - stpR[i]);   // stpOrder 1: facilitation before release
-      float rel = stpR[i]*stpX[i];
-      stpX[i] = stpX[i] - rel;
-      if(!stpOrder) stpR[i] = stpR[i] + stpU*(1.0f - stpR[i]);  // as published: facilitation after release
-      sf = rel*stpScale;
+      if(cStpC <= 1){
+        if(stpOrder) stpR[i] = stpR[i] + stpU*(1.0f - stpR[i]);   // stpOrder 1: facilitation before release
+        float rel = stpR[i]*stpX[i];
+        stpX[i] = stpX[i] - rel;
+        if(!stpOrder) stpR[i] = stpR[i] + stpU*(1.0f - stpR[i]);  // as published: facilitation after release
+        sf = rel*stpScale;
+      } else { stpReleaseC(i, n, stpX, stpR, stpOrder, rc); sf = rc[0]; }
     }
     unsigned int k = atomicAdd(nDlv, 1u); dlv[k] = (unsigned int)i; dlvAmp[k] = sf;   // delivered by deliverExp from the list
+    if(stpX && cStpC > 1 && dlvAmpC) for(int c = 0; c < cStpC; c++) dlvAmpC[(size_t)k*STP_CMAX + c] = rc[c];
   }
   v[i] = vi; u[i] = ui; gE[i] = ge; gI[i] = gi; fired[i] = f;
 }
@@ -209,15 +276,18 @@ __global__ void stepExp(int n, int cur, float decE, float decI,
 // The exponential and conductance form of the delivery pass (see deliverKick): excitatory and inhibitory weights into their own rings, a receptor channel into its own.
 __global__ void deliverExp(const unsigned int* dlv, const float* dlvAmp, const unsigned int* nDlv,
     int n, int cur, float* ring, float* ring2, float* ringX,
-    const int* preStart, const int* post, const float* w, const unsigned char* delay, const unsigned char* pmask){
+    const int* preStart, const int* post, const float* w, const unsigned char* delay, const unsigned char* pmask, int stpScope,
+    const float* dlvAmpC, const unsigned char* pmS){
   const unsigned int lane = threadIdx.x & 31u;
   const unsigned int warps = (gridDim.x*blockDim.x) >> 5;
   const unsigned int count = *nDlv;
   for(unsigned int k = (blockIdx.x*blockDim.x + threadIdx.x) >> 5; k < count; k += warps){
     const int i = (int)dlv[k];
-    const float amp = dlvAmp[k];
+    float aE, aI; ampBySign(dlvAmp[k], stpScope, aE, aI);
+    const float* ac = dlvAmp[k] >= 0.0f ? dlvAmpC : nullptr;
     for(int s = preStart[i] + (int)lane, e = preStart[i+1]; s < e; s += 32){
-      float wt = w[s]*amp;
+      if(ac) ampBySign(stpAmpOf(ac, k, pmS, s, 0.0f), stpScope, aE, aI);
+      float wt = w[s]*(w[s] > 0.0f ? aE : aI);
       int slot = (cur + delay[s]) % ROWS, at = slot*n + post[s];
       int ch = pmask ? (pmask[s] >> 5) : 0;
       if(ch >= 2) atomicAdd(&ringX[((size_t)(ch - 2)*ROWS + slot)*n + post[s]], wt);
@@ -238,6 +308,9 @@ __device__ inline float softBound(float wv, float delta, float wmax){
 #define RULE_STRIDE 11
 #define RULE_MAX 16
 __constant__ float cRules[RULE_MAX*RULE_STRIDE];
+// the pair rule timed at the synapse (stdpAt 1): what a spike k steps ago contributes to Kpre, e^(-k/tau+), and the factor that brings the trace d steps back, e^(d/tau+)
+__constant__ float cEk[17];
+__constant__ float cExd[17];
 #define R_aP 0
 #define R_aM 1
 #define R_wmax 2
@@ -299,9 +372,33 @@ __global__ void plastOut(const unsigned int* spk, const unsigned int* nSpk,
   }
 }
 
+// The pair rule timed at the synapse (stdpAt 1): the outgoing half runs when a spike arrives, d steps after it was fired, against Kpost as it stands before the step's spikes.
+// The trace step lists each cell whose history meets the delays its synapses carry (arr, nArr); a warp per listed cell walks its slice and updates every synapse whose delay bit is set in the cell's history.
+__global__ void plastArrive(const unsigned int* arr, const unsigned int* nArr, const unsigned int* hist,
+    const int* preStart, const int* post, float* w, const unsigned char* delay,
+    const unsigned char* pmask, const float* Kpost,
+    float iAlpha, const float* alphaI, const float* wRef, int commit){
+  const unsigned int lane = threadIdx.x & 31u;
+  const unsigned int warps = (gridDim.x*blockDim.x) >> 5;
+  const unsigned int count = *nArr;
+  for(unsigned int k = (blockIdx.x*blockDim.x + threadIdx.x) >> 5; k < count; k += warps){
+    const int i = (int)arr[k];
+    const unsigned int h = hist[i];
+    for(int s = preStart[i] + (int)lane, e = preStart[i+1]; s < e; s += (int)WARP)
+      if((h >> delay[s]) & 1u) plastOutSyn(s, post, w, pmask, Kpost, iAlpha, alphaI, wRef, commit);
+  }
+}
+
 // The triplet and heterosynaptic terms read the slow postsynaptic trace before this millisecond's spike is added, matching the reference: the triplet potentiates by postsynaptic history (Pfister and Gerstner 2006), and the cubed trace gates heterosynaptic regression toward the reference weight so only bursting engages it (Zenke et al. 2015).
-__device__ __forceinline__ void plastInSyn(int s, int pre, unsigned int mask, float* w,
-    const float* Kpre,
+// The pre trace a post spike sees through a synapse of delay d when the rule is timed at the synapse: the spikes of the last d - 1 steps (the cell's history, bit k for k steps ago) taken out of Kpre and the rest brought forward by e^(d/tau+), as simworker.js kpreAtSynapse.
+__device__ __forceinline__ float kpreAtSynapse(float kpre, unsigned int h, unsigned int d){
+  float sub = 0.0f;
+  for(unsigned int k = 1u; k < d; k++) if((h >> k) & 1u) sub += cEk[k];
+  float kp = cExd[d]*(kpre - sub);
+  return kp > 0.0f ? kp : 0.0f;
+}
+__device__ __forceinline__ void plastInSyn(int s, unsigned int preD, unsigned int mask, float* w,
+    const float* Kpre, const unsigned int* hist,
     const float* wRef, float z, float gate, int commit){
   unsigned int rid = mask & 31u;           // the rule is the low five bits; the channel the top three
   if(rid == 0u) return;
@@ -309,7 +406,10 @@ __device__ __forceinline__ void plastInSyn(int s, int pre, unsigned int mask, fl
   if(isCommitted(commit, wRef, R, s)) return;
   const float wmax = R[R_wmax], het = R[R_het];
   const int wdep = R[R_wdep] != 0.0f;
+  // the presynaptic cell and the synapse's delay, packed in the reverse list
+  const unsigned int pre = preD & 0x7ffffffu;
   float wp = w[s], kp = Kpre[pre];
+  if(hist) kp = kpreAtSynapse(kp, hist[pre], preD >> 27);
   if(wp > 0){
     float nw = wp + (R[R_aP] + R[R_trip]*z)*kp;
     if(het > 0 && wRef){
@@ -327,10 +427,11 @@ __device__ __forceinline__ void plastInSyn(int s, int pre, unsigned int mask, fl
   }
 }
 // revMask is the rule byte per entry of the reverse list (pmask in that order), read in step with revSyn: one scattered read fewer per weight.
+// Under measured set points (alphaI given) the gate's set point is the cell's own, alphaI[i] times kRefA, which is alphaI's definition inverted; else the fixed kRef. hist is the spike history per cell when the rule is timed at the synapse, else null.
 __global__ void plastIn(const unsigned int* spk, const unsigned int* nSpk,
     const int* inStart, const int* revSyn, const int* revPre, float* w,
-    const unsigned char* revMask, const float* Kpre,
-    const float* Kslow, const float* wRef, float kRef, int commit){
+    const unsigned char* revMask, const float* Kpre, const unsigned int* hist,
+    const float* Kslow, const float* wRef, float kRef, const float* alphaI, float kRefA, int commit){
   const unsigned int lane = threadIdx.x & 31u;
   const unsigned int warps = (gridDim.x*blockDim.x) >> 5;
   const unsigned int count = *nSpk;
@@ -338,20 +439,28 @@ __global__ void plastIn(const unsigned int* spk, const unsigned int* nSpk,
     const int i = (int)spk[k];
     float z = Kslow ? Kslow[i] : 0.0f;
     // the gate is this neuron's trace against its set point, so it is shared; only the amplitude multiplying it is per rule
-    float g = z/kRef;
+    float kr = alphaI ? fmaxf(1e-6f, alphaI[i]*kRefA) : kRef;
+    float g = z/kr;
     float gate = g*g*g;
     for(int kk = inStart[i] + (int)lane, ke = inStart[i+1]; kk < ke; kk += (int)WARP)
-      plastInSyn(revSyn[kk], revPre[kk], revMask ? revMask[kk] : 1u, w, Kpre, wRef, z, gate, commit);
+      plastInSyn(revSyn[kk], (unsigned int)revPre[kk], revMask ? revMask[kk] : 1u, w, Kpre, hist, wRef, z, gate, commit);
   }
 }
 
+// hist and dmask are each cell's spike history (bit k for a spike k steps ago) and the delays its synapses carry (bit d); the history moves on here, and under the rule at the synapse (atSyn) a cell whose history meets its mask has a spike arriving next step and is listed for the arrival pass.
 __global__ void traceStep(int n, const unsigned char* fired,
     float* Kpre, float* Kpost, float decS, float decM, float* Kslow, float decY,
-    unsigned int* spkAcc){
+    unsigned int* spkAcc, unsigned int* hist, const unsigned int* dmask, int atSyn,
+    unsigned int* arr, unsigned int* nArr){
   int i = blockIdx.x*blockDim.x + threadIdx.x;
   if(i >= n) return;
   // the scaling accumulator rides along here rather than in its own pass: this kernel already visits every neuron every step with fired in hand
   if(spkAcc && fired[i]) spkAcc[i] += 1u;
+  if(hist){
+    unsigned int h = ((hist[i] | (fired[i] ? 1u : 0u)) << 1) & 0x1ffffu;
+    hist[i] = h;
+    if(atSyn && (h & dmask[i])){ unsigned int k = atomicAdd(nArr, 1u); arr[k] = (unsigned int)i; }
+  }
   float kp = Kpre[i] + (fired[i] ? 1.0f : 0.0f);
   float ko = Kpost[i] + (fired[i] ? 1.0f : 0.0f);
   Kpre[i] = kp*decS; Kpost[i] = ko*decM;   // tau+ and tau- (Bi and Poo)
@@ -422,12 +531,15 @@ __global__ void finishCalK(int n, const unsigned int* spkAcc, float* rhoI,
 }
 
 // Per-millisecond recovery of the short-term plasticity state, exact exponential, matching stpStep() in src/simworker.js.
-__global__ void stpStepK(int n, float* stpX, float* stpR,
-    float stpU, float decD, float decF){
-  int i = blockIdx.x*blockDim.x + threadIdx.x;
-  if(i >= n) return;
-  stpX[i] = 1.0f - (1.0f - stpX[i])*decD;
-  stpR[i] = stpU + (stpR[i] - stpU)*decF;
+// A thread per cell and class over n*C, the class from the index; a class that is off is left alone.
+__global__ void stpStepK(int n, int C, float* stpX, float* stpR){
+  size_t k = (size_t)blockIdx.x*blockDim.x + threadIdx.x;
+  if(k >= (size_t)n*C) return;
+  const int c = (int)(k / n);
+  if(!cStpOn[c]) return;
+  const float4 p = cStpP[c];
+  stpX[k] = 1.0f - (1.0f - stpX[k])*p.y;
+  stpR[k] = p.x + (stpR[k] - p.x)*p.z;
 }
 
 // Records one neuron's membrane potential into a per-step slot, so the viewer's scope can show a live trace from a run the child is driving.

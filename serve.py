@@ -25,7 +25,7 @@ path and the directory browser were served to anything on the network,
 which is fine at home and not on shared wifi. --host 0.0.0.0 exposes it on
 purpose.
 """
-import http.server, os, sys, json, socket, subprocess, shutil, time, posixpath
+import http.server, os, sys, json, socket, subprocess, shutil, time, posixpath, re
 from urllib.parse import unquote
 import urllib.parse
 
@@ -33,6 +33,9 @@ ROOT = os.path.dirname(os.path.abspath(__file__))
 HOST_PORT = 8801
 HOST_LOG = os.path.join(ROOT, 'host', 'host.log')
 PROJECT = os.path.join(ROOT, 'project')
+# folders of node modules served to every project under /startup (--startup DIR, repeatable): the desktop app's startup folder and the folders added to it
+STARTUP = []
+MODULE_NAME = re.compile(r'^[A-Za-z0-9_.-]+\.m?js$')
 
 
 def drive_roots():
@@ -185,6 +188,40 @@ class Handler(http.server.SimpleHTTPRequestHandler):
             self._json(200, {'ok': True, 'path': full, 'parent': parent,
                              'dirs': names, 'adoptable': adoptable,
                              'why': why})
+            return
+        # the startup modules: every .js in each --startup folder, by folder index, read one at a time; a name is a plain file name, so nothing here can leave a folder
+        if path == '/startup/list':
+            if not self._local_only():
+                return
+            out = []
+            for k, d in enumerate(STARTUP):
+                try:
+                    names = sorted(os.listdir(d))
+                except OSError:
+                    continue
+                for name in names:
+                    if MODULE_NAME.match(name) and os.path.isfile(os.path.join(d, name)):
+                        out.append({'name': name, 'from': k, 'dir': d})
+            self._json(200, {'ok': True, 'entries': out})
+            return
+        if path.startswith('/startup/file/'):
+            if not self._local_only():
+                return
+            m = re.match(r'^/startup/file/(\d+)/([A-Za-z0-9_.-]+\.m?js)$', unquote(path))
+            if not m or int(m.group(1)) >= len(STARTUP):
+                self.send_error(404)
+                return
+            full = os.path.join(STARTUP[int(m.group(1))], m.group(2))
+            if not os.path.isfile(full):
+                self.send_error(404)
+                return
+            with open(full, 'rb') as f:
+                body = f.read()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/octet-stream')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
             return
         if path == '/project/list' or path.startswith('/project/list/'):
             if not self._local_only():
@@ -446,6 +483,10 @@ if __name__ == '__main__':
     if '--project' in argv:
         i = argv.index('--project')
         PROJECT = os.path.abspath(argv[i + 1])
+        del argv[i:i + 2]
+    while '--startup' in argv:
+        i = argv.index('--startup')
+        STARTUP.append(os.path.abspath(argv[i + 1]))
         del argv[i:i + 2]
     host = '127.0.0.1'
     if '--host' in argv:

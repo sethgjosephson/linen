@@ -96,6 +96,10 @@ def pcg(x):
     return ((word >> np.uint64(22)) ^ word) & MASK
 
 
+# the draw a noise stimulus shares among its cells is keyed on the stimulus's index above this base (src/rand.js NOISE_SHARED)
+NOISE_SHARED = 0x40000000
+
+
 def noise_draw(i, t, seed):
     i = np.asarray(i, dtype=np.uint64)
     t = np.asarray(t, dtype=np.uint64)
@@ -165,7 +169,7 @@ def fold(prefix, count):
     return L, '%sa%d' % (prefix, count)
 
 
-def step_code(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, stp=False, dt=1.0):
+def step_code(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, stp=False, dt=1.0, chan_mg=(), colored=False):
     """The engine's step, one assignment per quantity, sums two terms at a time.
     `graded` is the longest delay of a graded synapse, or 0. `dt` is the step in
     milliseconds: at 1 every line below is the engine's own, and under it the
@@ -196,7 +200,18 @@ def step_code(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, stp=Fa
         cur = 'Ie'
     if nnoise:
         lines, amp = fold('prz', nnoise)
-        L += lines + ['nz = %s*noise(i, t/ms)' % amp, 'In = %s + nz' % cur]
+        if colored:
+            # a stimulus with a time constant filters the cell's draw (an Ornstein-Uhlenbeck process, the states nfou and nfous kept in f32 as the engines keep them); a shared fraction mixes in the stimulus's draw, filtered the same way (MODEL.md 2)
+            L += lines + ['nfd0 = noise(i, t/ms)',
+                          'nfou = fround(nfa*nfou + nfk*nfd0)*int(nfa > 0) + nfou*int(nfa <= 0)',
+                          'nfd1 = nfou*int(nfa > 0) + nfd0*int(nfa <= 0)',
+                          'nfs0 = noise(nfid, t/ms)',
+                          'nfous = fround(nfa*nfous + nfk*nfs0)*int(nfa > 0) + nfous*int(nfa <= 0)',
+                          'nfs1 = nfous*int(nfa > 0) + nfs0*int(nfa <= 0)',
+                          'nfd2 = (sqrt(1 - nfc)*nfd1 + sqrt(nfc)*nfs1)*int(nfc > 0) + nfd1*int(nfc <= 0)',
+                          'nz = %s*nfd2' % amp, 'In = %s + nz' % cur]
+        else:
+            L += lines + ['nz = %s*noise(i, t/ms)' % amp, 'In = %s + nz' % cur]
         cur = 'In'
     if pool and syn == 0:
         L.append('Ip = %s + pin' % cur)
@@ -208,7 +223,13 @@ def step_code(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, stp=Fa
             L.append('c%d = abs(gx%d)*(chanErev%d - v)' % (k, k, k))
         else:
             L.append('c%d = gx%d*chanItau%d' % (k, k, k))
-        L.append('I%d = I%d + c%d' % (k + 1, k, k))
+        # the magnesium block (Jahr and Stevens 1990), on a channel with a concentration; the equations of a channel without one are unchanged
+        if k < len(chan_mg) and float(chan_mg[k]) > 0:
+            L.append('b%d = 1/(1 + (chanMg%d/3.57)*exp(-0.062*v))' % (k, k))
+            L.append('cb%d = b%d*c%d' % (k, k, k))
+            L.append('I%d = I%d + cb%d' % (k + 1, k, k))
+        else:
+            L.append('I%d = I%d + c%d' % (k + 1, k, k))
     I = 'I%d' % K
     L += [
         'act = int(refc <= 0)' if dt == 1.0 else 'act = int(refc <= 1e-9)',
@@ -238,7 +259,21 @@ def step_code(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, stp=Fa
         L += ['rq1 = vn - gthr', 'rq2 = rq1/gslp', 'rgr = clip(rq2, 0, 1)']
         L += ['rh%d = rh%d' % (d, d - 1) for d in range(graded, 1, -1)]
         L.append('rh1 = gd*rgr')
-    if stp:
+    if stp and stp.get('classes'):
+        # per-rule short-term plasticity: each class that is on releases from its own state, the release a double as in the single-class path
+        for c, cl in enumerate(stp['classes']):
+            if not cl['on']:
+                continue
+            x, r, f = 'stpX%d' % c, 'stpR%d' % c, 'sfv%d' % c
+            if stp.get('order', 0):
+                L += ['sr1 = 1 - %s' % r, 'sr2 = stpU%d*sr1' % c, 'sR = fround(%s + sr2)' % r,
+                      'rel = sR*%s' % x, 'sX = fround(%s - rel)' % x]
+            else:
+                L += ['rel = %s*%s' % (r, x), 'sX = fround(%s - rel)' % x,
+                      'sr1 = 1 - %s' % r, 'sr2 = stpU%d*sr1' % c, 'sR = fround(%s + sr2)' % r]
+            L += ['%s = sp*sR + (1 - sp)*%s' % (r, r), '%s = sp*sX + (1 - sp)*%s' % (x, x),
+                  'sr3 = rel*stpScale%d' % c, '%s = sp*sr3 + (1 - sp)*%s' % (f, f)]
+    elif stp:
         if stp.get('order', 0):
             # stpRelease at the spike, stpOrder 1: facilitation, then release
             L += ['sr1 = 1 - stpR', 'sr2 = stpU*sr1', 'sR = fround(stpR + sr2)',
@@ -258,8 +293,10 @@ def step_code(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, stp=Fa
     return '\n'.join(L)
 
 
-def neuron_model(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, dynamic=False):
+def neuron_model(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, dynamic=False, colored=False, stdp_at=False, stp_classes=0):
     names = ['v', 'u', 'refc', 'spiked']
+    if colored:
+        names += ['nfou', 'nfous']
     names += ['ring'] if syn == 0 else ['gE', 'gI', 'ringE', 'ringI']
     for k in range(K):
         names += ['gX%d' % k, 'ringX%d' % k]
@@ -271,12 +308,21 @@ def neuron_model(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, dyn
         names += ['Igr'] + ['rh%d' % d for d in range(1, graded + 1)]
     if dynamic:
         names += ['Kpre', 'Kpost', 'Kslow', 'spkAcc', 'rhoI', 'alphaI', 'stpX', 'stpR', 'sfv']
+        for c in range(stp_classes):
+            names += ['stpX%d' % c, 'stpR%d' % c, 'sfv%d' % c]
+    if stdp_at:
+        # the cell's spikes of the last 16 steps, h1 for the step before this one (simworker.js spkHist, bit k)
+        names += ['h%d' % k for k in range(1, 17)]
     const = ['bias', 'Cm', 'kk', 'vr', 'vt', 'vpeak', 'aa', 'bb', 'cc', 'dd']
     # prq and prz: short prefixes such as zs2 are Brian unit names
     const += ['prqf%d' % k for k in range(nstim)] + ['przf%d' % k for k in range(nnoise)]
     if graded:
         const += ['gd', 'gthr', 'gslp']
-    return '\n'.join(['%s : 1' % x for x in names] + ['%s : 1 (constant)' % x for x in const])
+    if colored:
+        const += ['nfa', 'nfk', 'nfc']
+    # the stimulus a cell takes its shared draw from, as the integer the hash is keyed on
+    ints = ['nfid'] if colored else []
+    return '\n'.join(['%s : 1' % x for x in names] + ['%s : 1 (constant)' % x for x in const] + ['%s : integer (constant)' % x for x in ints])
 
 
 # ---- plasticity (simworker.js plastOnSpike, consolidate, applyScaling, finishCalibration)
@@ -298,7 +344,8 @@ def potentiate(W, KP, Z, OUT, p):
     L = ['%sex = int(%s > 0)' % (p, W),
          '%st1 = rtrip*%s' % (p, Z), '%st2 = raP + %st1' % (p, p), '%st3 = %st2*%s' % (p, p, KP),
          '%snw = %s + %st3' % (p, W, p),
-         '%sg = %s/kRef' % (p, Z), '%sgg = %sg*%sg' % (p, p, p), '%sgate = %sgg*%sg' % (p, p, p),
+         '%skr = rhoMode*clip(alphaI_post*kRefA, 1e-6, 1e300) + (1 - rhoMode)*kRef' % p,
+         '%sg = %s/%skr' % (p, Z, p), '%sgg = %sg*%sg' % (p, p, p), '%sgate = %sgg*%sg' % (p, p, p),
          '%shg = rhet*%sgate' % (p, p), '%shm = clip(%shg, -1e300, 1)' % (p, p),
          '%sdw = %s - wRef' % (p, W), '%shh = %shm*%sdw' % (p, p, p), '%snw2 = %snw - %shh' % (p, p, p),
          '%swe = clip(%snw2, 0.0001, rwmax)' % (p, p),
@@ -333,7 +380,8 @@ MASKS = ['clb = rhoMode*upto(t/ms, calMs)',
 PRE_PLAST = (MASKS + ['cp = ple*spiked_post*int(i > j)']
              + potentiate('w', 'Kpre_pre', 'Kslow_post', 'wpot', 'pz')
              + ['wa = cp*wpot + (1 - cp)*w',
-                'wsent = wa*sfv_pre',
+                'sfs = 1 + (sfv_pre - 1)*(1 - stpScopeE*int(wa < 0))*(1 - stpScopeI*int(wa > 0))',
+                'wsent = wa*sfs',
                 'kqa = fround(Kpost_post + 1)',
                 'kq = cp*kqa + (1 - cp)*Kpost_post',
                 'alq = rhoMode*alphaI_post + (1 - rhoMode)*iAlpha']
@@ -348,6 +396,29 @@ POST_PLAST = (MASKS + ['cq = spiked_pre*int(i > j)',
                        'kpv = lower*kpa + (1 - lower)*Kpre_pre']
               + potentiate('w', 'kpv', 'Kslow_post', 'wpt', 'pq')
               + ['ap = ple*(1 - cq)', 'w = ap*wpt + (1 - ap)*w'])
+
+# The pair rule timed at the synapse (stdpAt 1, simworker.js kpreAtSynapse and plastArrivals).
+# A presynaptic spike counts when it arrives, d steps after it was fired.
+# Potentiation at a postsynaptic spike reads the pre trace as it was d steps ago: the spikes of the last d - 1 steps are taken out of Kpre (h_k is the pre cell's spike k steps ago and ekd_k is e^(-k/tau+) for k below d, else 0, one product and one sum per step as the engine adds them) and the rest is brought forward by exd, e^(d/tau+).
+# Kpre holds no spike of this step in either implementation here, so there is no same-millisecond correction to make.
+# Depression runs in a third pathway, at the arrival, against Kpost as it stands before any cell of that step fires; it runs first in the step (order -3), as the engine's arrival pass does.
+KPS = (['ha%d = h%d_pre*ekd%d' % (k, k, k) for k in range(1, 17)]
+       + ['sb1 = ha1'] + ['sb%d = sb%d + ha%d' % (k, k - 1, k) for k in range(2, 17)]
+       + ['kp0 = Kpre_pre - sb16', 'kp1 = exd*kp0', 'kps = clip(kp1, 0, 1e300)'])
+PRE_PLAST_SYN = (MASKS + ['cp = ple*spiked_post*int(i > j)'] + KPS
+                 + potentiate('w', 'kps', 'Kslow_post', 'wpot', 'pz')
+                 + ['wa = cp*wpot + (1 - cp)*w',
+                    'sfs = 1 + (sfv_pre - 1)*(1 - stpScopeE*int(wa < 0))*(1 - stpScopeI*int(wa > 0))',
+                    'wsent = wa*sfs',
+                    'w = wa'])
+POST_PLAST_SYN = (MASKS + ['cq = spiked_pre*int(i > j)'] + KPS
+                  + potentiate('w', 'kps', 'Kslow_post', 'wpt', 'pq')
+                  + ['ap = ple*(1 - cq)', 'w = ap*wpt + (1 - ap)*w'])
+ARRIVE_PLAST = (MASKS + ['alq = rhoMode*alphaI_post + (1 - rhoMode)*iAlpha']
+                + depress('w', 'Kpost_post', 'wdn', 'dz')
+                + ['w = ple*wdn + (1 - ple)*w'])
+# the history moves on with the trace decay: h1 takes this step's spike
+SHIFT = '\n'.join(['h%d = h%d' % (k, k - 1) for k in range(16, 1, -1)] + ['h1 = spiked'])
 
 RESET_PLAST = '\n'.join(['Kpre = fround(Kpre + 1)', 'Kpost = fround(Kpost + 1)',
                          'Kslow = hasSlow*fround(Kslow + 1)', 'spkAcc = fround(spkAcc + 1)'])
@@ -415,6 +486,7 @@ def run_case(case):
     plast = case.get('plast')
     stp = case.get('stp')
     dynamic = plast is not None or stp is not None
+    stdp_at = plast is not None and int(plast.get('stdpAt') or 0) == 1
     grd = np.asarray(case.get('grd') or np.zeros(n), dtype=np.float64)
     post = np.asarray(case.get('post') or [], dtype=np.int64)
     starts = np.asarray(case.get('pre') or np.zeros(n + 1), dtype=np.int64)
@@ -474,31 +546,49 @@ def run_case(case):
             ns['chanDec%d' % k] = float(chan_dec[k])**dt
             ns['chanItau%d' % k] = exact_itau(float(chan_dec[k])) if exact and dt != 1.0 else float(case['chanItau'][k])
             ns['chanErev%d' % k] = float(case['chanErev'][k]) if k < len(case.get('chanErev') or []) else float('nan')
+            ns['chanMg%d' % k] = float(case['chanMg'][k]) if k < len(case.get('chanMg') or []) else 0.0
     if noise:
         ns['noise'] = noise_function(int(case['seed']))
     if plast is not None:
-        for key in ('kRef', 'iAlpha', 'decS', 'decM', 'decY', 'hasSlow', 'commitOn', 'sEta', 'iRho',
+        for key in ('kRef', 'kRefA', 'iAlpha', 'decS', 'decM', 'decY', 'hasSlow', 'commitOn', 'sEta', 'iRho',
                     'scaleOn', 'rhoMode', 'calMs', 'calSecs', 'tauSum', 'consOn', 'consStep', 'consRate'):
             ns[key] = float(plast[key])
     else:
         for key in ('rhoMode', 'commitOn'):
             ns[key] = 0.0
+    # the scope: 1 keeps inhibitory synapses out of the release, 2 excitatory ones; named in every case, since the plastic delivery path reads them whether or not the term is on
+    ns['stpScopeE'] = 0.0
+    ns['stpScopeI'] = 0.0
+    stp_classes = stp.get('classes') or [] if stp is not None else []
     if stp is not None:
+        ns['stpScopeE'] = 1.0 if int(stp.get('scope') or 0) == 1 else 0.0
+        ns['stpScopeI'] = 1.0 if int(stp.get('scope') or 0) == 2 else 0.0
         ns.update({'stpU': float(stp['U']), 'stpScale': float(stp['scale']),
                    'stpDx': float(stp['dx']), 'stpDr': float(stp['dr'])})
+        for c, cl in enumerate(stp_classes):
+            ns.update({'stpU%d' % c: float(cl['U']), 'stpScale%d' % c: float(cl['scale']),
+                       'stpDx%d' % c: float(cl['dx']), 'stpDr%d' % c: float(cl['dr'])})
 
     defaultclock.dt = dt*ms
     group_args = {'threshold': 'spiked > 0.5', 'namespace': ns}
     if plast is not None:
         group_args['reset'] = RESET_PLAST
-    G = NeuronGroup(n, neuron_model(syn, K, len(stim), len(noise), ext, pool, graded, dynamic), **group_args)
-    G.run_regularly(step_code(syn, K, len(stim), len(noise), ext, pool, graded, stp, dt), when='groups')
+    G = NeuronGroup(n, neuron_model(syn, K, len(stim), len(noise), ext, pool, graded, dynamic, bool(case.get('noise')), stdp_at, len(stp_classes)), **group_args)
+    G.run_regularly(step_code(syn, K, len(stim), len(noise), ext, pool, graded, stp, dt, case.get('chanMg') or [], bool(case.get('noise'))), when='groups')
     objects = [G]
     # after the step, in the engine's order: trace decay, consolidation, short-term recovery, then (at the clock tick) scaling and calibration
     if plast is not None:
-        objects.append(G.run_regularly(DECAY, when='end', order=0))
+        objects.append(G.run_regularly(DECAY + ('\n' + SHIFT if stdp_at else ''), when='end', order=0))
         objects.append(G.run_regularly(CALIBRATE, when='end', order=4))
-    if stp is not None:
+    if stp is not None and stp_classes:
+        rec = []
+        for c, cl in enumerate(stp_classes):
+            if cl['on']:
+                rec.append(STP_RECOVER.replace('stpX', 'stpX%d' % c).replace('stpR', 'stpR%d' % c)
+                           .replace('stpU', 'stpU%d' % c).replace('stpDx', 'stpDx%d' % c).replace('stpDr', 'stpDr%d' % c))
+        if rec:
+            objects.append(G.run_regularly('\n'.join(rec), when='end', order=2))
+    elif stp is not None:
         objects.append(G.run_regularly(STP_RECOVER, when='end', order=2))
     rows = np.asarray(case['rows'], dtype=np.float64)
     for name, col in zip(['Cm', 'kk', 'vr', 'vt', 'vpeak', 'aa', 'bb', 'cc', 'dd'], rows.T):
@@ -506,6 +596,15 @@ def run_case(case):
     G.bias = case['bias']
     G.v = case['v0']
     G.u = case['u0']
+    if case.get('noise'):
+        # a noise stimulus's memory and shared part per cell, folded by the case builder; the shared draw is keyed on NOISE_SHARED plus the stimulus's index
+        nf = case['noise']
+        G.nfa = np.asarray(nf['a'], dtype=np.float64)
+        G.nfk = np.asarray(nf['k'], dtype=np.float64)
+        G.nfc = np.asarray(nf['c'], dtype=np.float64)
+        G.nfid = NOISE_SHARED + np.maximum(0, np.asarray(nf['id'], dtype=np.int64))
+        G.nfou = 0.0
+        G.nfous = 0.0
     for prefix, protos in (('prq', stim), ('prz', noise)):
         for k, p in enumerate(protos):
             setattr(G, '%sf%d' % (prefix, k), p['f'])
@@ -517,6 +616,10 @@ def run_case(case):
         G.stpX = 1.0
         G.stpR = float(stp['R0']) if stp is not None else 0.0
         G.sfv = 1.0
+        for c, cl in enumerate(stp_classes):
+            setattr(G, 'stpX%d' % c, 1.0)
+            setattr(G, 'stpR%d' % c, float(cl['R0']))
+            setattr(G, 'sfv%d' % c, 1.0)
 
     if pool:
         # the pool drive for the next step: poolK times this step's spike count per pool
@@ -567,11 +670,23 @@ def run_case(case):
             if not dynamic:
                 S = Synapses(G, G, 'w : 1 (constant)', on_pre=deliver, namespace=ns)
             else:
-                model = '\n'.join(['w : 1', 'wsent : 1', 'wRef : 1', 'pl : 1 (constant)']
-                                  + ['%s : 1 (constant)' % r for r in RULE_VARS])
-                emit = '\n'.join(PRE_PLAST) if plast is not None else 'wsent = w*sfv_pre'
-                S = Synapses(G, G, model, on_pre={'pre': emit, 'deliver': deliver},
-                             on_post='\n'.join(POST_PLAST) if plast is not None else None,
+                model = '\n'.join(['w : 1', 'wsent : 1', 'wRef : 1', 'pl : 1 (constant)'] + (['stc : 1 (constant)'] if stp_classes else [])
+                                  + ['%s : 1 (constant)' % r for r in RULE_VARS]
+                                  + (['exd : 1 (constant)'] + ['ekd%d : 1 (constant)' % k for k in range(1, 17)] if stdp_at else []))
+                # the release factor in scope (stpScope): 1 on a synapse the scope leaves out
+                if plast is None:
+                    emit = 'sfs = 1 + (sfv_pre - 1)*(1 - stpScopeE*int(w < 0))*(1 - stpScopeI*int(w > 0))\nwsent = w*sfs'
+                else:
+                    emit = '\n'.join(PRE_PLAST_SYN if stdp_at else PRE_PLAST)
+                if stp_classes:
+                    # the synapse's release is its rule's class (stc), chosen from the classes' factors
+                    sel = ' + '.join('sfv%d_pre*int(stc == %d)' % (c, c) for c in range(len(stp_classes)))
+                    emit = 'sfsel = ' + sel + '\n' + emit.replace('sfv_pre', 'sfsel')
+                pre_paths = {'pre': emit, 'deliver': deliver}
+                if stdp_at:
+                    pre_paths['arrive'] = '\n'.join(ARRIVE_PLAST)
+                S = Synapses(G, G, model, on_pre=pre_paths,
+                             on_post='\n'.join(POST_PLAST_SYN if stdp_at else POST_PLAST) if plast is not None else None,
                              namespace=ns)
             # in the engine's CSR order, so arrivals in one step are summed in the order the engine sums them
             S.connect(i=pre[idx], j=post[idx])
@@ -582,6 +697,8 @@ def run_case(case):
             else:
                 S.wRef = w[idx]
                 S.pl = (rule[idx] != 0).astype(np.float64)
+                if stp_classes:
+                    S.stc = np.asarray(stp['cls'], dtype=np.float64)[rule[idx]]
                 if rules is not None:
                     # a frozen synapse (rule 0) never uses its row, but the masks multiply the unused branch by 0 and 0 times NaN is NaN, so row 0's zero wmax (a division) is replaced by a harmless one
                     safe = rules.copy()
@@ -593,6 +710,15 @@ def run_case(case):
                 S.deliver.delay = (delay[idx] - 1)*ms
                 S.pre.order = -2
                 S.deliver.order = -1
+                if stdp_at:
+                    # the arrival, d steps after the spike, before anything else of that step
+                    S.arrive.delay = delay[idx]*ms
+                    S.arrive.order = -3
+                    dl = delay[idx].astype(np.int64)
+                    S.exd = np.asarray(plast['exd'], dtype=np.float64)[dl]
+                    ek = np.asarray(plast['ek'], dtype=np.float64)
+                    for k in range(1, 17):
+                        setattr(S, 'ekd%d' % k, np.where(k < dl, ek[k], 0.0))
                 if plast is not None:
                     S.post.order = 1
                     if plast['consOn']:

@@ -7,7 +7,7 @@
 
 import { defaultNodeName } from './tagname.js';
 
-export const SCENE_FORMAT = 13;
+export const SCENE_FORMAT = 14;
 
 import { applyOverrides } from './sweepvariant.js';
 
@@ -283,6 +283,15 @@ const STEPS = [
   // Only the type changes: parameters, wires, ids and names are as they were.
   d => {
     for(const n of d.nodes || []) if(n.type === 'wiring') n.type = 'connectionsfile';
+    return d;
+  },
+  // 13 -> 14: the pair rule is timed at the synapse by default (stdpAt 1, a presynaptic spike counts when it arrives).
+  // A scene from before the setting was tuned on the soma reading and declares it, as the release order was declared at 9.
+  d => {
+    for(const n of d.nodes || []){
+      if(n.type !== 'checkpoint' || !n.params) continue;
+      if(n.params.stdpAt === undefined) n.params.stdpAt = 0;
+    }
     return d;
   },
 ];
