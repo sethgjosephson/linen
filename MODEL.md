@@ -211,6 +211,56 @@ checkpoint's default `refrac` = 2 ms (an engine given no `refrac` uses 0;
 every engine clamps it to 20), which caps a neuron at 1000/(refrac+1) = 333
 Hz. Without it the reset alone permits a spike on the very next millisecond.
 
+### Dynamic threshold
+
+A row may carry `thrJump` (mV) and `thrTau` (ms). Each cell then keeps a
+threshold state `θ`, zero at the start, that relaxes every step before
+anything else happens to the cell and jumps to `thrJump` when it spikes:
+
+    θ ← θ · e^(−1/thrTau)      at the start of the step
+    spike when v ≥ v_peak + θ,  then θ ← thrJump
+
+This is the refractoriness of Zenke, Agnes and Gerstner 2015's cells
+(Auryn's `IFGroup` and `AIFGroup`: `dthr` 100 mV, `tau_thr` 5 ms), a
+threshold set, not added to, at the spike. It replaces nothing: the
+absolute refractory period below still applies when `refrac` is above
+zero, and their scene sets it to zero. The state is not saved in a brain.
+`src/simworker.js`, `step` and `stepExp` (`thr`, `thrJ`, `thrDec`);
+`src/gpuworker.js`, `update` (slot 12 of the state, slots 12 and 13 of the
+row); `cuda/kernels.cuh`, `stepKick`, `stepExp` (`thr`).
+
+### Conductance adaptation
+
+A row may carry `adaptCond` 1. Its recovery variable `u` is then a
+conductance in nanosiemens drawing current toward the checkpoint's
+inhibitory reversal, and the membrane's `− u` becomes
+
+    − u (v − E_I)
+
+in both half steps; `u`'s own dynamics (`a`, `b`, the jump `d`, now in nS)
+are unchanged. Zenke et al. 2015's spike-frequency adaptation (Auryn's
+`AIFGroup`: `dg_adapt1` 0.1 leak units, `tau_adapt1` 100 ms, toward
+`e_rev` −80 mV). `src/simworker.js`, `step` and `stepExp` (`adC`,
+`S.eRevAd`); `src/gpuworker.js`, `update` (slot 14 of the row, `U.eI`);
+`cuda/kernels.cuh`, `stepKick`, `stepExp` (`adC`, `eI`).
+
+### Poisson rows
+
+A row may carry `poisson` 1. Such a cell has no membrane: each step it
+fires with probability `I / 1000`, where `I` is its total input current
+in pA, so the number is its rate in hertz, and the draw is
+`poissonDraw(i, t, seed)` in `src/rand.js`, a pure function of the cell,
+the step and the seed under its own salt (mirrored in the WebGPU and CUDA
+copies, and in `tools/brian_ref.py`). The cell fires by being put at its
+peak plus its threshold state, so the spike path (reset, `u += d`, the
+deliveries, plasticity) is the one every cell takes; `c` at rest and `d` 0
+leave it where it was. At most one spike a step. The input units of
+Zenke et al. 2015 (Auryn's `StimulusGroup`, Poisson at 5 Hz background
+and 30 Hz in a pattern) are such rows driven by a 5 pA stimulus and a 25
+pA input node. `src/simworker.js`, `step` and `stepExp` (`poi`);
+`src/gpuworker.js`, `update` (slot 15 of the row, `poissonDraw`);
+`cuda/kernels.cuh`, `stepKick`, `stepExp` (`poi`, `poissonDraw`).
+
 ### Membrane floor
 
     v ← max(v, v_min)   after each half step
@@ -224,6 +274,66 @@ one half step is sent over threshold or to infinity, which a synchronous
 inhibitory volley (a feedback pool's onset kick) can do.
 Applied in all three engines after each half step, so a run that never
 reaches the floor is unchanged.
+
+### Exponential step
+
+    v ← v + h F(v)/C · (e^x − 1)/x,   x = h F′(v)/C,   h = 0.5 ms, twice a step
+    F(v) = k (v − v_r)(v − v_t) − u_term(v) + I + G (v₀ − v)
+
+`I` is the cell's current at the step's opening potential `v₀`, `G` the
+sum of its synaptic conductances (zero for current synapses), `u_term`
+the adaptation (`u`, or `u (v − E_I)` on an `adaptCond` row). Exact when
+`F` is linear in `v` and the conductances hold over the step.
+
+At a spike the crossing is put inside the step: the distance to the
+threshold (`v_peak` plus the threshold state, taken at both ends of the
+step) is interpolated between the opening and the end, the cell resets
+to `c` there, `u` jumps by `d`, and the rest of the step is integrated
+from the reset. The threshold state is `thrJump` relaxed over that rest.
+
+The checkpoint's `integ` (1) turns it on. It applies to rows linear over
+the spiking range (`v_t` more than 100 mV above `v_peak`); every other
+row keeps the half steps above. On the cells of Zenke, Agnes and
+Gerstner 2015 driven by the input their run recorded, the half steps
+fire 5 to 15 percent above Auryn's 0.1 ms integration at low rates and
+round each interval up to the next millisecond, 2 percent at 40 Hz; this
+step matches it within 0.3 percent (`bench/cell_replay.mjs`, JOURNAL
+221). On a quadratic row it does worse than the half steps (a
+fast-spiking 2007 row at 60 pA: 34 spikes in 2 s against 259 on a 1 µs
+clock and 83 under the half steps). `src/simworker.js`, `expSpan`,
+`spanReset`; `src/gpuworker.js`, `expSpan` in `update`;
+`cuda/kernels.cuh`, `expSpanD`, `spanResetD`; `tools/brian_ref.py`,
+`step_code` with `integ`.
+
+### The equations' step
+
+    w = v − m,   w′ = A w² + q,   A = k/C
+    m = (v_r + v_t)/2 + g/(2k),   g = G + u on an adaptCond row, else G
+    w(t) = (w₀ C_s + q S_n)/φ,   φ = C_s − A w₀ S_n,   ∫w dt = −ln(φ)/A
+    C_s = cos(s t), S_n = sin(s t)/s,   s² = A q   (cosh and sinh when A q < 0)
+    u ← u_∞ + (u − u_∞) e^(−a h),   u_∞ = b (v̄ − v_r)
+
+Each half step (h = 0.5 ms) is solved exactly with `u`, `I` and `G` held:
+the membrane is a Riccati equation in `v`. The time to the threshold
+(`v_peak` plus the threshold state) comes from the same solution, and a
+crossing inside the half step puts the reset there: `v` to `c`, `u` up
+by `d`, the threshold state to `thrJump` relaxing over the rest of the
+millisecond, and the rest of the half step from `c`. After each half
+step `u` relaxes exactly toward `b (v̄ − v_r)`, `v̄` the exact mean of `v`
+over it. A cell fires at most once a millisecond: a second crossing in
+the same millisecond holds `v` at the threshold, and the cell fires at
+the opening of the next.
+
+The checkpoint's `integ` (2) turns it on. Rows linear over the spiking
+range take the exponential step above; graded and Poisson rows are
+unchanged. On every quadratic row of the type table at 1.5, 2 and 4
+times its rheobase, constant and with Poisson kicks, the mean rate error
+against a 1 µs Euler clock is 0.6 percent (worst 5.9, one spike in 2 s),
+where the half steps are off by 21.6 percent (worst 68.8;
+`tools/izhsteps.mjs`). `src/simworker.js`, `quadTime`, `quadAt`, `quadMs`;
+`src/gpuworker.js`, `quadTime`, `quadAt`, `quadMs` in `update`;
+`cuda/kernels.cuh`, `quadTimeD`, `quadAtD`, `quadMsD`;
+`tools/brian_ref.py`, `quad_ms`.
 
 ### Initial state
 
@@ -636,7 +746,7 @@ the same cell, is counted and skipped. For a matched row with count `c₀`:
 
     c  = c₀ if c₀ > 0 else 1
     c  ← min(c, cap)                 if cap > 0
-    c  ← √c | log₂(1 + c) | 1        under "count taken as" 1 | 2 | 3   (0 leaves c)
+    c  ← √c | log₂(1 + c) | 1        under "count scale" 1 | 2 | 3   (0 leaves c)
 
     sign  = the transmitter column's sign under "sign" 1 (a name containing gaba,
             glut, hist or inh, or starting with a hyphen, is −1, else +1),
@@ -774,8 +884,8 @@ any increment, so both read the pre-increment traces.
 
 | Symbol | Default | Source |
 |---|---|---|
-| `τ₊` (`tauS`) | 16.8 ms | Bi and Poo 1998 report ≈ 17 ms |
-| `τ₋` (`tauM`) | 33.7 ms | Bi and Poo 1998 report ≈ 34 ms |
+| `τ₊` (`tauS`) | 16.8 ms | Pfister and Gerstner 2006, taken from Bi and Poo 2001 and held fixed in their fits |
+| `τ₋` (`tauM`) | 33.7 ms | Pfister and Gerstner 2006, taken from Bi and Poo 2001 and held fixed in their fits |
 | `τ_y` (`tauY`) | 114 ms | Pfister and Gerstner 2006 |
 | `stdpAt` | 1 (synapse) | 0 at the soma, 1 at the synapse after the axonal delay `d` with dendritic delay 0 |
 
@@ -788,18 +898,44 @@ On a **presynaptic** event (at arrival `t₀ + d` when `stdpAt` = 1, or at
 somatic emission `t₀` when `stdpAt` = 0), for each outgoing synapse
 (depression):
 
-    w ← clamp( w − A₋ K_post[j] · (w if wdep else 1) + δ ,  1e-4,  wmax )
+    w ← clamp( w − A₋ s_j K_post[j] · (w if wdep else 1) + δ ,  1e-4,  wmax )
+
+`s_j` is 1 unless the sliding threshold is on (`slide` 1), when it is
+`(r̄_j / κ)²`, the square of the cell's slow rate estimate over the target
+rate (below).
 
 On a **postsynaptic** spike at `t`, for each incoming synapse (potentiation,
 with `K_pre^* = K_pre,i(t − d)` when `stdpAt` = 1 and `K_pre[i](t)` when
 `stdpAt` = 0):
 
-    w ← clamp( w + (A₊ + A₃ z) K_pre^* − min(1, β g³) (w − w̃) ,  1e-4,  wmax )
+    w ← clamp( w + (A₊ + A₃ z) K_pre^* − β g³ (w − w̃) ,  1e-4,  wmax )
 
 `src/simworker.js`, `plastArrivals`, `plastOutSyn` and `plastOnSpike`: the
 outgoing depression (`plastOutSyn`, called from `plastArrivals` at `stdpAt`
 1 or the `preStart` loop of `plastOnSpike` at `stdpAt` 0) and the incoming
 loop over `inStart` (potentiation, calling `kpreAtSynapse` at `stdpAt` 1).
+
+**The sliding threshold** (`slide`; Zenke, Agnes and Gerstner 2015, their
+`P11Connection`, the class their published runs use). Each cell keeps a
+slow trace of its own spikes, `K_hom`, bumped by one per spike and decaying
+with `τ_h`, so `r̄_j = K_hom,j / τ_h` is its rate over the last several
+minutes. On a presynaptic spike the depression of every incoming excitatory
+synapse is multiplied by
+
+    s_j = (r̄_j / κ)²
+
+so a cell firing under `κ` depresses its inputs less than `A₋` says and one
+firing above it more: the rate at which depression balances potentiation
+slides with the cell's own history, toward `κ` (Bienenstock, Cooper and
+Munro 1982, in trace form). `K_hom` starts at `r̄(0)` (`slideInit`) times
+`τ_h` and runs whenever plasticity does, so a tune that switches the
+threshold on reads the rate the cell has shown; a saved brain does not carry
+it, so a resumed run starts it over. The transmitter term and the
+inhibitory rule are not scaled. `src/simworker.js`, `configure` (`slideK`,
+`decH`, `khomInit`), `plastOutSyn` (`sl`), `traceStep`; `src/gpuworker.js`,
+the second lane of the `Kpost` buffer, read in `plastOut` and
+`plastArrive`; `cuda/kernels.cuh`, `plastOutSyn`, `traceStep`;
+`tools/brian_ref.py`, `depress`.
 
 | Symbol | Field | Default | Meaning and source |
 |---|---|---|---|
@@ -809,29 +945,127 @@ loop over `inStart` (potentiation, calling `kpreAtSynapse` at `stdpAt` 1).
 | `A₃` | `trip` | 0 | triplet amplitude, multiplying the slow postsynaptic trace. Pfister and Gerstner 2006 |
 | `δ` | `tin` | 0 | transmitter-induced potentiation, a constant per presynaptic spike. Zenke et al. 2015 |
 | `β` | `het` | 0 | heterosynaptic regression amplitude. Zenke et al. 2015 |
+| `slide` | `slide` | 0 | the sliding threshold switch. Zenke et al. 2015, their `P11Connection` |
+| `κ` | `slideRate` | 10 Hz | the rate at which the sliding threshold leaves `A₋` as set. same (their `kappa`) |
+| `τ_h` | `slideTau` | 600 s | time constant of the slow rate estimate. same (their `tauh`) |
+| `r̄(0)` | `slideInit` | 1 Hz | where the estimate starts; a saved brain does not carry it |
 | `w̃` | | | the reference weight, see consolidation below |
 | `wmax` | `wmax` | 30 | upper bound |
 
-The heterosynaptic gate is
+The heterosynaptic term is the paper's (Zenke, Agnes and Gerstner 2015,
+their `P10Connection`): at a postsynaptic spike of cell i, every incoming
+plastic excitatory weight moves by
 
-    g = z / k_ref ,      k_ref = τ_y · ρ / 1000
+    Δw = −β · K_post,i³ · (w − w̃)
 
-`src/simworker.js`, `plastOnSpike` (`gate`), with `k_ref` set in
-`configure` (`S.kRef`). The cube `g³` and the saturation at 1 are the
-project's stated adaptation of Zenke's `−β (w − w̃) z³`: normalizing by the
-trace at the target rate makes `β` dimensionless and comparable across
-scenes, and the saturation stops a burst from erasing a synapse in one step.
-`ρ` is the global `iRho`, or under measured set points each neuron's own
-`ρ_i`, read back from its Vogels target: `k_ref,i = α_i τ_y/(τ_+ + τ_-)`,
-which is `α_i = ρ_i (τ_+ + τ_-)/1000` inverted, so the WebGPU incoming
-pass needs no buffer beyond the per-neuron lane it already reads (Terms
-in combination, below).
+with `K_post` the fast postsynaptic trace (`τ₋`) as it stood before that
+spike was added. `src/simworker.js`, `plastOnSpike` (`hetCube`);
+`src/gpuworker.js`, the `plastIn` shader, which reads the trace from the
+third lane of the per-neuron interleave, a copy of `K_post` the decay pass
+leaves there; `cuda/kernels.cuh`, `plastIn` (`gate`); `tools/brian_ref.py`,
+`potentiate`. There is no normalization and no ceiling on the step: a lone
+spike at a low rate leaves the cube near zero, a burst raises it steeply,
+which is the paper's burst detector, and the weight limits bound the
+result. (An earlier form here normalized the trace by its value at the
+homeostatic target rate and capped the pull at a full return to the
+reference; it erased learned weights at every doublet and is gone.)
 
 **Why weight-dependent depression is the default.** Additive depression with
 hard bounds has no interior fixed point, so with `A₋` above `A₊` and
 uncorrelated firing every weight drifts to a bound. Depression
 proportional to `w` puts the fixed point at `A₊⟨K_pre⟩ = A₋ w ⟨K_post⟩`,
 which is stable and unimodal.
+
+### The third factor
+
+A gain `g` on the Hebbian terms of the pair rule, 1 by default, set on
+init and tune (`plastGain`):
+
+    Δw₊ = g · (A₊ + A₃ K_slow) · K_pre          at a postsynaptic spike
+    Δw₋ = g · A₋ · K_post · w^μ − g · A_tin       at a presynaptic spike
+
+The inhibitory rule, synaptic scaling, the heterosynaptic pull and
+consolidation are not multiplied by `g`. The exponent `μ` in `Δw₋` is
+`wmu` on the checkpoint: 1 (the default) is depression proportional to the
+weight (van Rossum, Bi and Turrigiano 2000), 0 additive, and values between
+are the interpolation of Gütig, Aharonov, Rotter and Sompolinsky 2003 (J
+Neurosci 23:3697), under which strong synapses are depressed less than in
+proportion and the weight distribution is both stable and competitive. Hard
+bounds (`wdep` 0) ignore it. In a training run the checkpoint's
+`plastGate` setting makes `g` 1 while a presentation is on (or while a
+presentation of both senses is on) and 0 otherwise, so the Hebbian terms
+act only during the events and the homeostatic terms throughout. This is
+the neoHebbian three-factor form with the modulatory signal tied to the
+stimulus and no eligibility trace (Fremaux and Gerstner 2016, Front Neural
+Circuits 9:85; Gerstner, Lehmann, Liakoni, Corneil and Brea 2018, Front
+Neural Circuits 12:53). `src/simworker.js`: `S.gain` in `plastOutSyn` and
+`plastOnSpike`; `src/gpuworker.js`: `U.plastGain`; `cuda/kernels.cuh`: the
+`gain` argument of `plastOutSyn` and `plastInSyn`; `tools/brian_ref.py`:
+`pgain`.
+
+### Neuromodulation
+
+A modulator level per cell, `M_i`, dimensionless, decaying with `modTau`
+(default 200 ms, the dopamine decay of Izhikevich 2007, Cereb Cortex
+17:2443) and raised by two kinds of source a modulator node declares before
+the wiring:
+
+    M_i(t) = M_i(t-1) e^(-1/τ_mod) + s_i(t) + K_g c_g(t-1)
+
+A time course holds a level `L` at every cell of a population, constant,
+pulsed, ramped, or while a presentation is on, as a stimulus holds a
+current: the increment per step is `L (1 - e^(-1/τ_mod))` times the course's
+scale, so a constant course settles at `L`. A releasing population `g` adds
+`K_g = L 1000 / N_g` (folded by `1 - e^(-1/τ_mod)`) per spike of its `N_g`
+cells to every cell of its target, so a steady level reads as `L` times the
+population's mean rate in Hz, as a pool's gain does; the spikes count the
+step after they are fired. Everything at step `t` reads `M(t-1)`. A cell
+releases into at most one population and receives from at most one. The
+level starts at zero and is not kept in a brain file.
+
+What the level does is the checkpoint's modulation settings, all global:
+
+- `modPlast` 1, the gain form: the Hebbian terms of a synapse are
+  multiplied by `g (b + M_j)`, `g` the third factor above, `b` the
+  learning base (`modBase`, default 1) and `M_j` the level of the
+  postsynaptic cell, so with the base at 1 the rule is unchanged where the
+  level is zero and at 0 only the modulator drives learning. This is the
+  neoHebbian three-factor rule with the third factor a field rather than
+  a gate (Fremaux and Gerstner 2016, Front Neural Circuits 9:85).
+- `modPlast` 2, the eligibility form: the same terms accumulate on a trace
+  per synapse, `c_ij`, and the weight does not move at the spike. Every
+  `modStep` ms (default 10, Izhikevich's) each excitatory plastic synapse
+  pays into its weight
+
+      Δw_ij = c_ij (1 - e^(-modStep/τ_e)) (b + M_j)
+
+  clamped as the pair rule clamps, and then `c_ij ← c_ij
+  e^(-modStep/τ_e)`, with `τ_e` the trace time constant (`eligTau`,
+  default 1000 ms). Izhikevich pays the whole trace at every sweep; the
+  factor here makes the sum over a trace's life its amount, so a level
+  means in this form what it means in the gain form, and a pairing followed
+  within the trace's life by a modulator pulse is paid in proportion to
+  the pulse, where one followed by nothing is paid `b` times. The
+  heterosynaptic pull, the inhibitory rule, scaling and consolidation are
+  not routed through the trace. A committed synapse keeps its weight.
+- `modDrive`: the synaptic current of a cell (its deliveries, its pool,
+  its receptor channels; not the bias, the stimuli, the input maps or the
+  noise) is multiplied by `1 + modDrive M_i`, the gain modulation ascribed
+  to noradrenaline (Servan-Schreiber, Printz and Cohen 1990, Science
+  249:892), and under the exponential step the synaptic conductance with
+  it.
+- `modCur`: a current `modCur M_i` is added, a depolarizing or
+  hyperpolarizing action of the modulator on the cell itself.
+
+One level per cell means one substance per scene: a scene that needs
+dopamine on learning and acetylcholine on excitability at the same cells
+cannot keep them apart. `src/simworker.js`: `modUpdate`, `eligSweep`, the
+`S.mod` reads in `step`, `stepExp`, `plastOutSyn` and `plastOnSpike`;
+`src/gpuworker.js`: the level in state lane 14 of `update`, the copies in
+`decay`, `U.modPlast` in the plasticity shaders, `SHADER_ELIG`;
+`cuda/kernels.cuh`: the `mod` arguments of `stepKick`, `stepExp`,
+`plastOutSyn`, `plastInSyn`, and `eligSweepK`; `tools/brian_ref.py`:
+`mod_update`, `pgn` in the plasticity blocks, `ELIG_SWEEP`.
 
 ### Inhibitory plasticity
 
@@ -865,9 +1099,40 @@ ENGINE.md section 3.
 |---|---|---|---|
 | `η` | `iEta` | 0.002 | learning rate |
 | `ρ` | `iRho` | 5 Hz | target postsynaptic firing rate |
+| `iGlobal` | `iGlobal` | 0 | the global factor switch (below) |
+| `τ_G` | `iTauG` | 10 s | the window of the population rate the factor reads |
 
 Weights are negative, so `Δw < 0` when the target fires above `ρ` means
 stronger inhibition.
+
+**The global factor** (`iGlobal` 1; Zenke, Agnes and Gerstner 2015, their
+`GlobalPFConnection`, the inhibitory rule of their published network).
+The per-cell target leaves the rule and one factor, read from the
+population, scales every update. The population is every cell with an
+inhibitory synapse under a rule; its spike count is low-passed over `τ_G`
+into `P`, which stands for the population's total rate in spikes per
+second (`P ← P e^(−1/τ_G) + n_spikes / τ_G` per step, started at `ρ N` so
+the factor starts at zero as theirs does), and
+
+    r = P / (N ρ) − 1
+    on presynaptic event:   Δw = −η r ( K_post[j] + 1 )
+    on postsynaptic spike:  Δw = −η r K_pre^*
+
+with the same clamps and soft bounds as above. The `+ 1` is their `xi`.
+The factor is read as the step before left it, in every engine, and it
+evolves only while plasticity is on (a count made while plasticity is off
+is folded at the first plastic step). Below the target it weakens every
+inhibitory synapse at every pairing and above it strengthens them, so
+single cells are free to fire above or below `ρ` while the population is
+held; the per-cell form drives each cell to `ρ`. Their numbers: `iEta`
+eta/50 (2.5e-4 nS at 12.5 nS per unit), `ρ` 4 Hz, `τ_G` 10 s.
+`src/simworker.js`, `globalFactor` (`S.gPf`, `S.gRatio`, both float32),
+`plastOutSyn` and `plastOnSpike` (the `S.iGlobal` branches);
+`src/gpuworker.js`, `update` (the count, one word past the pool tables of
+`refcnt`; slot 13 of the state flags the population), `decay` (the fold,
+the ratio after the `Kpost` lanes and after the `ktr` lanes),
+`plastOut`, `plastArrive`, `plastIn`; `cuda/kernels.cuh`, `gfacK`,
+`plastOutSyn`, `plastInSyn` (`gState`, `iGlobal`).
 
 ### Soft bounds
 
@@ -892,6 +1157,12 @@ a double well whose lower fixed point is 0 and whose upper one is `w_P`, with
 an unstable midpoint at `w_P/2`.
 
     w̃ ← w̃ + (Δt / τ_cons) · ( w − w̃ − P w̃ (w_P/2 − w̃)(w_P − w̃) )
+
+The fixed points 0 and `w_P` are those of the well alone. The weight's pull
+moves them: a synapse held above `w_P` settles with `w̃` above `w_P`, where
+the two balance (0.57 of 0.5 on the strong synapses of their network).
+Each step is held in `[0, max(w̃, w, w_P)]`, which the exact equation cannot
+leave, so a short `τ_cons` stays bounded.
 
 `src/simworker.js`, `consolidate`, called from `step` and `stepExp` on
 the `consAcc` counter. Evaluated every `Δt` = 1200 ms rather than every
@@ -925,8 +1196,18 @@ three engines.
 |---|---|---|---|
 | `commit` | `commit` | 0 | the switch, a control on the checkpoint |
 | `τ_cons` | `tauCons` | 1,200,000 ms (20 min) | timescale of the drive into the well, "commit after (sim-min)". Zenke et al. 2015 fix it at twenty minutes; it is exposed because how many presentations it takes to commit depends on the curriculum |
-| `Δt` | `consStep` | 1200 ms | cadence of the consolidation step, "commit check every (sim-s)" |
+| `Δt` | `consStep` | 1200 ms | cadence of the consolidation step, "commit check s" |
 
+Where the reference starts is the checkpoint's `refInit` (`refStart` in
+`src/simworker.js`, the `initRef` pass in `src/gpuworker.js`, `initRefK` in
+`cuda/kernels.cuh`, the `wRef` assignment in `tools/brian_ref.py`), for the
+excitatory synapses of a consolidating rule: 0, the wired weight brought
+inside the well (a synapse wired above `w_P` starts at `w_P`, where the
+equation settles from above); 1, the lower fixed point, zero, which is where
+Zenke et al. start it (their `weight_a`), so every synapse is pulled toward
+nothing until it has stayed above the midpoint long enough to consolidate;
+2, the consolidated weight. A rule without consolidation keeps the weight
+itself as the reference.
 The reference is clamped to the two fixed points of its own well, `[0,
 w_P]`, in all three engines. The consolidation step is forward Euler over a
 cubic, so a short timescale diverges without the clamp: at a twenty second
@@ -980,7 +1261,7 @@ three engines: `finishCalibration` in the reference, the host side of
 `tick` in the WebGPU worker (which then writes `α_i` per cell into the
 buffer the plasticity passes read), and `finishCalK` in the CUDA child. The
 measured `ρ_i` reach the Vogels term and synaptic scaling; the
-heterosynaptic gate keeps the global `ρ` (above).
+heterosynaptic term has no set point to reach.
 
 ### Short-term plasticity
 
@@ -1112,16 +1393,10 @@ Scaling therefore carries the cell's whole rate error on the synapses that
 have not committed: the more of a cell's inputs commit, the larger the
 multiplicative step the rest take for the same error.
 
-**The heterosynaptic gate and measured set points.** The gate is `g =
-z/k_ref` with `k_ref = τ_y ρ / 1000`, so `g = 1` when the neuron fires at
-`ρ`. Under `rhoMode` 1 the Vogels term, scaling and the gate all use each
-neuron's own `ρ_i`: `k_ref,i = α_i τ_y/(τ_+ + τ_-)`, computed from the
-per-neuron Vogels target every engine already holds. With a gate built on
-the global `iRho` instead, a neuron whose measured set point is a fifth of
-`iRho` has its competition engage at five times its own rate; one whose set
-point is four times `iRho` has it engage at a quarter of its own rate,
-which is always, so its
-synapses are regressed toward the reference on every spike.
+**The heterosynaptic term and the set points.** The term reads the cell's
+own fast trace and nothing else, so measured set points (`rhoMode` 1)
+change the Vogels term and scaling and leave it alone; a cell's competition
+engages at the same burst whatever its target rate.
 
 **Transmitter-induced potentiation needs a counterweight.** `δ` (`tin`)
 adds a constant to every outgoing synapse on a presynaptic spike, whatever
@@ -1189,8 +1464,13 @@ order (the documented residual, ENGINE.md section 4), the cell says so.
 | Term | Reference (`src/simworker.js`) | WebGPU (`src/gpuworker.js`) | CUDA (`cuda/kernels.cuh`, `cuda/engine.cu`) |
 |---|---|---|---|
 | Membrane half steps, spike and reset | `step`, `stepExp` | `update` | `stepKick`, `stepExp` |
+| Exponential step and the reset inside the step (`integ`) | `expSpan`, `spanReset` in `step`, `stepExp` | `expSpan` in `update` (Step word 71) | `expSpanD`, `spanResetD` in `stepKick`, `stepExp` (bit 32 of byte 100) |
+| The equations' step (`integ` 2) | `quadTime`, `quadAt`, `quadMs` in `step`, `stepExp` | `quadTime`, `quadAt`, `quadMs` in `update` (Step word 71) | `quadTimeD`, `quadAtD`, `quadMsD` in `stepKick`, `stepExp` (bit 64 of byte 100) |
 | Graded release | `step`, `stepExp` (the `grd` branch) | `update` (amplitude byte in the event list, rounded to 1/254), `deliver` (scales the synapses by it) | `stepKick`, `stepExp` (the `grd` branch) |
 | Absolute refractory period | `step`, `stepExp` (`refCnt`) | `update` (low byte of `refcnt`) | `stepKick`, `stepExp` (`refCnt`) |
+| Dynamic threshold | `step`, `stepExp` (`thr`, `thrJ`, `thrDec`) | `update` (state slot 12, row slots 12 and 13) | `stepKick`, `stepExp` (`thr`, `thrJ`, `thrDec`) |
+| Conductance adaptation | `step`, `stepExp` (`adC`, `S.eRevAd`) | `update` (row slot 14, `U.eI`) | `stepKick`, `stepExp` (`adC`, `eI`) |
+| Poisson rows | `step`, `stepExp` (`poi`, `poissonDraw` in `src/rand.js`) | `update` (row slot 15, `poissonDraw`) | `stepKick`, `stepExp` (`poi`, `poissonDraw`) |
 | Membrane floor | `step`, `stepExp` (`vmin`) | `update` (`U.vmin`) | `stepKick`, `stepExp` (`vmin`) |
 | Initial state | computed on the host, `initState` in `src/rand.js`; read from the init message in the `init` branch of `onmessage` | the same `v0`, `u0`, in host `init` | the same, in the INIT frame of `engine.cu` |
 | Noise draw | `noiseDraw` in `src/rand.js`, called from `step`, `stepExp` | `pcg`, `unif`, inline in `update` | `pcgH`, `unifH`, `noiseDraw` |
@@ -1205,8 +1485,10 @@ order (the documented residual, ENGINE.md section 4), the cell says so.
 | Traces | decay in `step`, `stepExp`; increments in `plastOnSpike` | `bump` (increments), `decay` | `traceStep` (increment, then decay) |
 | Pair STDP depression, transmitter term | `plastOnSpike`, outgoing loop | `plastOut` | `plastOut` |
 | Potentiation, triplet, heterosynaptic terms | `plastOnSpike`, incoming loop | `plastIn` | `plastIn` |
-| Heterosynaptic gate `k_ref` | `configure` (`S.kRef`) | host `configure` (`S.kRef`), `U.kRef` in `plastIn` | the `kRef` argument of `plastIn`, computed in `engine.cu` TICK |
+| Heterosynaptic term's trace | `K_post[i]` in `plastOnSpike` | the third lane of the interleave, copied from `Kpost` by the decay pass | the `Kpost` argument of `plastIn` |
+| Sliding threshold | `plastOutSyn` (`sl`); `K_hom` bumped in `plastOnSpike`, decayed in `traceStep` | `plastOut`, `plastArrive` (the second lane of `Kpost`), `bump`, `decay` | `plastOutSyn` (`sl`), `traceStep` (`Khom`) |
 | Inhibitory plasticity | `plastOnSpike`, both loops; `α` in `configure` (`S.iAlpha`) | `plastOut`, `plastIn`; `α` per cell in the `alphaI` buffer, written by host `configure` | `plastOut`, `plastIn`; `iAlpha` in `engine.cu` TICK |
+| Global factor | `globalFactor` (`S.gPf`, `S.gRatio`); the `S.iGlobal` branches of `plastOutSyn`, `plastOnSpike` | `update` (the count past the pool tables), `decay` (the fold; the ratio after the `Kpost` and `ktr` lanes), `plastOut`, `plastArrive`, `plastIn` | `gfacK`; `plastOutSyn`, `plastInSyn` (`gState`) |
 | Soft bounds | `softBound` | `softBound` (in both plasticity shaders) | `softBound` |
 | Consolidation | `consolidate` | `consolidate` (`SHADER_CONS`); cadence in host `encodeSteps` | `consolidateK`; cadence in `engine.cu` TICK |
 | Committed synapses | `plastOnSpike` (`committed`), `applyScaling` | `plastOut`, `plastIn`, `scalePass` (`U.commit`, `wRef`) | `isCommitted`, in `plastOut`, `plastIn`, `scaleK` |
@@ -1215,6 +1497,10 @@ order (the documented residual, ENGINE.md section 4), the cell says so.
 | Short-term plasticity, release | `stpRelease` | `deliver` | `stepKick`, `stepExp` |
 | Short-term plasticity, recovery | `stpStep` | `stpRecover` | `stpStepK` |
 | Rule table | `configure` (`S.ruleTable`, row 1 from the scalars) | host `writeRules` (the `Rules` uniform, 16 rows) | `cRules` (constant memory), filled in `engine.cu` TUNE |
+| Modulator field | `modUpdate` (sources in `updateStim`, release counts in `step`, `stepExp`) | `update` (state lane 14; sources in host `updateDrive`, release counts past the pool tables in `refcnt`), `decay` (the copies the learning passes read), `poolClear` | `stepKick`, `stepExp` (`modPrev`, `modNew`; the sources on the host side of the child, the counts in `modCnt`); the swap in `engine.cu` TICK |
+| Modulated Hebbian gain (`modPlast` 1) | `plastOutSyn`, `plastOnSpike` (`S.mod`) | `plastOut`, `plastArrive` (the third lane of `Kpost`), `plastIn` (the fifth lane of `ktr`) | `plastOutSyn`, `plastIn` (`modPrev`) |
+| Eligibility trace and sweep (`modPlast` 2) | `plastOutSyn`, `plastOnSpike` (`S.elig`), `eligSweep` | `plastOut`, `plastArrive`, `plastIn` (`elig`), `eligSweep` (`SHADER_ELIG`); cadence in host `encodeSteps` | `plastOutSyn`, `plastInSyn` (`elig`), `eligSweepK`; cadence in `engine.cu` TICK |
+| Synaptic gain and current of the modulator | `step`, `stepExp` (`mDrive`, `mCur`) | `update` (`mf`, `mc`) | `stepKick`, `stepExp` (`mf`, `mc`) |
 
 Every term is in all three engines. The differences the table marks are
 the fixed-point kick delivery on WebGPU, the 1/254 rounding of a graded
@@ -1296,7 +1582,7 @@ figure while holding the other is comparing the wrong thing.
 | Proxy downscaling | van Albada, Helias and Diesmann 2015 |
 | Pair STDP, trace form | Song, Miller and Abbott 2000 |
 | Weight-dependent depression | van Rossum, Bi and Turrigiano 2000; Gütig et al. 2003 (μ = 1) |
-| Window time constants | Bi and Poo 1998 |
+| Window time constants | Pfister and Gerstner 2006 (from Bi and Poo 2001) |
 | Triplet term | Pfister and Gerstner 2006 |
 | Inhibitory plasticity | Vogels et al. 2011 |
 | Heterosynaptic, consolidation, transmitter-induced | Zenke et al. 2015 |
@@ -1453,7 +1739,9 @@ it below 1 ms.
 - Conductance synapses are optional (`syn` 2, section 2). In kick and exp
   modes currents are injected, so there is no
   driving-force dependence and no shunting inhibition in those modes.
-- No astrocytes, no neuromodulation as a signal, no gap junctions.
+- No astrocytes, no gap junctions. Neuromodulation is one level per cell
+  (section 4), a field with a time constant and no receptor of its own,
+  so one substance per scene and no diffusion between cells.
 - At `stdpAt` 1 the pair and inhibitory rules time each presynaptic spike at
   its arrival after the axonal delay `d`, with the dendritic delay set to 0
   (NEST's convention: a postsynaptic spike reaches every synapse of its cell

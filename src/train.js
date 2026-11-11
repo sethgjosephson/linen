@@ -3,7 +3,7 @@
 // The input encoder is driven by simulated time, so the stimulus timeline is identical no matter how fast the engine runs.
 // Brain-file checkpoints and metrics land in the project folder under runs/<tag>/ when serve.py is serving one, and in browser storage otherwise (src/store.js decides, and the file pane says which); load a checkpoint with LOAD BRAIN in the playground.
 // URL params: scenario (name substring, default visual), engine (gpu|cpu), hours (default 8; min=N overrides for short runs), steps (per tick, 50), ckptmin (sim-minutes between checkpoints, 30).
-import { engineConfig, NODE_DEFS, NEURON_TYPES, computeNode, setResolution, setComputeProgress, setMaxSyn,
+import { engineConfig, modsGated, NODE_DEFS, NEURON_TYPES, computeNode, setResolution, setComputeProgress, setMaxSyn,
   buildRuleTable, RULE_STRIDE, engineTypes } from './nodes.js';
 import { PROTOCOL } from './protocol.js';
 import { initState } from './rand.js';
@@ -85,6 +85,7 @@ const WARMUP_MS = Math.max(0, WARMUP_RAW === null ? 30 : +WARMUP_RAW || 0) * 100
 const TOTAL_MS = Math.round(HOURS * 3600000);
 const PLAST = Q.get('plast') !== '0';        // plast=0: evaluation run, no learning
 let NODE_PLAST = true;                       // the checkpoint's switch, read at compute time
+let NODE_GATE = 0;                           // the checkpoint's gate: 0 always, 1 the Hebbian terms only while a presentation is on, 2 only while both senses are on
 // probe=<n> overrides the scenario's unimodal probe rate.
 // An evaluation run wants far more probe trials than a training run does, because completion is measured per item per modality and probes alternate, so probe=8 yields one trial per item per modality every 16 presentations.
 // With learning off there is no reason to be sparing.
@@ -408,6 +409,7 @@ async function main(){
   // plast=0 on the address bar evaluates the circuit as built; otherwise the checkpoint's own switch stands.
   if(!PLAST) outNode.params.plast = 0;
   NODE_PLAST = (outNode.params.plast|0) !== 0;
+  NODE_GATE = outNode.params.plastGate|0;
   const byId = id => ed.nodes.find(n => n.id === id);
   // Show the anatomy before the wiring: placing neurons takes seconds while wiring hundreds of millions of synapses takes minutes, and an empty viewer for the first few minutes of a run is indistinguishable from a broken one.
   try {
@@ -450,7 +452,8 @@ async function main(){
     resumedFrom = name; RESUMED_FROM = name;
     log(`resumed from ${name}: ${r.matched.toLocaleString()} of ` +
       `${r.saved.toLocaleString()} weights onto ${r.wired.toLocaleString()} wired, ` +
-      `sim clock ${(resumeMs/60000).toFixed(1)} min`);
+      `sim clock ${(resumeMs/60000).toFixed(1)} min` +
+      (net.wRef0 ? ', with the consolidation reference' : brain.meta.ref ? ', consolidation reference dropped (not every synapse matched)' : ''));
     if(brain.meta.curriculum)
       log(`curriculum: ${JSON.stringify(brain.meta.curriculum)}`);
   }
@@ -615,8 +618,9 @@ async function main(){
     if(xp) betweenSyn = betweenSynapses(net, xp.cls);
   }
 
+  // a modulator source gated to the presentations starts closed; the gate below opens it with the first presentation
   if(!ATTACH) worker.postMessage({ cmd:'init', count:net.count, ntype:net.ntype,
-    inputs:engineInputs, pmask:net.pmask, ...engineCfg,
+    inputs:engineInputs, pmask:net.pmask, ...engineCfg, mods:modsGated(engineCfg.mods, false),
     seed:runSeed, ...initState(runSeed, net.ntype, NEURON_TYPES),
     preStart:net.preStart, post:net.post, w:net.w, delay:net.delay,
     types:engineTypes() },
@@ -627,10 +631,26 @@ async function main(){
           ...(net.pmask ? [net.pmask.buffer] : [])]
       : []);
   net.pmask = pmask0;                  // put the readable copy back in its place
+  // a resumed brain's consolidation reference, which the engine takes in place of capturing one from the weights
+  if(!ATTACH && net.wRef0) worker.postMessage({ cmd:'setRef', wRef:net.wRef0 });
   // the computed network is exposed for console inspection: anyone with the page can interrogate exactly what was computed, per the replicability principle
   window.__net = net;
   const io = new IORuntime(msg => log('io: ' + msg));
   io.attach(worker, net.inputMaps, runSeed);
+  // The third factor: with the checkpoint's gate set, the Hebbian terms run only while a presentation is on, the engine told through its tune (plastGain 0 or 1) at each change; the homeostatic terms run throughout.
+  // The gate is applied once plasticity is on; before that the tune below carries whatever the warm-up says.
+  let gateOpen = true;
+  // the modulator sources gated to the presentations (a modulator node's time course "presentations") follow the same gate, whatever the checkpoint's learning gate says
+  const GATED_MODS = (engineCfg.mods || []).some(s => s.gated);
+  io.gateMode = NODE_GATE || (GATED_MODS ? 1 : 0);
+  io.onGate = on => {
+    if(PASSIVE) return;
+    if(!NODE_GATE && !GATED_MODS) return;
+    gateOpen = on;
+    if(GATED_MODS && !(NODE_GATE && plastOn)) worker.postMessage({ cmd:'tune', ...engineCfg, mods:modsGated(engineCfg.mods, on), plast:(PLAST && NODE_PLAST && plastOn) ? 1 : 0, ...(NODE_GATE && plastOn ? { plastGain:on ? 1 : 0 } : {}) });
+    else if(NODE_GATE && plastOn) worker.postMessage({ cmd:'tune', ...engineCfg, mods:modsGated(engineCfg.mods, on), plast:(PLAST && NODE_PLAST) ? 1 : 0, plastGain:on ? 1 : 0 });
+  };
+  if(NODE_GATE) log('Hebbian learning gated to ' + (NODE_GATE === 2 ? 'the presentations of both senses' : NODE_GATE === 3 ? 'the presentations, probes excepted' : 'the presentations') + ' (the checkpoint setting); homeostasis runs throughout');
   setupInputs(net, io);
   io.last = -1e9;                           // sim-time clock starts at zero
 
@@ -665,7 +685,7 @@ async function main(){
   // Canvas-drawn stimuli (glyphs, words, objects) become an atlas of canonical rasters sampled through the pose transform, so the same rendering runs in the page and on the engine host, which has no canvas.
   // Spots are already analytic and need none of this.
   let atlas = null;
-  if(csig && itemList.length && (SETS[csig.set] || SETS[0]).kind !== 'spot'){
+  if(csig && itemList.length && !['spot', 'pattern'].includes((SETS[csig.set] || SETS[0]).kind)){
     atlas = buildAtlas(itemList, (SETS[csig.set] || SETS[0]).kind);
     setGlyphAtlas(atlas);
   }
@@ -689,6 +709,8 @@ async function main(){
   // This is the run's calibration: which cells were conjunctive before learning had time to move them.
   // Everything the binding measure says is relative to it, so it is taken once and never rebuilt.
   const conjCal = new Map();
+  // the cells each sense alone drives per item, for every covered population, whether or not it has a conjunction to calibrate
+  const senseCal = new Map();
   const conjWarned = new Set();   // say once per population, not every checkpoint
   // The cross-modal learning measures' calibration, per population: each item's cells in each sense's drive set and the evoked transfer before anything learned.
   // Taken at the same moment as the conjunctive sets and for the same reason, and pooled trials for the end-of-run figure.
@@ -754,14 +776,19 @@ async function main(){
     }
   };
   const saveCalibration = async () => {
-    if(calSaved || !statusDir || !conjCal.size) return;
+    if(calSaved || !statusDir || !(conjCal.size || senseCal.size)) return;
     calSaved = true;
     const pops = {};
     for(const [label, c] of conjCal)
       pops[label] = { atSimMin:+(c.atMs/60000).toFixed(2), items:c.sets.length,
         nonEmpty:c.sized, meanCells:c.mean,
-        // probe-local indices, the same space the readout counts in
-        sets:c.sets.map(x => Array.from(x)) };
+        // probe-local indices, the same space the readout counts in; idx maps them to network indices
+        sets:c.sets.map(x => Array.from(x)),
+        visSets:(c.visSets || []).map(x => Array.from(x)), audSets:(c.audSets || []).map(x => Array.from(x)),
+        idx:c.idx || [] };
+    for(const [label, c] of senseCal) if(!pops[label])
+      pops[label] = { atSimMin:+(c.atMs/60000).toFixed(2), items:c.visSets.length, nonEmpty:0, meanCells:0, sets:[],
+        visSets:c.visSets.map(x => Array.from(x)), audSets:c.audSets.map(x => Array.from(x)), idx:c.idx };
     try {
       await writeFile(statusDir, P.RUN_CALIBRATION, JSON.stringify({
         run:RUN_TAG, at:new Date().toISOString(), simMs,
@@ -791,6 +818,8 @@ async function main(){
     const nI = itemList.length, nN = rec.nNeurons;
     const both = rec.pack(0);
     const out = { neurons:nN, trials:both.n, probeTrials:rec.trials.length - both.n };
+    // Under scrambling a bimodal trial is a sight item with another item's sound, labeled by the sight item, so every measure built on bimodal trials falls by construction; the row says so, and the unimodal probe measures are the ones to compare.
+    if(csig && csig.scramble) out.scrambled = true;
     // How many single-sense probes evoke nothing at all in this population.
     // A trial with no spikes carries no pattern to compare, so the decoders skip it and every accuracy below is a fraction of the trials that did respond.
     // That denominator is a result in itself: a rule change that moves the silent fraction moves what the accuracy is an accuracy of.
@@ -808,6 +837,30 @@ async function main(){
         vis:cnt[1] ? +(sil[1]/cnt[1]).toFixed(4) : null,
         aud:cnt[2] ? +(sil[2]/cnt[2]).toFixed(4) : null,
         trials:[cnt[0], cnt[1], cnt[2]] };
+    }
+    // Delay activity (the curriculum's afterMs): for each item, the rate of its own cells (the calibration's sight set) in the window after its own presentations against the window after other items', and the cells in no set.
+    // Rates from summed counts over the window, so they are Hz whatever the tick.
+    const pk3 = rec.pack(3);
+    if(pk3.n && senseCal.has(popKey) && csig && csig.afterMs > 0){
+      const vs = senseCal.get(popKey).visSets || [], win = csig.afterMs/1000;
+      const inSet = new Int32Array(nN).fill(-1);
+      vs.forEach((s, k) => { for(const j of s) inSet[j] = k; });
+      const own = new Float64Array(nI), other = new Float64Array(nI), nOwn = new Float64Array(nI), nOther = new Float64Array(nI);
+      let bgSum = 0, bgN = 0;
+      const sizes = vs.map(s => s.length), bgCells = inSet.filter(x => x < 0).length;
+      for(let t = 0; t < pk3.n; t++){
+        const lab = pk3.labels[t]; if(lab < 0 || lab >= nI) continue;
+        const sum = new Float64Array(nI); let bg = 0;
+        for(let j = 0; j < nN; j++){ const k = inSet[j], v = pk3.trials[t*nN + j]; if(k >= 0) sum[k] += v; else bg += v; }
+        for(let k = 0; k < nI; k++){ if(!sizes[k]) continue; const r = sum[k]/sizes[k]/win; if(k === lab){ own[k] += r; nOwn[k]++; } else { other[k] += r; nOther[k]++; } }
+        if(bgCells){ bgSum += bg/bgCells/win; bgN++; }
+      }
+      const perItem = [];
+      for(let k = 0; k < nI; k++) if(nOwn[k] && nOther[k]) perItem.push({ own:+(own[k]/nOwn[k]).toFixed(3), other:+(other[k]/nOther[k]).toFixed(3) });
+      out.delay = { ms:csig.afterMs, trials:pk3.n,
+        own:perItem.length ? +(perItem.reduce((a, q) => a + q.own, 0)/perItem.length).toFixed(3) : null,
+        other:perItem.length ? +(perItem.reduce((a, q) => a + q.other, 0)/perItem.length).toFixed(3) : null,
+        background:bgN ? +(bgSum/bgN).toFixed(3) : null, perItem };
     }
     // Decoding needs two bimodal trials per item.
     // A checkpoint window that cannot hold that many measures nothing, so trials carry over between windows: with 26 letters at one second on and two off, a two-minute checkpoint sees about thirty bimodal presentations against the fifty-two needed, and a readout that started from nothing each window could never appear at any point in a sixteen-hour run.
@@ -840,10 +893,20 @@ async function main(){
           `${(simMs/60000).toFixed(1)}`);
       }
       if(full === nI){
+        // A sensory layer has no conjunction by construction, so it never calibrates binding below, but the synapse readout classifies its synapses by these sets and needs them from the same sweep.
+        {
+          const every = new Uint8Array(nN).fill(1);
+          senseCal.set(popKey, { visSets:itemCellSets(c1.cent, c1.cnt, nI, nN, every, AN.topQ) || [],
+            audSets:itemCellSets(c2.cent, c2.cnt, nI, nN, every, AN.topQ) || [], idx:Array.from(rec.idx), atMs:simMs });
+        }
         const sets = conjunctiveSets(cc.cent, c1.cent, c2.cent, nI, nN, AN.topQ, AN.margin);
         const sized = sets.filter(x => x.length).length;
         if(sized >= 2){
-          conjCal.set(popKey, { sets, atMs:simMs, sized,
+          // The cells each sense alone drives for each item, beside the conjunction: the synapse readout classifies a projection's synapses by its source population's item cells and its target's other-sense item cells, and needs both from the same sweep.
+          const every = new Uint8Array(nN).fill(1);
+          const visSets = itemCellSets(c1.cent, c1.cnt, nI, nN, every, AN.topQ) || [];
+          const audSets = itemCellSets(c2.cent, c2.cnt, nI, nN, every, AN.topQ) || [];
+          conjCal.set(popKey, { sets, visSets, audSets, idx:Array.from(rec.idx), atMs:simMs, sized,
             mean:+(sets.reduce((a, x) => a + x.length, 0)/nI).toFixed(1) });
           // Handed to the page as well, so the viewer can draw them, mapped to network indices here because the sets index this recorder's own sample of the population and nothing outside knows that sampling.
           if(globalThis.__npConjSets)
@@ -1302,8 +1365,8 @@ async function main(){
       const bytes = usePlastic ? plasticFileBytes(pk) : weightFileBytes(net.synCount);
       brainFiles.push(name);
       jobs.push(ST.write(P.runBrainPath(runTag, name), usePlastic
-        ? buildPlasticFile(graph, net, w, simMs, curriculumPosition(simMs))
-        : buildWeightsFile(graph, net, w, simMs, curriculumPosition(simMs))));
+        ? buildPlasticFile(graph, net, w, simMs, curriculumPosition(simMs), lastRef)
+        : buildWeightsFile(graph, net, w, simMs, curriculumPosition(simMs), lastRef)));
       // retention: always keep the first, then the most recent that fit both the count and the byte budget
       while(brainFiles.length > KEEP + 1 ||
             (brainFiles.length > 2 && brainFiles.length*bytes > KEEP_BYTES)){
@@ -1319,6 +1382,8 @@ async function main(){
   // last weights read back from the engine, for the like-to-like measure.
   // Weights only come back at brain saves, so between them this is the state at the previous save rather than the current one; connectivity does not change, so only the similarity-against-weight figure is affected and it is labeled as of the last readback.
   let lastW = null;
+  // the consolidation reference from the same readback, written into the brain file with the weights
+  let lastRef = null;
   // The warm-up has to outlast the calibration sweep.
   // The conjunctive sets are what the whole binding measure is scored against, and a set built from a network that has already been learning for a few minutes is not a baseline.
   // So plasticity stays off for the settle time or the full sweep, whichever is longer, and the sweep is sized by the curriculum itself.
@@ -1364,6 +1429,7 @@ async function main(){
     if(m.cmd === 'weights'){
       waitingWeights = false;
       lastW = m.w;
+      lastRef = m.ref || null;
       globalThis.__npWeights = m.w;
       // Measured homeostatic set points, when the engine has them.
       // An unreachable target drives inhibition into the clamp, and is invisible while these live only in the engine.
@@ -1419,9 +1485,11 @@ async function main(){
     // Recording waits out the startup transient only, not the whole plasticity hold: the calibration sweep runs inside that hold and its trials are exactly what the conjunctive sets are built from, so gating recording on HOLD_MS would leave nothing to calibrate from.
     if(recs.length && simMs >= resumeMs + WARMUP_MS){
       const st = scheduleAt(csig, simMs);
-      const lab = st.on ? (itemLabel.has(st.item) ? itemLabel.get(st.item) : -1) : -1;
-      const key = (st.on ? 'p' : 'g') + st.k;
-      for(const r of recs) r.rec.sample(m.fired, key, lab, st.cond, m.lat);
+      // the first afterMs of a gap is a trial of condition 3, labeled with the item just shown (delay activity); the sweep's gaps are left out
+      const after = !st.on && csig.afterMs > 0 && !st.sweep && (st.phase - st.onMs) < csig.afterMs;
+      const lab = (st.on || after) ? (itemLabel.has(st.item) ? itemLabel.get(st.item) : -1) : -1;
+      const key = (st.on ? 'p' : after ? 'a' : 'g') + st.k;
+      for(const r of recs) r.rec.sample(m.fired, key, lab, after ? 3 : st.cond, m.lat);
       // A sweep window holds the recorder open, the same way the opening one does, because its trials only mean something together.
       // The report runs as the window closes, while they are all still there.
       const inSweep = !!st.sweep;
@@ -1453,7 +1521,7 @@ async function main(){
       // Waiting for the next checkpoint would take the baseline from a network that had already been learning for however long the cadence is, which is not a baseline.
       calibrateNow();
       plastOn = true;
-      worker.postMessage({ cmd:'tune', ...engineCfg, plast:(PLAST && NODE_PLAST) ? 1 : 0 });
+      worker.postMessage({ cmd:'tune', ...engineCfg, mods:modsGated(engineCfg.mods, gateOpen), plast:(PLAST && NODE_PLAST) ? 1 : 0, ...(NODE_GATE ? { plastGain:gateOpen ? 1 : 0 } : {}) });
       log(`plasticity ${(PLAST && NODE_PLAST) ? 'on' : 'off, as the checkpoint says,'} at sim ${(simMs/1000).toFixed(0)} s (warm-up complete)`);
     }
     if((simMs/STEPS & 63) === 0){
@@ -1561,7 +1629,7 @@ async function main(){
     worker.postMessage({ __host:'clock', simMs: resumeMs });
     if(warmup){
       worker.postMessage({ __host:'at', simMs: resumeMs + HOLD_MS,
-        msg:{ cmd:'tune', ...engineCfg, plast:(PLAST && NODE_PLAST) ? 1 : 0 } });
+        msg:{ cmd:'tune', ...engineCfg, mods:modsGated(engineCfg.mods, gateOpen), plast:(PLAST && NODE_PLAST) ? 1 : 0 } });
       // The host flips plasticity on its own clock, so this page has to calibrate when that moment passes rather than at its next checkpoint.
       calAtMs = resumeMs + HOLD_MS;
       warmup = false;

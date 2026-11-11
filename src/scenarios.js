@@ -95,7 +95,7 @@ export function corticalColumn(ed){
   const { add, wire, note, group } = api(ed);
   note(20, 'Mouse cortical column\n\nFour layer bands are stacked at their real cortical depths and filled at the population proportions of the reference microcircuit (Potjans and Diesmann 2014). Layer 5 pyramids are intrinsically bursting, a tenth of layer 2/3 chatters, and every layer splits its interneurons between fast spiking (PV, tag Lxi) and low threshold spiking (SST, tag Lxs) cells. Every cell is one of the measured rows of Izhikevich 2007 chapter 8, so it carries a capacitance in picofarads and a rest in millivolts, and every current in the scene is in picoamps.');
   note(170, 'The connect node carries the 8 by 8 population pair table from the same paper, so every layer to layer connection probability is the published one; the PV and SST cells of a layer share its inhibitory rows. Excitatory synapses onto PV cells depress and onto SST cells facilitate (Reyes et al. 1998; Silberberg and Markram 2007), and SST inhibition decays over 20 ms on its own receptor channel. A pulse train drives layer 4, the input layer, through a geometry mask, as two nodes: the same current is five times the voltage step on a 20 pF interneuron that it is on a 100 pF pyramid, so the pulse is set per cell class.', 340, 'local wiring');
-  note(320, 'The background drive is tuned layer by layer. With the thalamic pulse off, the spontaneous rates sit inside the bands that de Kock and Sakmann (2009) recorded: layer 2/3 excitatory cells at 0.64 Hz (band 0.2 to 1), layer 4 at 2.10 (0.5 to 3), layer 5 at 2.88 (2 to 4) and layer 6 at 1.21 (0.3 to 2). Every interneuron population fires faster than its excitatory partner, the PV cells at 5.40, 8.39, 19.79 and 18.39 Hz and the SST cells at 2.18, 5.83, 3.08 and 1.59, and the population Fano factor per thousand cells is 0.13, which means the firing is asynchronous. The validation battery checks all of this.', 340, 'L2/3 drive');
+  note(320, 'The background drive is a constant current and a noise term per layer and cell class, and the current is tuned layer by layer so that the rate of each layer sits in the band de Kock and Sakmann (2009) report. With the thalamic pulse off, the spontaneous rates on these drives are: layer 2/3 excitatory cells at 0.64 Hz (band 0.2 to 1), layer 4 at 2.10 (0.5 to 3), layer 5 at 2.88 (2 to 4) and layer 6 at 1.21 (0.3 to 2). Every interneuron population fires faster than its excitatory partner, the PV cells at 5.40, 8.39, 19.79 and 18.39 Hz and the SST cells at 2.18, 5.83, 3.08 and 1.59, and the population Fano factor per thousand cells is 0.13, which means the firing is asynchronous. The validation battery holds every excitatory layer to a cortical band of 0.5 to 25 Hz (30 for layer 5) and, in its column group, checks that layer 5 has the highest excitatory rate, that no excitatory population is silent and that the inhibitory rates exceed the excitatory.', 340, 'L2/3 drive');
   // 400x400 µm column, 1.2 mm deep; ~14k neurons at PD-2014 layer proportions
   const layers = [
     { name:'L2/3', c:[0,900,0], s:[400,300,400], e:3750, eType:RS07, chFrac:0.10, i:1060, ltsFrac:0.35 },
@@ -192,7 +192,7 @@ export function corticalColumn(ed){
     wire(pb, 0, prb); prb = pb; probes.push(pb);
   });
   // stpNorm 1: a rested synapse releases its full weight, so the short-term plasticity below changes how the weight moves with use and not the weight the drive was tuned on
-  const out = add('checkpoint', 490, 690, { steps:2, syn:1, psc:1, tauE:3, tauI:8, stpNorm:1 });
+  const out = add('checkpoint', 490, 690, { steps:2, syn:1, psc:1, tauE:3, tauI:8, stpNorm:1, integ:2 });
   wire(out, 0, prb);
   const cha = add('chart', 490, 750, { plot:7, pop:'L4e', window:5, height:130 });
   wire(cha, 0, out);
@@ -246,14 +246,14 @@ function thalamocortical(ed){
   wire(ns, 0, cn);
   // Steady background for the cortical patch, split by class.
   // Fast spiking cells sit above their excitatory neighbors in cortex (Gentet et al. 2010) and receive less recurrent excitation than the pyramids do, so both classes get their own current.
-  const dce = add('stimulus', 40, 390, { mode:0, current:80, tag:'ce' });
+  const dce = add('stimulus', 40, 390, { mode:0, current:86, tag:'ce' });
   wire(dce, 0, ns); wire(dce, 1, cortexBox);
   const dci = add('stimulus', 190, 390, { mode:0, current:10, tag:'ci' });
   wire(dci, 0, dce); wire(dci, 1, cortexBox);
   // The holding current.
   // The TC preset rests at -64.4 mV but fires steadily from a current of about 0.66, so under this scene's noise and input relay cells would free-run above the tonic 5 to 20 Hz awake.
   // A rebound burst has to rebound from somewhere, which is why Izhikevich drives this preset from a hyperpolarized hold.
-  const hold = add('stimulus', 490, 390, { mode:0, current:-500, tag:'tc' });
+  const hold = add('stimulus', 490, 390, { mode:0, current:-800, tag:'tc' });
   wire(hold, 0, dci); wire(hold, 1, thal);
   const sens = add('stimulus', 490, 450, { mode:1, current:1500, period:120, width:15 });
   wire(sens, 0, hold); wire(sens, 1, thal);   // sensory pulses into the thalamus
@@ -266,7 +266,7 @@ function thalamocortical(ed){
   wire(pbT, 0, pbC);
   const pbR = add('probe', 440, 450, { label:'reticular', tag:'rz' });
   wire(pbR, 0, pbT);
-  const out = add('checkpoint', 490, 510, { steps:2, syn:1, psc:1, tauE:3, tauI:8, wmax:30 });
+  const out = add('checkpoint', 490, 510, { steps:2, syn:1, psc:1, tauE:3, tauI:8, wmax:30, integ:2 });
   wire(out, 0, pbR);
   group('cortical patch  RS + FS/LTS', [cortexBox, ce, ci, ciR], 130);
   group('fiber tract', [tract, tr], 280);
@@ -303,7 +303,7 @@ function ca3Attractor(ed){
   // It is the holding current that matters and not the baseline: 30 pA fires nothing on its own, the pyramids sit silent between events, and taking it away drops the recall from 8.2 Hz in its 500 ms to 1.8, which is the cue's own cells and nothing recruited (2026-09-22).
   // What a cue completes from is a population close enough to threshold, which is what a holding current is.
   const bg = add('stimulus', 115, 320,
-    { mode:3, current:240, radius:100000, center:[0,0,0] });
+    { mode:3, current:210, radius:100000, center:[0,0,0] });
   wire(bg, 0, cn);
   // A holding current under the noise.
   // On the measured rows a pyramid has a rheobase near 60 pA and noise alone crosses it either never or in a volley: 240 pA of noise leaves the band silent between events and 500 ignites it.
@@ -328,7 +328,7 @@ function ca3Attractor(ed){
   const farEnd = add('sphere', 250, 400, { center:[600, 0, -300], radius:200 });
   const pbF = add('probe', 250, 455, { label:'far end', tag:'ca3' });
   wire(pbF, 0, pbC); wire(pbF, 1, farEnd);
-  const out = add('checkpoint', 115, 510, { steps:2,
+  const out = add('checkpoint', 115, 510, { steps:2, integ:2,
     syn:1, psc:1, tauE:3, tauI:8, refrac:2, wmax:40,
     stp:1, stpNorm:1, stpU:0.5, stpTauD:200, stpTauF:600 });
   wire(out, 0, pbF);
@@ -630,7 +630,7 @@ function visualPathway(ed){
   // Weights are drawn lognormal (sigma 1, mean preserving), and over eleven million synapses the tail runs to about a hundred and seventy times the mean: measured 2026-09-24 this scene wires weights from -26,400 to 33,800 pA, the top being the optic tract at a mean of 1000 and the largest local excitatory draw 11,900 against a mean of 70.
   // Those few are snapped to the bound on their first plasticity event.
   // Per-neuron measured set points, since a uniform target drives the column into synchronous bursting; cortical inhibition faster than excitatory scaling growth, the standard stability ordering.
-  const out = add('checkpoint', 490, 680, { steps:2, syn:1, psc:1, tauE:3, tauI:8, tauS:20, tauM:20,
+  const out = add('checkpoint', 490, 680, { steps:2, integ:2, syn:1, psc:1, tauE:3, tauI:8, tauS:20, tauM:20,
     // A- is A+ divided by the wired mean excitatory weight, so the weight-dependent fixed point lands on the weight the network was wired with rather than somewhere else.
     aP:0.035, aM:0.0005, wmax:3500, wdep:1, iEta:0.106, iRho:2.5,
     rhoMode:1, calS:20, scale:1, sEta:0.0003 });
@@ -830,7 +830,7 @@ export function everyNode(ed){
   note(520, 'The buds: a noise field region, a seeded density pattern inside a bounds box, filled by a neuron scatter beyond the arm\'s tip. Repeat lays down three copies turned about the tip, and a move turns the fan back so it sits astride the arm.', 340, 'the buds');
   note(660, 'One ray: the arm and its buds gathered, tilted upward by a move, and typed: a cell type node set to custom names a row of the scene\'s own for the arm (the measured regular-spiking numbers, so its currents are in picoamps), and another makes half of the bud cells chattering.', 340, 'one ray');
   note(800, 'The crown: repeat turns the ray six times about the vertical axis, and a second repeat stacks the six as three tiers, each two thirds the size of the one below, raised and turned by thirty degrees. The copies are numbered, so every cell has a population name that says where it is: tier2.ray4.fork1.bud. Three population nodes pick the tiers back out by name, and the top one is tilted on its own before all three are gathered with the core.', 340, 'the crown');
-  note(1000, 'Wiring: gather joins the populations; receptors declares channels beyond E and I; plasticity names a pair STDP rule on the core\'s excitatory synapses; feedback inhibition pools the core\'s excitatory cells; project runs a tract from the core to the lowest tier\'s arms; connect grows the local synapses.', 340, 'wiring');
+  note(1000, 'Wiring: gather joins the populations; receptors declares channels beyond E and I; plasticity names a pair STDP rule on the core\'s excitatory synapses; feedback inhibition pools the core\'s excitatory cells; the modulator has the core\'s interneurons release a level onto its pyramids, which the checkpoint reads as a gain on the rule; project runs a tract from the core to the lowest tier\'s arms; connect grows the local synapses.', 340, 'wiring');
   note(1180, 'Drive: a noise current per population, a pulse train on every arm by its population name, a slower pulse on the top tier alone through a sphere as a mask, a bar sweep from the test signal fed across the lowest tier through a flat box as a mask, and a lesson of shapes from the curriculum fed onto the core. Readout: a probe per kind of tissue, analysis, the checkpoint with plasticity on, and a chart.', 340, 'drive');
   // ---- the core ----
   const ball = add('sphere', 40, 20, { center:[0, 0, 0], radius:250 });
@@ -870,7 +870,9 @@ export function everyNode(ed){
   const rc = add('receptor', 190, 955); wire(rc, 0, g);
   const pl = add('plasticity', 190, 1010, { name:'stdp', from:'exc', to:'exc', aP:0.8, aM:0.001, wmax:3000, wdep:1 }); wire(pl, 0, rc);
   const fb = add('pool', 190, 1065, { tag:'exc', gain:-1 }); wire(fb, 0, pl);
-  const pr = add('project', 190, 1120, { from:'exc', to:'tier1.ray*.arm', axisFrom:1, axisTo:1, dispersed:1, fanout:20, weight:40 }); wire(pr, 0, fb);
+  // the core's interneurons release a modulator onto its pyramids, 0.02 per Hz of their mean rate; the checkpoint reads the level as a gain on learning, so the pair rule learns faster while the interneurons are busy
+  const md = add('modulator', 340, 1065, { tag:'exc', source:1, level:0.02, from:'inh' }); wire(md, 0, fb);
+  const pr = add('project', 190, 1120, { from:'exc', to:'tier1.ray*.arm', axisFrom:1, axisTo:1, dispersed:1, fanout:20, weight:40 }); wire(pr, 0, md);
   // Weights in picoamps on the measured rows, and smaller than a tissue scene's: 30 pA is 0.3 mV on a 100 pF cell where the balanced net uses 50.
   // The crown is the reason: the arms and the buds are geometry with no interneurons of their own, and at the balanced net's 50 pA the purely excitatory crown runs to the refractory ceiling and takes the core with it (measured 2026-09-24: core 333 Hz, arms 53).
   const cn = add('connect', 190, 1175, { radius:300, sigma:3000, prob:0.1, wExc:30, wInh:-150, wdist:1, velocity:100, seed:1 }); wire(cn, 0, pr);
@@ -898,14 +900,14 @@ export function everyNode(ed){
   const pbS = add('probe', 190, 1615, { label:'arms', tag:'*.arm' }); wire(pbS, 0, pbI);
   const pbT = add('probe', 190, 1670, { label:'buds', tag:'*.bud' }); wire(pbT, 0, pbS);
   const an = add('analysis', 190, 1725, {}); wire(an, 0, pbT);
-  const out = add('checkpoint', 190, 1780, { steps:2, syn:1, psc:1, tauE:3, tauI:8, plast:1 }); wire(out, 0, an);
+  const out = add('checkpoint', 190, 1780, { steps:2, syn:1, psc:1, tauE:3, tauI:8, plast:1, modPlast:1, modBase:1 }); wire(out, 0, an);
   const cha = add('chart', 190, 1835, { plot:7, pop:'core exc', window:5, height:130 }); wire(cha, 0, out);
   group('the core  sphere, neuron scatters, cell type', [ball, e, i, nt], 25);
   group('one arm  a ribbon through every arrange node', [slab, hole, sl, cu, gr, tw, nw, gb, op], 270);
   group('the buds  noise field, neuron scatter, forked by a repeat', [field, pa, fk, fc], 190);
   group('one ray  arm and buds, tilted, typed', [gA, tilt, ct, ch], 300);
   group('the crown  six rays, three tiers, picked apart', [ring, tiers, t1, t2, t3, crown], 270);
-  group('wiring  gather to connect', [g, rc, pl, fb, pr, cn], 140);
+  group('wiring  gather to connect', [g, rc, pl, fb, md, pr, cn], 140);
   group('drive  currents, a bar sweep, a lesson', [ns, nsI, nsB, pu, cap, pc, plate, bar, inS, cur, inB], 55);
   group('readout  a probe per tissue, analysis, chart', [pbE, pbI, pbS, pbT, an, cha], 175);
   group('run  the checkpoint, plasticity on', [out], 0);

@@ -228,7 +228,7 @@ server.on('upgrade', (req, socket) => {
       if(ctl.pump && !was) tick();
     }
   };
-  const saveBrain = w => {
+  const saveBrain = (w, ref) => {
     const n = ctl.netShim;
     if(!n || !ctl.save) return;
     try {
@@ -239,8 +239,8 @@ server.on('upgrade', (req, socket) => {
       // Plastic-only whenever the run has a gate: a full weights file at density is 579 MB a save, the pump stops for the whole write, and the wiring reproduces the frozen weights exactly.
       const net = ctl.pmask ? { ...n, pmask:ctl.pmask } : n;
       const file = ctl.pmask
-        ? buildPlasticFile(n.graph, net, w, ctl.simMs, cur)
-        : buildWeightsFile(n.graph, net, w, ctl.simMs, cur);
+        ? buildPlasticFile(n.graph, net, w, ctl.simMs, cur, ref)
+        : buildWeightsFile(n.graph, net, w, ctl.simMs, cur, ref);
       const name = 'ckpt-' + ctl.save.dir + '-' +
         String(Math.round(ctl.simMs/60000)).padStart(5, '0') + 'min.npb';
       fs.writeFileSync(path.join(dir, name), Buffer.from(file));
@@ -295,7 +295,7 @@ server.on('upgrade', (req, socket) => {
       ctl.pendingSave = false;
       ctl.wbackAt = Date.now();
       ctl.wbackMs = ctl.wbackAt - (ctl.wreqAt || ctl.wbackAt);
-      saveBrain(d.w);
+      saveBrain(d.w, d.ref);
       forward(d);
       if(ctl.pump) tick();
       else if(ctl.gone){ log('detached run complete; engine down');

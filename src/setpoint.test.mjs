@@ -1,4 +1,4 @@
-// Under measured set points the global target has no say: every homeostatic term, the heterosynaptic gate included, uses the rate each cell measured for itself.
+// Under measured set points the global target has no say: every homeostatic term (the Vogels rule, scaling) uses the rate each cell measured for itself; the heterosynaptic term reads the cell's own trace and has no set point.
 // So two runs that differ only in iRho learn identical weights once calibration has set the per-cell targets; at rhoMode 0 the same two runs differ, which is what shows the check can tell.
 // Reference engine, in this process; the CUDA parity gate (cuda/parity.mjs on a rhoMode dump) and the battery's cross-engine group hold the other two to the reference.
 // Run: node src/setpoint.test.mjs

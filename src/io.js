@@ -253,7 +253,7 @@ class CurriculumSource {
     const hears = map.sense === 'sound';
     const scr = sig.scramble && hears && st0.altItem && (st0.cond | 0) === 0;
     const st = scr ? { ...st0, item:st0.altItem } : st0;
-    this.item = st.item; this.on = st.on; this.cond = st.cond;
+    this.item = st.item; this.on = st.on; this.cond = st.cond; this.probe = !!st.probe;
     // probe presentations drop one modality so cross-modal completion can be measured: cond 1 shows the glyph with no sound, cond 2 the spoken name with no glyph.
     // Which presentations are probes is a pure function of the presentation index, so every encoder agrees without shared state.
     const silent = st.cond === 1 ? hears : st.cond === 2 ? !hears : false;
@@ -400,6 +400,13 @@ export class IORuntime {
       if(s && s.inst instanceof BarSweep && s.inst.alternating) this.sweepDir = s.inst.dir;
       if(!displayOnly)
         this.worker.postMessage({ cmd:'inputFrame', mi, gains:g }, [g.buffer]);
+    }
+    // the presentation gate: on while a curriculum source is showing its item (gateMode 1), or only while a presentation of both senses is on (gateMode 2, cond 0), told to whoever set onGate (the trainer) when it changes
+    if(this.onGate){
+      let anyCur = false, anyOn = false;
+      // gateMode 3: on while a presentation is on unless it is a single-sense probe, so the probes measure without training
+      for(const [, s] of this.sources) if(s.inst instanceof CurriculumSource){ anyCur = true; if(s.inst.on && (this.gateMode === 2 ? (s.inst.cond | 0) === 0 : this.gateMode === 3 ? !s.inst.probe : true)) anyOn = true; }
+      if(anyCur && anyOn !== this.gateOn){ this.gateOn = anyOn; this.onGate(anyOn); }
     }
   }
   stop(){

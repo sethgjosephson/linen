@@ -7,7 +7,7 @@
 
 import { defaultNodeName } from './tagname.js';
 
-export const SCENE_FORMAT = 14;
+export const SCENE_FORMAT = 15;
 
 import { applyOverrides } from './sweepvariant.js';
 
@@ -291,6 +291,15 @@ const STEPS = [
     for(const n of d.nodes || []){
       if(n.type !== 'checkpoint' || !n.params) continue;
       if(n.params.stdpAt === undefined) n.params.stdpAt = 0;
+    }
+    return d;
+  },
+  // 14 -> 15: a scatter fills at density by default (fill 1), and a scene from before the setting existed carries a count and no fill key.
+  // Loading fills every missing setting with its default, which would fill such a scatter at density: the count it was authored with is what it means.
+  d => {
+    for(const n of d.nodes || []){
+      if(n.type !== 'scatter' || !n.params) continue;
+      if(n.params.fill === undefined) n.params.fill = 0;
     }
     return d;
   },

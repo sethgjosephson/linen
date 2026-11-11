@@ -34,8 +34,10 @@
 //   static short    no plasticity, the base the next cases differ from
 //   stdp soft       pair STDP with soft bounds, tin, the Vogels rule
 //   stdp hard       the same with hard bounds
-//   triplet+het     the triplet term and the heterosynaptic gate
-//   het saturating  the gate past its ceiling of 1
+//   triplet+het     the triplet term and the heterosynaptic term
+//   het strong      a large beta, the weights held by their limits
+//   ref zero        consolidation with the reference starting at zero
+//   slide           the sliding threshold on depression, a one second rate estimate
 //   stp             short-term plasticity alone
 //   stp norm        short-term plasticity normalized to the rested release
 //   stdp+stp exp    plasticity and short-term plasticity on exponential synapses
@@ -44,6 +46,13 @@
 //   consolidation   the reference weight through the double well
 //   commit          consolidated synapses leaving the plastic pool
 //   two rules       two rows of the rule table on one network
+//   mod drive       a modulator level on half the cells scaling their synaptic current (kick)
+//   mod drive exp   the same on exponential synapses, the channels included
+//   mod drive cond  the same on conductance synapses under the exponential step, the conductance scaled with the current
+//   mod current     a current per level
+//   mod gain        the Hebbian terms times base + the postsynaptic level
+//   mod elig        the eligibility trace per synapse, paid in at every sweep
+//   mod release     the excitatory cells release onto the inhibitory ones, the gain form reading the level
 //
 // A case that switches a term on also checks that its spike trains or its weights differ from the case without it.
 // Agreement alone would pass if both sides ignored the term.
@@ -120,7 +129,7 @@ function runEngine(c){
     ...(c.pools ? { pool:c.pools.pool, poolK:c.pools.poolK } : {}),
     plast:0, ...ruleFields,
     ...(RT ? { ruleTable:RT, ruleCount:RT.length/RS } : {}),
-    refrac:c.refrac, ...(c.vmin === undefined ? {} : { vmin:c.vmin }),
+    refrac:c.refrac, ...(c.vmin === undefined ? {} : { vmin:c.vmin }), integ:c.integ|0,
     seed:c.seed, ...st, preStart:net.preStart, post:net.post, w:net.w.slice(),
     delay:net.delay, ...(net.pmask ? { pmask:net.pmask } : {}), types:TYPES };
   // the engine runs in this process and learns in place on the weight array it is handed, so it gets a copy and init keeps the wired weights
@@ -281,6 +290,7 @@ const ROWS3 = [key('RS'), key('RS07'), key('FL')];
 const kick = network({ we:0.5, wi:-2 });
 const expNet = network({ we:0.17, wi:-0.25 });
 const condNet = network({ we:0.003, wi:-0.05 });
+const lifCond = network({ we:1, wi:-4 });
 const chanExp = network({ we:0.17, wi:-0.25, pmaskOf:channelBits });
 const chanCond = network({ we:0.003, wi:-0.05, pmaskOf:channelBits });
 const CHANNELS = { chanTau:[20, 100], chanErev:[0, -90] };
@@ -298,6 +308,16 @@ const POOLS = { pool:Uint16Array.from({ length:400 }, (_, i) => i < 160 ? 1 : (i
 const MAPS = inputMaps(), FRAMES = inputFrames(MAPS, 2000);
 // the plastic network: delays up to 4 ms under a 3 ms refractory count, so every presynaptic interval covers the longest delay
 const PLASTIC = { N:200, NE:160, P:0.1, seed:777, maxDelay:4, we:0.5, wi:-2 };
+// rows with the three features, appended to the type table: the RS row with a 200 mV threshold jump relaxing over 100 ms (a jump the Izhikevich upswing feels within an interval; a few millivolts over 5 ms it does not), the RS row with its jump a conductance of half a nanosiemens, the FS row as a Poisson row
+const THR = TYPES.push({ f7:{ ...TYPES[key('RS')].f7, thrJump:200, thrTau:100 } }) - 1;
+const ADC = TYPES.push({ f7:{ ...TYPES[key('RS')].f7, d:0.5, adaptCond:1 } }) - 1;
+// leaky integrate-and-fire rows (src/rowfeat.test.mjs), the rows the exponential step applies to: plain, with the dynamic threshold, with the dynamic threshold and the conductance adaptation
+const LIF7 = { C:250, k:12.5/1070, vr:-70, vt:1000, vpeak:-50, a:0.01, b:0, c:-70, d:0 };
+const LIFR = TYPES.push({ f7:LIF7 }) - 1, LIFT = TYPES.push({ f7:{ ...LIF7, thrJump:100, thrTau:5 } }) - 1, LIFA = TYPES.push({ f7:{ ...LIF7, thrJump:100, thrTau:5, d:1.25, adaptCond:1 } }) - 1;
+// on these rows a cell needs 250 pA to fire (a 12.5 nS leak, 20 mV to threshold): the biases sixty times the 2007 rows', 120 to 420 pA, and the conductance network's synapses in nanosiemens of this size
+const lif = (net, t) => ({ ...net, ntype:remap(remap(net.ntype, key('RS'), t), key('FS'), t), bias:net.bias.map(x => 60*x) });
+const POI = TYPES.push({ f7:{ ...TYPES[key('FS')].f7, poisson:1 } }) - 1;
+const remap = (nt, from, to) => Uint8Array.from(nt, x => x === from ? to : x);
 const pnet = network({ ...PLASTIC, pmaskOf:ruleBits(false) });
 const pnet2 = network({ ...PLASTIC, pmaskOf:ruleBits(true) });
 const STDP = { plast:1, aP:0.05, aM:0.03, tauS:16.8, tauM:33.7, wmax:5, wdep:1, iEta:0.05, iRho:5, tin:0.001 };
@@ -305,6 +325,11 @@ const TRIPHET = { ...STDP, trip:0.02, het:0.01 };
 const CONS = { ...TRIPHET, cons:1, consW:1, consP:10, tauCons:2000, consStep:50 };
 const STP = { stp:1, stpU:0.2, stpTauD:200, stpTauF:600 };
 const P2 = { ms:2000, refrac:3, seed:3 };
+// a constant modulator level of 2 on the first 80 cells (the plastic network's) or the first 200 (the 400-cell networks')
+const MODSRC = [{ idx:range(0, 80), amp:2, mode:0, period:100, width:10, t0:0, duration:0 }];
+const MODSRC400 = [{ idx:range(0, 200), amp:2, mode:0, period:100, width:10, t0:0, duration:0 }];
+// the excitatory cells release onto the inhibitory ones, 0.02 per Hz of their mean rate
+const RELEASE = { modGrp:Uint8Array.from({ length:200 }, (_, i) => i < 160 ? 1 : 0), modTgt:Uint16Array.from({ length:200 }, (_, i) => i >= 160 ? 1 : 0), modK:Float32Array.from([0, 0.02*1000/160]) };
 
 const ALL = [
   { name:'membrane', ms:3000, refrac:0, seed:7, ...grid(SPIKING, [-40, -3, 0, 0.9, 1.5, 3, 8, 40]) },
@@ -336,7 +361,7 @@ const ALL = [
   { name:'stdp soft', ...P2, rule:STDP, coincide:true, differsFrom:'static short', ...pnet },
   { name:'stdp hard', ...P2, rule:{ ...STDP, wdep:0 }, weightsDifferFrom:'stdp soft', ...pnet },
   { name:'triplet+het', ...P2, rule:TRIPHET, weightsDifferFrom:'stdp soft', ...pnet },
-  { name:'het saturating', ...P2, rule:{ ...STDP, trip:0.1, het:5 }, weightsDifferFrom:'triplet+het', ...pnet },
+  { name:'het strong', ...P2, rule:{ ...STDP, trip:0.1, het:5 }, weightsDifferFrom:'triplet+het', ...pnet },
   { name:'stp', ...P2, rule:STP, differsFrom:'static short', ...pnet },
   { name:'stp norm', ...P2, rule:{ ...STP, stpNorm:1 }, differsFrom:'stp', ...pnet },
   { name:'stp order', ...P2, rule:{ ...STP, stpOrder:1 }, differsFrom:'stp', ...pnet },
@@ -345,8 +370,20 @@ const ALL = [
   // short-term plasticity per rule: rule row 2 a depressing class of its own beside the checkpoint's, so one axon's synapses release by two classes
   { name:'stp rules', ...P2, rule:{ ...STP, ...stpClassTable(STP, [{ stpOwn:2, stpU:0.5, stpTauD:800, stpTauF:1 }]) }, differsFrom:'stp', ...pnet2 },
   { name:'stdp+stp exp', ...P2, syn:1, psc:1, rule:{ ...STDP, ...STP }, ...pnet },
+  // neuromodulation (MODEL.md 4): the field as a gain on the synaptic current and as a current, then on learning in both forms, then from a releasing population
+  { name:'mod drive', ...P2, rule:{ modDrive:0.5, mods:MODSRC }, differsFrom:'static short', ...pnet },
+  { name:'mod drive exp', ms:2000, refrac:0, seed:3, syn:1, psc:0, ...CHANNELS, rule:{ modDrive:0.5, mods:MODSRC400 }, differsFrom:'channels', ...chanExp },
+  { name:'mod drive cond', ms:2000, refrac:0, seed:3, syn:2, integ:1, ...CHANNELS, rule:{ modDrive:0.5, mods:MODSRC400 }, differsFrom:'channels cond', ...chanCond },
+  { name:'mod current', ...P2, rule:{ modCur:1.5, mods:MODSRC }, differsFrom:'static short', ...pnet },
+  { name:'mod gain', ...P2, rule:{ ...STDP, modPlast:1, modBase:0.5, mods:MODSRC }, weightsDifferFrom:'stdp soft', ...pnet },
+  { name:'mod elig', ...P2, rule:{ ...STDP, modPlast:2, modBase:0.2, modStep:10, eligTau:500, mods:MODSRC }, weightsDifferFrom:'stdp soft', ...pnet },
+  { name:'mod release', ...P2, rule:{ ...STDP, modPlast:1, modBase:1, ...RELEASE }, weightsDifferFrom:'stdp soft', ...pnet },
   // the pair rule timed at the synapse (stdpAt 1): the pre trace read d steps back at a post spike, depression at the arrival
   { name:'stdp at synapse', ...P2, rule:{ ...STDP, stdpAt:1 }, coincide:true, weightsDifferFrom:'stdp soft', ...pnet },
+  // the third factor at half gain: the Hebbian terms halved, the inhibitory rule as it was
+  { name:'stdp gain', ...P2, rule:{ ...STDP, plastGain:0.5 }, weightsDifferFrom:'stdp soft', ...pnet },
+  // soft depression scaling with the square root of the weight
+  { name:'stdp mu', ...P2, rule:{ ...STDP, wmu:0.5 }, weightsDifferFrom:'stdp soft', ...pnet },
   { name:'triplet+het at synapse', ...P2, rule:{ ...TRIPHET, stdpAt:1 }, weightsDifferFrom:'triplet+het', ...pnet },
   { name:'stdp+stp at synapse', ...P2, syn:1, psc:1, rule:{ ...STDP, ...STP, stdpAt:1 }, weightsDifferFrom:'stdp+stp exp', ...pnet },
   { name:'scaling', ...P2, rule:{ ...STDP, scale:1, sEta:0.05 }, weightsDifferFrom:'stdp soft', ...pnet },
@@ -354,6 +391,33 @@ const ALL = [
     weightsDifferFrom:'scaling', ...pnet },
   { name:'consolidation', ...P2, rule:CONS, weightsDifferFrom:'triplet+het', ...pnet },
   { name:'commit', ...P2, rule:{ ...CONS, commit:1 }, weightsDifferFrom:'consolidation', ...pnet },
+  // the reference starting at the lower fixed point, as the paper starts it
+  { name:'ref zero', ...P2, rule:{ ...CONS, refInit:1 }, weightsDifferFrom:'consolidation', ...pnet },
+  // the sliding threshold: depression scaled by the square of the cell's slow rate estimate over a target, the estimate on a one second trace so it moves within the run (slideTau in ms here, as the engine takes it)
+  { name:'slide', ...P2, rule:{ ...STDP, slide:1, slideRate:5, slideTau:1000, slideInit:5 }, weightsDifferFrom:'stdp soft', ...pnet },
+  // the global factor on the inhibitory rule: one amplitude from the population rate over a one second window, so it moves within the run
+  { name:'iglobal', ...P2, rule:{ ...STDP, iGlobal:1, iTauG:1 }, weightsDifferFrom:'stdp soft', ...pnet },
+  // the three row features (MODEL.md 1) on the kick network: the excitatory cells on a row whose threshold jumps and relaxes, on one whose adaptation is a conductance, and the inhibitory cells as Poisson rows firing at their bias in hertz
+  { name:'thr rows', ms:2000, refrac:0, seed:3, ...kick, ntype:remap(kick.ntype, key('RS'), THR), differsFrom:'kick' },
+  { name:'adapt cond', ms:2000, refrac:0, seed:3, ...kick, ntype:remap(kick.ntype, key('RS'), ADC), differsFrom:'kick' },
+  { name:'poisson rows', ms:2000, refrac:0, seed:3, ...kick, ntype:remap(kick.ntype, key('FS'), POI), differsFrom:'kick' },
+  // the exponential membrane step (MODEL.md 1): two exponential half steps and the reset at the crossing inside the millisecond, on current kicks, conductances, the dynamic threshold and the conductance adaptation
+  { name:'lif kick', ms:2000, refrac:0, seed:3, ...lif(kick, LIFR), differsFrom:'kick' },
+  { name:'integ lif kick', ms:2000, refrac:0, seed:3, integ:1, ...lif(kick, LIFR), differsFrom:'lif kick' },
+  { name:'lif conductance', ms:2000, refrac:0, seed:3, syn:2, ...lif(lifCond, LIFT), differsFrom:'conductance' },
+  { name:'integ lif conductance', ms:2000, refrac:0, seed:3, syn:2, integ:1, ...lif(lifCond, LIFT), differsFrom:'lif conductance' },
+  { name:'lif adapt cond', ms:2000, refrac:0, seed:3, syn:2, ...lif(lifCond, LIFA), differsFrom:'lif conductance' },
+  { name:'integ lif adapt cond', ms:2000, refrac:0, seed:3, syn:2, integ:1, ...lif(lifCond, LIFA), differsFrom:'lif adapt cond' },
+  // a quadratic row keeps the Euler half steps under integ
+  { name:'integ kick', ms:2000, refrac:0, seed:3, integ:1, ...kick, sameAs:'kick' },
+  // the equations' step (integ 2): quadratic rows solved exactly over each half step with the reset at the crossing, on kicks, conductances, the dynamic threshold and the conductance adaptation; a linear row runs as under integ 1
+  { name:'integ2 kick', ms:2000, refrac:0, seed:3, integ:2, ...kick, differsFrom:'kick' },
+  { name:'integ2 conductance', ms:2000, refrac:0, seed:3, syn:2, integ:2, ...condNet, differsFrom:'conductance' },
+  { name:'integ2 thr rows', ms:2000, refrac:0, seed:3, integ:2, ...kick, ntype:remap(kick.ntype, key('RS'), THR), differsFrom:'thr rows' },
+  { name:'integ2 adapt cond', ms:2000, refrac:0, seed:3, integ:2, ...kick, ntype:remap(kick.ntype, key('RS'), ADC), differsFrom:'adapt cond' },
+  { name:'integ2 lif kick', ms:2000, refrac:0, seed:3, integ:2, ...lif(kick, LIFR), sameAs:'integ lif kick' },
+  // a consolidated weight below most of the wiring: the references start at consW and those synapses are committed from the first step
+  { name:'commit strong', ...P2, rule:{ ...CONS, commit:1, consW:0.2 }, weightsDifferFrom:'commit', ...pnet },
   { name:'two rules', ...P2, rule:{ ...STDP, rules:[
       { aP:0.05, aM:0.03, wmax:5, wdep:1, tin:0.001, iEta:0.05, consW:0.5, consP:10 },
       { aP:0.02, aM:0.05, wmax:3, wdep:0, iEta:0.02, consW:0.3, consP:10 }] },
@@ -363,6 +427,7 @@ const ALL = [
 const wanted = new Set(ALL.filter(c => !ONLY || c.name.includes(ONLY)).map(c => c.name));
 for(const c of ALL) if(wanted.has(c.name)){
   if(c.differsFrom) wanted.add(c.differsFrom);
+  if(c.sameAs) wanted.add(c.sameAs);
   if(c.weightsDifferFrom) wanted.add(c.weightsDifferFrom);
 }
 const CASES = ALL.filter(c => wanted.has(c.name));
@@ -457,6 +522,8 @@ for(const c of CASES){
   if(c.differsFrom && trainsOf.has(c.differsFrom))
     ok(c.name + ': the term changes the spike trains (against ' + c.differsFrom + ')',
       !sameTrains(eng.times, trainsOf.get(c.differsFrom)), 'identical to ' + c.differsFrom + ', so the term was not exercised');
+  if(c.sameAs && trainsOf.has(c.sameAs))
+    ok(c.name + ': the same spike trains as ' + c.sameAs, sameTrains(eng.times, trainsOf.get(c.sameAs)), 'differs from ' + c.sameAs);
   if(c.weightsDifferFrom && weightsOf.has(c.weightsDifferFrom))
     ok(c.name + ': the term changes the learned weights (against ' + c.weightsDifferFrom + ')',
       !sameArray(eng.weights.w, weightsOf.get(c.weightsDifferFrom)), 'identical to ' + c.weightsDifferFrom + ', so the term was not exercised');

@@ -15,7 +15,11 @@ engine pays a submit and a readback per tick (2.71 ms, measured
 GPU and 0.4774 ms per step on the CPU), so the round trip, not the
 arithmetic, decides. Both per-step costs scale with synapse count, which
 makes the boundary one product, `steps * synCount >= 1.16e8`
-(`GPU_BREAKEVEN` in `src/document.js`). The fit is conservative: the GPU
+(`GPU_BREAKEVEN` in `src/document.js`). The exact membrane step adds a
+cost per cell to the CPU engine and none the GPU engine can measure
+(1.1e-4 ms per cell per step, measured 2026-11-05 on three networks), so
+with `integ` 2 each cell counts as `EXACT_STEP_CELL` (4,000) synapses in
+that product. The fit is conservative: the GPU
 scales better than linearly as occupancy improves, so some mid-size
 networks stay on the CPU that the GPU would have won. `auto` never
 selects an engine for a network using a term that engine does not
@@ -97,7 +101,10 @@ Requests (main thread to engine):
   script of another contract by name. Any change to a message or frame
   shape bumps the number. `types` is the resolved type table: an `f7`
   row per type with the Izhikevich 2007 membrane's C, k, vr, vt, vpeak,
-  a, b, c, d, and `graded` where the row releases instead of spiking;
+  a, b, c, d, and `graded` where the row releases instead of spiking,
+  `thrJump` and `thrTau` where its threshold jumps and relaxes,
+  `adaptCond` where its adaptation is a conductance, `poisson` where it
+  fires at its input current read in hertz (MODEL.md section 1);
   `engineTypes()` in `src/nodes.js` builds it. The table holds one
   membrane form; an init that carries a `form` field with any value but 1
   is refused by every engine. `v0` and `u0` (Float32Array, n) are the
@@ -117,7 +124,16 @@ Requests (main thread to engine):
   `stpOrder` (0 release then facilitation, 1 the reverse; section 8),
   `stpScope` (0 every synapse, 1 excitatory only, 2 inhibitory only;
   section 8), `stdpAt` (where the pair rule is timed: 0 at the soma, 1
-  at the synapse; section 3),
+  at the synapse; section 3), `plastGain` (a gain on the Hebbian terms,
+  1 by default; section 3), `wmu` (the exponent of the weight in soft
+  depression, 1 by default; section 3), `modTau`, `modPlast`, `modBase`,
+  `eligTau`, `modStep`, `modDrive`, `modCur` and `mods` (neuromodulation,
+  section 14b: the modulator field's time constant, what reads it, and
+  the time-course sources, a list of `{ idx, amp, mode, t0, period,
+  width, duration }` every engine evaluates per step, the CUDA child
+  included), with `modGrp` (Uint8Array n), `modTgt` (Uint16Array n) and
+  `modK` (Float32Array, one per release group) on the init, fixed like
+  the pools,
   `protocols` (list of `{ idx, amp, mode, period, width, t0, duration,
   gain, tau, common }`; mode 0 constant, 1 pulse train, 2 ramp, 3 noise
   amplitude, with `tau` and `common` on mode 3 only (section 9);
@@ -202,6 +218,10 @@ Requests (main thread to engine):
   the reverse index its plasticity passes build.
 - `getWeights`: `{ cmd }`. Read back the current weight array
   (checkpoints, analysis).
+- `setRef`: `{ cmd, wRef (Float32Array m) }`. The consolidation
+  reference from a brain file, sent after `init`. It allocates the
+  reference when plasticity has not yet, and the engine then skips the
+  capture from the weights (and `refInit`) it would otherwise make.
 
 Replies (engine to main thread):
 
@@ -218,15 +238,23 @@ Replies (engine to main thread):
   by the tune field that switches it on, with the value where the field
   selects a mode: `syn:1` exponential synapses, `syn:2` conductance,
   `psc:1` and `psc:2` the two other exp conventions, `refrac`, `vmin`,
-  `protocols:0` to `protocols:3` the four stimulus modes, `inputs` input
+  `integ` and `integ:2` the two other membrane steps, `protocols:0` to `protocols:3` the four stimulus modes, `inputs` input
   maps, `graded` graded rows, `plast` pair STDP with the inhibitory rule
   (`aP`, `aM`, `tauS`, `tauM`, `wmax`, `wdep`, `iEta`, `iRho`), `stdpAt`
-  (the pair rule timed at the synapse), `rhoMode`,
+  (the pair rule timed at the synapse), `plastGain` (a gain on the
+  Hebbian terms other than 1), `wmu` (soft depression scaling with a
+  power of the weight below 1), `refInit` (the consolidation reference
+  starting at zero or at the consolidated weight), `slide` (the sliding
+  threshold on depression), `iGlobal` (the global factor on the
+  inhibitory rule, with `iTauG`), `rhoMode`,
   `scale`, `trip`, `het`, `tin`, `cons`, `commit`, `ruleTable` (named
   plasticity rules), `stp`, `stpNorm`, `stpOrder`, `stpScope`, `stpRules`
   (short-term plasticity per rule, more than one class), `chanTau`
-  (receptor channels), `chanMg` (the magnesium block) and `pool`
-  (feedback inhibition). The optional queries are
+  (receptor channels), `chanMg` (the magnesium block), `pool`
+  (feedback inhibition), `mod` (neuromodulation: a modulator field
+  written by a source or a releasing population, or read by a gain on
+  learning, on the synaptic current, or a current) and `elig` (the
+  eligibility form, `modPlast` 2). The optional queries are
   `watch`, `sendV`, `sendT`, `query` and `getWeights`; `host/host.mjs`
   adds `host` (the run controller, section 7) to its engine's reply, and
   `src/remoteworker.js` adds `url`, the address the reply came from. The
@@ -249,7 +277,9 @@ Replies (engine to main thread):
   }`. `t` is the engine's step count on the two JavaScript engines and 0
   from the CUDA host; nothing reads it. `rho` carries the measured
   per-neuron homeostatic set points when `rhoMode` is 1 and calibration
-  has finished, and is absent otherwise.
+  has finished, and is absent otherwise. `ref` (Float32Array m) carries
+  the consolidation reference when the engine has one (a rule with
+  heterosynaptic plasticity or consolidation), and is null otherwise.
 - `error`: `{ cmd, message }`. A refused init or tune, a device error
   (section 10) or a dropped remote connection (section 7).
 
@@ -264,12 +294,14 @@ Large arrays move by transfer, never copy.
   the lower root of 0.04 v² + (5 − b) v + 140, vt = −125 − vr), derived
   term for term in `src/form.js` and held by the battery against the
   2003 arithmetic. In the WebGPU worker the per-neuron parameter buffer
-  is 12 floats wide (a, b, c, d, C, k, vr, vt, vpeak, release threshold,
-  slope, graded flag) and the state buffer is 12 floats per neuron (v,
-  u, gE, gI, six channel conductances, padding); the u32 after `vmin` in
-  its Step struct is `stpOrder`. In the CUDA child the five membrane
-  arrays ride at the tail of the INIT frame (section 13), and the child
-  checks the frame length.
+  is 16 floats wide (a, b, c, d, C, k, vr, vt, vpeak, release threshold,
+  slope, graded flag, the dynamic threshold's jump and decay, the
+  conductance adaptation flag, the Poisson flag) and the state buffer is
+  16 floats per neuron (v, u, gE, gI, six channel conductances, two noise
+  states, the threshold state, the global factor's population flag,
+  padding); the u32 after `vmin` in its Step struct is `stpOrder`. In the
+  CUDA child the nine per-cell row arrays ride at the tail of the INIT
+  frame (section 13), and the child checks the frame length.
 - Graded rows (MODEL.md section 1): a type row with `graded: { thr,
   slope }` never spikes; each ms it delivers `w r` through its synapses
   with `r = clamp((v − thr)/slope, 0, 1)`, no short-term plasticity, and
@@ -317,13 +349,24 @@ Large arrays move by transfer, never copy.
   engine's host, in JavaScript, so the three carry the same floats; the
   two filter states are per cell and start at zero. Two noise stimuli
   with different `tau` or `common` on one cell are refused.
-- Spike at v >= the row's vpeak (graded rows never spike): v = c,
-  u += d, deliveries scheduled at t + delay per synapse.
+- Spike at v >= the row's vpeak plus its threshold state (graded rows
+  never spike): v = c, u += d, deliveries scheduled at t + delay per
+  synapse. The threshold state is zero unless the row carries `thrJump`
+  (MODEL.md section 1): then it relaxes by e^(−1/thrTau) at the start of
+  every step and is set to `thrJump` at the spike. A row with `adaptCond`
+  reads `u` as a conductance toward the inhibitory reversal, and a row with
+  `poisson` has no membrane and fires with probability I/1000 on
+  `poissonDraw` (rand.js), by being put at its peak.
 - `vmin`: membrane floor in mV, default -90 (the potassium reversal
   potential), applied after each half step: `v = max(v, vmin)`. 0
   disables it. Without it a hyperpolarizing step past about -150 mV
   sends the quadratic to infinity and the cell to NaN. Implemented in
   all three engines; MODEL.md section 1.
+- `integ`: the membrane step, on init and tune. 0 two Euler half steps
+  (the default); 1 two exponential half steps with the reset inside the
+  step, on rows linear over the spiking range; 2 the same on those rows
+  and the equations solved exactly over each half step on quadratic rows,
+  the reset at the crossing. MODEL.md section 1.
 - `refrac`: absolute refractory period in whole ms; 2 on the checkpoint
   node, 0 in an init that omits it, clamped to 20, on every engine. For
   that many steps after a spike the membrane is held at reset and cannot
@@ -377,7 +420,21 @@ Large arrays move by transfer, never copy.
   cell order. Every engine keeps the per-cell history (bit k for a spike
   k steps ago) and a per-cell mask of the delays its synapses carry, and
   walks the cells whose history meets their mask once per step; nothing
-  is kept per synapse. Its target term is alpha = rho (tauS + tauM) with rho in kHz,
+  is kept per synapse. `plastGain` is the third factor (MODEL.md 4): a
+  gain on the Hebbian terms, potentiation, depression, the triplet and
+  transmitter terms, 1 by default, that a sender can set on any tune; a
+  training run sets it to 0 between presentations when the checkpoint's
+  gate says so. The homeostatic terms (the inhibitory rule, scaling,
+  the heterosynaptic pull, consolidation) run whatever it is. Under
+  `modPlast` 1 the gain is multiplied per synapse by `modBase` plus the
+  modulator field of the postsynaptic cell, and under `modPlast` 2 the
+  Hebbian terms go to an eligibility trace per synapse instead of the
+  weight (section 14b). Under soft
+  bounds (`wdep` 1) excitatory depression scales with w^`wmu`: 1 is the
+  proportional form, 0 the additive, between them the interpolation of
+  Gutig, Aharonov, Rotter and Sompolinsky 2003 (J Neurosci 23:3697),
+  where strong synapses are depressed less than in proportion and a
+  stable, competitive weight distribution exists. Its target term is alpha = rho (tauS + tauM) with rho in kHz,
   which is the published 2 rho tau when the constants are equal. The
   generalization follows from the rule's fixed point: per unit time the
   pre-spike term contributes rho_pre (rho_post tauM - alpha) and the
@@ -630,7 +687,7 @@ and `scaleK` in `cuda/kernels.cuh` share one `isCommitted` test.
 
 Both settings that drive it are controls on the checkpoint node:
 `commit after (sim-min)` (`tauCons`, the timescale of the drive into the
-well) and `commit check every (sim-s)` (`consStep`, the cadence of the
+well) and `commit check s` (`consStep`, the cadence of the
 consolidation step). On the CUDA tune frame bytes 104, 108 and 112 carry
 the commit switch, the timescale and the cadence (section 13).
 
@@ -670,7 +727,7 @@ computing.
 
 ## 11. The fast plasticity mechanism set
 
-The tune message carries four fields beyond the pair rule, all defaulting
+The tune message carries these fields beyond the pair rule, all defaulting
 to zero, where zero reproduces the pair rule byte for byte (MODEL.md
 section 4 has the equations):
 
@@ -681,21 +738,35 @@ section 4 has the equations):
   and Nelson 2001 and Wang et al. 2005, which pair STDP cannot produce.
 - `tauY`: Kslow's time constant in ms, default 114, the Pfister and
   Gerstner visual cortex fit.
-- `het`: heterosynaptic regression. At a postsynaptic spike every
-  incoming plastic excitatory weight is pulled toward its reference by
-  the fraction min(1, het*(Kslow/kRef)^3), kRef being Kslow's steady
-  state at the homeostatic target rate (the cell's own under measured
-  set points), so competition engages when the
-  neuron fires above its set point and the pull saturates at a full
-  return to baseline (Lynch et al. 1977; Chistiakova et al. 2014;
-  implementation form of Zenke, Agnes and Gerstner 2015). The reference
-  is the weight vector at the moment het or consolidation first switches
-  on; after a resume that is the resumed state. Section 12 says how
-  consolidation moves it.
+- `het`: heterosynaptic regression, the form of Zenke, Agnes and
+  Gerstner 2015. At a postsynaptic spike every incoming plastic
+  excitatory weight moves toward its reference by het times the cube of
+  the cell's fast postsynaptic trace (Kpost as it stood before that
+  spike), with no normalization and no ceiling; the weight limits bound
+  the step (Lynch et al. 1977; Chistiakova et al. 2014). The reference
+  is captured when het or consolidation first switches on (the weight
+  vector, or where `refInit` says, section 12); after a resume that is
+  the resumed state.
 - `tin`: transmitter-induced potentiation added per presynaptic spike,
   the small non-Hebbian term that keeps low-rate synapses from silent
   collapse; the least measured of the set, and stated as such in the
   source.
+- `slide`, with `slideRate`, `slideTau` and `slideInit`: the sliding
+  threshold of Zenke, Agnes and Gerstner 2015 (their `P11Connection`).
+  Each cell keeps a slow trace of its own spikes (time constant
+  `slideTau`, in ms on the wire), and the depression of its incoming
+  excitatory synapses is multiplied by the square of that rate estimate
+  over `slideRate`; the transmitter term and the inhibitory rule are not
+  scaled. The trace starts at `slideInit` times the time constant and
+  runs whenever plasticity does; a saved brain does not carry it.
+- `iGlobal`, with `iTauG` (seconds on the wire): the global factor on
+  the inhibitory rule of Zenke, Agnes and Gerstner 2015 (their
+  `GlobalPFConnection`). The population is every cell with an inhibitory
+  synapse under a rule; its spike count, low-passed over `iTauG`, stands
+  for its rate, and every inhibitory update is the rule's eta times (that
+  rate over `iRho` minus one), with the presynaptic term the trace plus
+  one. The factor is read as the step before left it, kept in float32,
+  and evolves while plasticity is on; it starts at zero.
 
 Implemented in all three engines. The transmitter drip is a constant
 added per presynaptic spike in the outgoing pass, which makes the wmax
@@ -707,8 +778,9 @@ postsynaptic history rather than by the present spike.
 WebGPU layout: Kpre and the slow trace are interleaved into one buffer,
 two floats per neuron, which keeps the incoming pass within the eight
 storage buffers WebGPU guarantees once the reference weight is bound;
-Kpost stays a plain array because it is the hot read in the outgoing
-pass. The reference weight vector is allocated when het or consolidation
+Kpost is its own buffer, two lanes per cell (the fast trace and the
+sliding threshold's slow rate trace), because it is the hot read in the
+outgoing pass. The reference weight vector is allocated when het or consolidation
 switches on, not always, since it is a second copy of every weight. The
 heterosynaptic pull is computed in the same pass as potentiation, from
 the pre-update weight, with one clamp on the combined result, as the
@@ -733,7 +805,13 @@ Commun 6:6922) equation 16:
 
 The lower fixed point is zero, the upper is consW, and the midpoint at
 consW/2 is unstable, so a synapse driven above the midpoint consolidates
-to the upper state and one left below it decays to zero. `tauCons`
+to the upper state and one left below it decays to zero. The reference
+starts inside that well: a synapse wired above consW under a
+consolidating rule starts its reference at consW, which is where the
+equation settles from above (a forward Euler step from a reference far
+above consW overshoots to zero instead, and the heterosynaptic term then
+pulled the strongest pathways toward zero). A rule without consolidation
+keeps the weight itself as the reference. `tauCons`
 defaults to 20 simulated minutes. Every engine updates the reference
 every `consStep` (default 1.2 simulated seconds) rather than every step,
 as the published implementation does.
@@ -767,7 +845,9 @@ Commands and replies:
     3 EXT    f32[n]                 -
     4 NAMP   f32 amp[n], f32 a[n], f32 k[n], f32 c[n], i32 id[n]   -
     5 TICK   u32 steps              100 STATE
-    6 GETW                          101 WEIGHTS: f32 w[m], then f32 rho[n]
+    6 GETW                          104 REF: f32 wRef[m], when the child
+                                        has a reference, then
+                                        101 WEIGHTS: f32 w[m], then f32 rho[n]
                                         when set points are measured
     7 QUERY  u32 idx, cap, outOnly  102 QUERYRESULT: u32 idx, outTotal,
                                         inTotal, outN, innN,
@@ -777,12 +857,14 @@ Commands and replies:
     10 SENDT u32 on
     11 HELLO                        103 HELLO: u32 the contract number the
                                         child was built for
+    12 SETREF f32 wRef[m]           -
 
 INIT frame: a 24-byte head (u32 n, m, syn; f32 tauE, tauI; u32 psc), then
 f32 a, b, c, d, bias [n], i32 preStart [n+1], i32 post [m], f32 w [m], u8
 delay [m], u8 pmask [m], f32 v0 [n], f32 u0 [n], u32 seed, u32 poolCount,
 u16 pool [n], f32 poolK [poolCount] (a network without pools sends
-poolCount 1 and zeros), f32 C, k, vr, vt, vpeak [n], u32 graded and,
+poolCount 1 and zeros), f32 C, k, vr, vt, vpeak, thrJump, thrDec, adaptCond, poisson [n] (the
+last four the rows' features as floats, zeros when no row asks), u32 graded and,
 when graded is 1, u8 grd [n], f32 thr [n], f32 slope [n]. The child
 computes the expected length from n, m and poolCount and exits with a
 message if the frame differs, so a host and a child built either side of
@@ -802,17 +884,33 @@ TUNE frame, 208 bytes without a rule table (`_plastStruct` in
 | 80, 84 | f32 scale, sEta |
 | 88, 92 | f32 rhoMode, calS |
 | 96 | f32 tauM |
-| 100 | f32 stpNorm + 2 stpOrder + 4 stpScope (4 excitatory only, 8 inhibitory only) + 16 stdpAt |
+| 100 | f32 stpNorm + 2 stpOrder + 4 stpScope (4 excitatory only, 8 inhibitory only) + 16 stdpAt + 32 (integ 1) or 64 (integ 2) |
 | 104 to 112 | f32 commit, tauCons, consStep |
 | 116 | f32 vmin |
 | 120 | u32 receptor channel count, then six f32 channel taus from 124 |
 | 148, 152 | f32 eRevE, eRevI, then six f32 channel reversals from 156 |
+| 180 | f32 plastGain, the gain on the Hebbian terms (1 by default) |
 | 184 | six f32 channel magnesium concentrations, mM, 0 for no gate |
-| 208 | optional: u32 rowCount, then rows of 11 floats from 212 |
+| 208 | f32 wmu, the weight exponent of soft depression (1 by default) |
+| 212 | u32 refInit, where the consolidation reference starts (0 the wired weight inside the well, 1 zero, 2 consW) |
+| 216, 220, 224 | f32 slideK (1000 over slideTau times slideRate, 0 with the sliding threshold off), decH (the slow rate trace's decay per step), khomInit (where the trace starts) |
+| 228, 232 | u32 iGlobal (the global factor on the inhibitory rule), f32 its window iTauG in ms |
+| 236 | optional: u32 rowCount, then rows of 11 floats from 240 |
 | after the rows | optional: u32 class count C, 16 u8 (the class of each rule row), then C rows of f32 on, U, tauD, tauF |
+| after the classes | optional: the neuromodulation block (section 14b): u32 marker 0x31444F4D, then f32 modTau, u32 modPlast, f32 modBase, eligTau, modStep, modDrive, modCur; absent means the field is off |
 
 The child reads the rule table behind a length guard and builds row 1
 from the scalars when none is sent.
+
+MODS (13): the modulator sources and release arrays (section 14b), sent
+after the TUNE of an init and on a tune that carries them: u32 G (the
+release groups, 1 for none), f32 K[G] (the release per spike, raw; the
+child folds it by the field's decay), u8 grp[n] (the group each cell
+releases into, 0 none), u16 tgt[n] (the group a cell receives from, 0
+none), u32 count, then per source f32 amp, u32 mode, f32 t0, period,
+width, duration, u32 cells, u32 idx[cells]. The child evaluates each
+source's time course per step itself, so the modulator's pulse trains
+and ramps run on it where the stimulus protocols' do not.
 
 STATE: u32 steps, u32 hasV, u64 spikes, u8 fired[n], then f32
 vtrace[steps] if hasV (the watched neuron's membrane trace, written by a
@@ -868,6 +966,75 @@ WebGPU engine against each other and checks that a cell outside every
 pool computes the same bytes as it does with no pool in the network;
 `cuda/parity.mjs` covers the CUDA child.
 
+## 14b. Neuromodulation
+
+One modulator level per cell, `M`, in every engine (MODEL.md section 4,
+neuromodulation). At the end of step `t`:
+
+    M(t) = M(t-1) e^(-1/modTau) + s(t) + K_g c_g(t-1)
+
+where `s(t)` is the increment the cell's time-course sources deliver at
+`t` (each source's `amp` times `1 - e^(-1/modTau)` times its scale, the
+same `scaleOf` the stimulus protocols use, so a constant source holds
+`amp`), `g` is the release group the cell receives from (`modTgt`),
+`K_g` the group's release per spike (`modK`, the node's level times 1000
+over the group's cell count, folded by `1 - e^(-1/modTau)` in the
+engine) and `c_g(t-1)` the spikes the group's cells (`modGrp`) fired at
+`t-1`. Everything at step `t` reads `M(t-1)`, the field as the step
+before left it, whatever the cell order; the field starts at zero and
+is not kept in a brain file.
+
+What reads it, all on the tune:
+
+- `modPlast` 1: the Hebbian terms at a synapse (potentiation, depression,
+  the triplet and transmitter terms) are multiplied by `plastGain`
+  times (`modBase` + `M` of the postsynaptic cell). The homeostatic
+  terms are not.
+- `modPlast` 2: the same terms accumulate on an eligibility trace per
+  synapse, `c`, and the weight does not move at the spike. Every
+  `modStep` ms a sweep over every excitatory plastic synapse pays `c
+  (1 - e^(-modStep/eligTau)) (modBase + M)` into the weight, clamped
+  as the pair rule clamps, and decays `c` by `e^(-modStep/eligTau)`
+  (Izhikevich 2007, Cereb Cortex 17:2443, whose sweep pays the whole
+  trace every 10 ms; the factor here makes the sum over a trace's life
+  its amount, so a level means in this form what it means in the gain
+  form). The sweep runs after the field update of its step and reads
+  `M(t)`. A committed synapse keeps its weight and its trace still
+  decays. The trace is allocated when the form first switches on, four
+  bytes per synapse, and is not kept in a brain file.
+- `modDrive`: the synaptic current (the ring deliveries, the pool, the
+  receptor channels; not the bias, the stimuli, the input maps or the
+  noise) is multiplied by `1 + modDrive M`, and under the exponential
+  step the synaptic conductance with it.
+- `modCur`: `modCur M` is added to the cell's current.
+
+Layouts. The reference engine keeps `mod` and `modNew` and swaps them
+at the end of the step; the WebGPU engine keeps the level in lane 14 of
+the state buffer, the update pass reads the old level and writes the new
+one, and the decay pass copies the level into the third lane of `Kpost`
+(now four lanes: the fast trace, the sliding threshold's rate trace, the
+level, the cell's Vogels alpha) and the fifth lane of `ktr` (now eight
+lanes) for the learning passes of the next step; the release group a
+cell releases into is the top byte of its `refcnt` word (the pool id
+moves to bits 8 to 23), and the groups' two count halves and release per
+spike follow the pool tables and the global factor's word in that
+buffer. The eligibility trace is partitioned with the weights and bound
+in place of `alphaI` in the outgoing passes (alpha rides in `Kpost`) and
+in a slot freed by interleaving the reverse index (`rev`, pairs of
+synapse and presynaptic cell with delay) in the incoming pass; the sweep
+is `SHADER_ELIG`. The CUDA child keeps `mod` and `modNew` on the device
+and swaps the pointers, counts the groups' spikes into two halves by the
+step's parity as the pools are counted, evaluates the sources on the
+host side of the child and uploads their increment when a scale changes,
+and sweeps with `eligSweepK`. With `modPlast` on and plasticity switched
+on mid-run, the WebGPU learning passes read the level the decay pass
+last copied, one step stale at that edge; the reference and CUDA
+engines read the current one.
+
+Held by `src/mod.test.mjs` (the reference engine against the arithmetic),
+`cuda/modtest.mjs` (the child against the reference) and the battery's
+neuromodulation group (both page engines).
+
 ## 15. Writing an engine
 
 An engine written in any language can run the networks the node graph
@@ -903,7 +1070,7 @@ use the same framing. `src/frame.js` is the codec the page uses, and
 
 1. `{ cmd:'hello' }` arrives first. The reply is `{ cmd:'hello', protocol,
    engine, terms, optional }` (section 2): `protocol` is the contract
-   number this engine implements (`PROTOCOL` in `src/protocol.js`, 7),
+   number this engine implements (`PROTOCOL` in `src/protocol.js`, 17),
    `engine` a short name the status line shows, `terms` the terms beyond
    the baseline it implements, `optional` the optional queries it
    answers. The page refuses an engine of another contract, and sends
@@ -912,7 +1079,8 @@ use the same framing. `src/frame.js` is the codec the page uses, and
    an engine needs for the baseline are `protocol` (refuse any other
    number with an `error` reply), `count`, `ntype` and `types` (each
    type's `f7` row: `C`, `k`, `vr`, `vt`, `vpeak`, `a`, `b`, `c`, `d`, in the
-   units of section 3), `bias`, `preStart`, `post`, `w`, `delay` (whole
+   units of section 3, and the optional `thrJump`, `thrTau`, `adaptCond`,
+   `poisson`), `bias`, `preStart`, `post`, `w`, `delay` (whole
    milliseconds, 1 to 16), `seed`, `v0` and `u0`. An engine with another
    membrane reads the row fields it needs; the template takes `C`, `k`,
    `vr` and `vt`.

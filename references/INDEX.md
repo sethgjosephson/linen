@@ -46,7 +46,7 @@ and is volume 12 (2018 volume year, published January 2019).
 
 | File | Citation | Source | License |
 |---|---|---|---|
-| `wright-2025-plasticity-rules-dendritic-compartments.pdf` | Wright, W. J., Hedrick, N. G., Komiyama, T. (2025). Distinct synaptic plasticity rules operate across dendritic compartments in vivo during learning. Science 388(6744), 322-328. doi:10.1126/science.ads4706 | https://www.science.org/doi/10.1126/science.ads4706 (author manuscript PMC12906676) | publisher copy, saved by Seth from the Science site |
+| `wright-2025-plasticity-rules-dendritic-compartments.pdf` | Wright, W. J., Hedrick, N. G., Komiyama, T. (2025). Distinct synaptic plasticity rules operate across dendritic compartments in vivo during learning. Science 388(6744), 322-328. doi:10.1126/science.ads4706 | https://www.science.org/doi/10.1126/science.ads4706 (author manuscript PMC12906676) | publisher copy |
 
 ## What the project takes from these
 

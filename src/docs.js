@@ -161,7 +161,10 @@ export const NODES = {
       preset:'Custom only: a built-in row whose numbers are written below; custom writes nothing.',
       tag:'Population to apply it to: a tag, a pattern with one *, or E or I; blank is every cell.',
       sign:'Whether the cell excites or inhibits its targets when the sign comes from the cell type.',
-      kind:'spiking, or graded: the cell never spikes and releases in proportion to its potential above the release threshold.',
+      kind:'spiking; graded: never spikes, releases in proportion to its potential above the release threshold; Poisson: fires at random at the input current read in hertz.',
+      adapt:'What u is: a current in pA, or a conductance in nS drawing current toward the inhibitory reversal (Zenke et al. 2015).',
+      thrJump:'Dynamic threshold: the threshold jumps by this at a spike and relaxes; 0 leaves it fixed.',
+      thrTau:'Time constant of the threshold\'s relaxation.',
       C:'Membrane capacitance.',
       k:'Slope of the instantaneous current-voltage curve.',
       vr:'Resting potential.',
@@ -213,7 +216,7 @@ export const NODES = {
       wdep:'hard: additive updates clamped at the limit. soft: updates scale with the room left toward the bound.',
       trip:'Triplet potentiation amplitude; 0 is the pair rule.',
       iEta:'Learning rate of inhibitory homeostasis.',
-      het:'Strength of heterosynaptic competition among a cell\'s incoming weights when it fires above its set point.',
+      het:'Heterosynaptic beta: at each postsynaptic spike the incoming weights move toward their reference by beta times the cubed fast postsynaptic trace.',
       tin:'Constant weight change at an active synapse on every presynaptic spike.',
       cons:'Rate of settling into a consolidated state.',
       consW:'Weight a consolidated synapse is drawn toward; at most the rule\'s weight limit.',
@@ -243,12 +246,25 @@ export const NODES = {
       tract:'Physical tract length; 0 uses the distance between population centroids.',
       frozen:'frozen: exempts these synapses from every plasticity term.',
       rule:'Plasticity rule this tract learns by, named on a plasticity node; blank uses the checkpoint\'s.',
+      channel:'Receptor channel this pathway\'s synapses use, named on the receptors node; blank follows the sign.',
       seed:'Seed of this projection\'s pair draws.' } },
   pool: { io:'points in (place before connect)',
     blurb:'Inhibits every cell of a population in proportion to that population\'s mean rate, one millisecond later.',
     params:{
       tag:'Population the pool covers: a tag, a pattern with one * for one pool per match, E or I, or blank for every cell.',
       gain:'Inhibition per millisecond per Hz of the pool\'s mean rate, in weight units on the inhibitory path; 0 is off.' } },
+  modulator: { io:'points in (place before connect)',
+    blurb:'Raises a modulator level at every cell of a population, by a time course or by a releasing population\'s spikes.',
+    params:{
+      tag:'Population whose cells carry the level: a tag, a pattern with one *, E or I, or blank for every cell.',
+      source:'time course: the engine holds or pulses the level. population spikes: every spike of the releasing population raises it.',
+      level:'A time course holds this level; a releasing population gives it per Hz of its mean rate. The level decays with the checkpoint\'s level tau.',
+      from:'The releasing population.',
+      mode:'constant, a pulse train, a ramp up over the period, or the level while a presentation of a curriculum is on.',
+      period:'Pulse period, or the ramp\'s rise time.',
+      width:'Pulse width.',
+      t0:'Onset.',
+      duration:'How long the course runs; 0 is without end.' } },
   connectionsfile: { io:'points in (place before connect)',
     blurb:'Adds explicit synapses from a connections table, matched to the ids a points file carried.',
     params:{
@@ -274,7 +290,7 @@ export const NODES = {
       prob:'Connection probability at zero distance.',
       wExc:'Synaptic weight of excitatory presynaptic neurons.',
       wInh:'Synaptic weight of inhibitory presynaptic neurons.',
-      wdist:'uniform: within 50 percent of the base weight. lognormal: heavy-tailed, with the same mean.',
+      wdist:'uniform: within 50 percent of the base weight. lognormal: heavy-tailed, with the same mean. equal: every synapse the base weight.',
       wsigma:'Lognormal only: sigma of the underlying normal distribution.',
       cluster:'Fraction of extra synapses added by triadic closure, redrawn at every wiring.',
       table:'Pair rules per line: pre post probMul wMul, then 0, 1 or a rule name; keys are tags, tag* prefixes, E, I or *.',
@@ -302,13 +318,15 @@ export const NODES = {
       order:'sequential recites the set in order; shuffled draws each presentation independently.',
       onMs:'Duration of each presentation.',
       offMs:'Blank gap between presentations.',
+      timing:'fixed: onMs and offMs every time. random: normal presentations (SD a third of onMs) and exponential gaps of mean offMs (Zenke et al. 2015).',
       jitter:'Position jitter as a fraction of the field, redrawn each presentation.',
       scaleVar:'Size variation per presentation.',
       rotVar:'Rotation range per presentation.',
       acuity:'Visual sharpness; 1 is sharp and 0 heavily blurred.',
-      phases:'Training blocks such as 25 A; 25 B; 130 AB: simulated minutes, then the channels driven; blank drives every channel.',
+      phases:'Training blocks such as 25 A; 25 B; 130 AB: minutes, channels, then optional on=ms off=ms set=index gain=factor per block; blank drives every channel.',
       probeEvery:'Presents one sense alone, alternating, on every Nth presentation; 0 disables.',
       condNames:'Probe condition names, comma separated: the ordinary presentation first, then the probe conditions.',
+      afterMs:'Records the first part of every gap as a fourth trial condition labeled with the item just shown, for delay activity.',
       calCycles:'Passes of the calibration sweep before the schedule starts; 0 disables the sweep and the binding measure.',
       reSweepEvery:'Presentations between repeats of the calibration sweep; 0 for none.',
       place:'Whole sheet: items overlap fully. Own tile per item: each item small in its own tile. Own offset per item: full size, shifted per item.',
@@ -417,6 +435,7 @@ export const NODES = {
     blurb:'Simulates the network fed into it and holds the settings of the simulation, plasticity and training.',
     params:{
       steps:'Simulated milliseconds per rendered frame.',
+      integ:'How the membrane advances each millisecond: Euler half steps; exponential half steps on linear rows; or the equations, solved exactly over each half step.',
       liveHost:'WebSocket address of the remote engine.',
       engine:'auto picks cpu or gpu by size; cpu runs the reference engine; gpu runs WebGPU; remote runs an engine at the address below.',
       syn:'kick: charge in one step. exp decay: an exponentially decaying current. conductance: a decaying conductance toward each channel\'s reversal potential.',
@@ -431,17 +450,32 @@ export const NODES = {
       tauS:'Presynaptic trace time constant, the potentiation window.',
       tauM:'Postsynaptic trace time constant, the depression window.',
       stdpAt:'Where a pairing is timed: at the synapse a presynaptic spike counts when it arrives, after its delay; at the soma when it is fired.',
+      plastGate:'When the Hebbian terms act in a training run: always, during presentations, during bimodal presentations, or during presentations other than probes; homeostasis runs throughout.',
+      modPlast:'gain: the Hebbian terms scale with base + level. eligibility: they accumulate on a trace per synapse, paid in by base + level each sweep.',
+      modBase:'What multiplies the Hebbian terms at a level of 0: 1 leaves the rule unchanged without a modulator, 0 lets only the modulator drive learning.',
+      eligTau:'Decay time constant of the eligibility trace.',
+      modStep:'How often the traces are paid into the weights.',
+      modTau:'Decay time constant of the level at every cell.',
+      modDrive:'The synaptic current is scaled by 1 + this times the level.',
+      modCur:'A current of this times the level is added at every cell.',
       wdep:'hard: clamps weights at the limit. soft: scales each update by the room left toward the bound.',
+      wmu:'Exponent of the weight in soft depression: 1 proportional to the weight, 0 additive; between, strong synapses are depressed less than in proportion.',
       wmax:'Upper limit on any weight magnitude under learning.',
       iEta:'Learning rate of the inhibitory homeostasis rule.',
       rhoMode:'fixed target: one rate for every neuron. measured baseline: each neuron\'s own rate during a calibration window.',
       calS:'Measured set points only: length of the calibration window, with plasticity held off.',
       iRho:'Target excitatory rate for inhibitory homeostasis and synaptic scaling.',
+      slide:'Sliding threshold (Zenke, Agnes and Gerstner 2015): scales each cell\'s incoming depression by the square of its slow rate estimate over the target below.',
+      slideRate:'Rate at which the sliding threshold leaves depression at its set amplitude; below it depression weakens, above it strengthens.',
+      slideTau:'Time constant of the slow rate estimate the sliding threshold reads, in seconds.',
+      slideInit:'Rate the slow estimate starts at; a saved brain does not keep the estimate, so a resumed run starts here too.',
+      iGlobal:'per cell: each cell is driven to its own target. global: one factor from the population rate scales every update (Zenke et al. 2015).',
+      iTauG:'Window of the population rate the global factor reads, in seconds.',
       scale:'Scales each neuron\'s plastic excitatory inputs toward the target rate once per simulated second.',
       sEta:'Maximum fractional scaling step per second.',
       trip:'Triplet potentiation amplitude; 0 is the pair rule.',
       tauY:'Time constant of the slow postsynaptic trace read by the triplet and heterosynaptic terms.',
-      het:'Heterosynaptic competition: pulls incoming weights toward their reference when a neuron fires above its set point.',
+      het:'Heterosynaptic beta: at each postsynaptic spike the incoming weights move toward their reference by beta times the cubed fast postsynaptic trace, so bursts engage it.',
       stp:'Short-term plasticity on the synapses of the checkpoint rule and of every rule that inherits it; above 0 switches it on.',
       stpPreset:'A published synapse class that writes the three numbers below; custom writes nothing.',
       stpU:'Release probability of a rested synapse, and the fraction of resources each spike consumes.',
@@ -452,6 +486,7 @@ export const NODES = {
       stpTauF:'Decay time constant of the raised release probability.',
       cons:'Consolidates the heterosynaptic reference through a double well; any value above 0 is on, and all such values run alike.',
       consW:'Upper stable state of the consolidation well.',
+      refInit:'Where a consolidating synapse\'s reference starts: the wired weight inside the well, zero (the lower fixed point), or the consolidated weight.',
       consStep:'Interval between consolidation steps.',
       tauCons:'Time a reference weight must stay past the midpoint before it consolidates.',
       commit:'Freezes a consolidated synapse at its weight; needs consolidation on.',
@@ -468,6 +503,7 @@ export const NODES = {
       trSweep:'Conditions the sweep covers: the graph as configured, or each replicate paired and scrambled.',
       trKeep:'Number of brain files a run keeps; older ones are deleted.',
       trHost:'Address of the engine host the cuda option connects to; START starts one there when none listens.',
+      trBrain:'A saved brain to start the run from, as run tag and file name; empty starts from the wired weights.',
       trEngine:'Engine of a training run; cuda hands the run to the native engine host at the address below.',
       train:'Starts a training run on the graph upstream of this checkpoint.',
       brainSave:'Writes the graph and every synapse weight to a brain file in the project\'s brains folder.',
@@ -484,7 +520,7 @@ title:'overview', html:`
 <p>A sandbox for building and running 3D spiking neural networks.</p>
 <h2>finding your way around</h2>
 <p>The screen has three parts. The node graph is where you build a network, the viewer shows it running in 3D, and the properties panel holds the settings of whichever node you open. The guided tour is open when you first arrive, and the other scenes are in the Tab menu, each described on the scenarios page. The references page lists the papers behind them.</p>
-<p>To give the viewer or the node graph the whole window, hover over it and press Space. Press Space again to bring the other panels back.</p>
+<p>To give the viewer or the node graph the whole window, hover over it and press Space. Opening a node's properties brings that panel back beside it, and pressing Space again brings all the panels back.</p>
 <p>A network is described entirely by its graph, with data flowing from top to bottom. Everything is measured in micrometers, so the time a signal takes to reach another neuron depends on how far it has to travel.</p>
 <h2>the viewer</h2>
 <p>Use the mouse to orbit, pan and zoom around the tissue. Clicking a neuron shows its outgoing connections in white and its incoming ones in violet, and an oscilloscope appears at the top right with its membrane potential. Small bumps there are synaptic input that stayed below threshold, and a ramp followed by a sharp reset is a spike. Double-clicking a neuron selects the node that created it.</p>
@@ -532,7 +568,7 @@ title:'overview', html:`
 <tr><th>scene</th><th>cells</th><th>synapses</th><th>shows</th></tr>
 <tr><td class="k">guided tour</td><td class="v">14,000</td><td class="v">8 M</td><td class="d">Waves from a pacemaker across a sheet.</td></tr>
 <tr><td class="k">traveling waves</td><td class="v">39,000</td><td class="v">27 M</td><td class="d">Fronts at slice speeds.</td></tr>
-<tr><td class="k">mouse cortical column</td><td class="v">14,000</td><td class="v"></td><td class="d">Four layers at published proportions and rates.</td></tr>
+<tr><td class="k">mouse cortical column</td><td class="v">14,000</td><td class="v"></td><td class="d">Four layers wired from Potjans and Diesmann 2014, each driven to its de Kock and Sakmann 2009 rate band.</td></tr>
 <tr><td class="k">visual pathway</td><td class="v"></td><td class="v"></td><td class="d">Retina to thalamus to cortex.</td></tr>
 <tr><td class="k">thalamocortical loop</td><td class="v"></td><td class="v"></td><td class="d">Activity crossing a fiber tract in hops.</td></tr>
 <tr><td class="k">CA3 pattern completion</td><td class="v"></td><td class="v"></td><td class="d">Recall of a band from a cue at one end.</td></tr>
@@ -569,7 +605,7 @@ title:'overview', html:`
 <tr><td class="k">inhibition at a third</td><td class="d">The whole sheet bursts at once; the fronts are gone.</td></tr>
 </table>
 <h2>mouse cortical column</h2>
-<p>A four-layer column at the population proportions of Potjans and Diesmann 2014.</p>
+<p>A four-layer column: the connection probabilities and layer proportions of Potjans and Diesmann 2014, Izhikevich 2007 cells, and a background drive per layer tuned so each layer's rate sits in the band de Kock and Sakmann 2009 report.</p>
 <table>
 <tr><td class="k">size</td><td class="d">400 µm wide, 1.2 mm deep, four layer boxes.</td></tr>
 <tr><td class="k">cells</td><td class="d">About 14,000.</td></tr>
@@ -577,8 +613,8 @@ title:'overview', html:`
 <tr><td class="k">interneurons</td><td class="d">Per layer, a fast spiking (PV, tag Lxi) and a low threshold spiking (SST, tag Lxs) population.</td></tr>
 <tr><td class="k">wiring</td><td class="d">The Potjans and Diesmann pair table on the connect node; both interneuron populations take the published inhibitory rows.</td></tr>
 <tr><td class="k">synapse classes</td><td class="d">Excitatory synapses onto PV cells depress and onto SST cells facilitate; SST inhibition decays over 20 ms.</td></tr>
-<tr><td class="k">drive</td><td class="d">Background per layer and class; a weak pulse train into layer 4 through its box as a mask.</td></tr>
-<tr><td class="k">excitatory rates</td><td class="d">0.64, 2.10, 2.88 and 1.21 Hz from layer 2/3 down, pulse off; inside de Kock and Sakmann 2009.</td></tr>
+<tr><td class="k">drive</td><td class="d">A constant current and a noise term per layer and class, the current tuned per layer to its rate band; a weak pulse train into layer 4 through its box as a mask.</td></tr>
+<tr><td class="k">excitatory rates</td><td class="d">0.64, 2.10, 2.88 and 1.21 Hz from layer 2/3 down on the tuned drives, pulse off; inside the de Kock and Sakmann 2009 bands.</td></tr>
 <tr><td class="k">inhibitory</td><td class="d">Every PV and SST population above its excitatory partner; the state is asynchronous.</td></tr>
 </table>
 <h2>visual pathway</h2>
@@ -818,7 +854,7 @@ node tools/enginecheck.mjs ws://localhost:8890</pre>
 <tr><td class="k">delays past 16 ms</td><td class="d">A delay is distance over axon velocity, rounded to a whole millisecond and clamped to 1 to 16. A path past 1.6 mm at 100 &micro;m/ms cannot carry its own delay. The status line reports the count clamped.</td><td>MODEL.md 2, delays</td></tr>
 <tr><td class="k">receptor kinetics</td><td class="d">A spike delivers one exponential per channel, as a current or a conductance toward a reversal. A channel can carry the NMDA receptor's magnesium block (mg: on its line in the receptors node); there is no rise time. A kick synapse is a current for one step, its meaning tied to the millisecond.</td><td>MODEL.md 2, synapses</td></tr>
 <tr><td class="k">plasticity mechanisms</td><td class="d">Every rule is a trace rule from its published source: pair and triplet STDP, heterosynaptic and transmitter terms, inhibitory plasticity toward a target rate, short-term plasticity, scaling, consolidation. None models receptors, calcium or proteins. Timed at the synapse, a pairing counts the axonal delay with a dendritic delay of zero, so a postsynaptic spike reaches every synapse of its cell at once, with no back-propagation lag or attenuation along a dendrite, and the delays themselves do not change during a run. Synapses form at wiring time from distance and never form or prune during a run.</td><td>MODEL.md 4; MODEL.md, what is not modeled</td></tr>
-<tr><td class="k">glia, neuromodulation, gap junctions</td><td class="d">No astrocytes, no modulatory signal changing a cell's or a rule's parameters during a run, no electrical coupling. Input arrives through a chemical synapse or a current node.</td><td>MODEL.md, what is not modeled</td></tr>
+<tr><td class="k">glia, gap junctions, a second modulator</td><td class="d">No astrocytes, no electrical coupling. Neuromodulation is one level per cell with a time constant and no receptor of its own, so one substance per scene and no diffusion between cells. Input arrives through a chemical synapse or a current node.</td><td>MODEL.md 4, neuromodulation; what is not modeled</td></tr>
 <tr><td class="k">external synapses</td><td class="d">Background is a constant current plus per-millisecond noise drawn per cell from a seeded counter, identical in all three engines. It stands in for thousands of external synapses, with no synaptic time course and no correlation between cells.</td><td>MODEL.md 2, noise; the column's per-population drive</td></tr>
 <tr><td class="k">correlations below 100%</td><td class="d">Fewer cells, each cell's input mean and variance restored (van Albada, Helias and Diesmann 2015). Rates and the activity regime survive; correlations, synchrony and oscillation amplitudes do not. Training below 100 percent is refused.</td><td>MODEL.md 3, proxy downscaling; the scaling page</td></tr>
 <tr><td class="k">bitwise agreement</td><td class="d">The reference, WebGPU and CUDA engines run the same mechanisms under one contract, statistically equivalent, each with its own summation order. The reference matches a second implementation on Brian 2 spike for spike. CUDA reports first-spike latency within a tick; WebGPU refuses that request. A step below 1 ms exists only in the Brian reference, for measurement.</td><td>ENGINE.md; the battery's cross-engine group</td></tr>
@@ -837,7 +873,7 @@ node tools/enginecheck.mjs ws://localhost:8890</pre>
 <a href="https://journals.plos.org/ploscompbiol/article?id=10.1371/journal.pcbi.1004490">journals.plos.org</a></p>
 <p>Song, S., Sjostrom, P. J., Reigl, M., Nelson, S., Chklovskii, D. B. (2005). Highly nonrandom features of synaptic connectivity in local cortical circuits. PLOS Biology. Lognormal weights.</p>
 <p>Perin, R., Berger, T. K., Markram, H. (2011). A synaptic organizing principle for cortical neuronal groups. PNAS. Common-neighbor clustering.</p>
-<p>Potjans, T. C., Diesmann, M. (2014). The cell-type specific cortical microcircuit. Cerebral Cortex. Layer population proportions.</p>
+<p>Potjans, T. C., Diesmann, M. (2014). The cell-type specific cortical microcircuit. Cerebral Cortex. The column's layer population proportions and its connection probability table.</p>
 <p>Bi, G., Poo, M. (1998). Synaptic modifications in cultured hippocampal neurons. Journal of Neuroscience. The STDP window.</p>
 <p>Song, S., Miller, K. D., Abbott, L. F. (2000). Competitive Hebbian learning through spike-timing-dependent synaptic plasticity. Nature Neuroscience. The online trace formulation.</p>
 <p>Vogels, T. P., et al. (2011). Inhibitory plasticity balances excitation and inhibition in sensory pathways and memory networks. Science. The homeostasis rule.</p>

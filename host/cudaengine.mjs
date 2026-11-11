@@ -8,7 +8,7 @@ import { foldNoise } from '../src/noisefold.js';
 import { EventEmitter } from 'node:events';
 
 const CMD = { INIT:1, TUNE:2, EXT:3, NAMP:4, TICK:5, GETW:6,
-  QUERY:7, WATCH:8, SENDV:9, SENDT:10, HELLO:11 };
+  QUERY:7, WATCH:8, SENDV:9, SENDT:10, HELLO:11, SETREF:12, MODS:13 };
 // Every term but the time-varying stimulus protocols, which the child does not run (_protocols), and every optional query.
 export const CUDA_TERMS = TERM_NAMES.filter(t => t !== 'protocols:1' && t !== 'protocols:2');
 
@@ -133,7 +133,11 @@ export class CudaEngine extends EventEmitter {
             rho = new Float32Array(extra);
             for(let i = 0; i < extra; i++) rho[i] = body.readFloatLE((this.m + i)*4);
           }
-          this.emit('message', { cmd:'weights', w, rho, t:0 });
+          const ref = this.pendingRef || null; this.pendingRef = null;
+          this.emit('message', { cmd:'weights', w, rho, ref, t:0 });
+        } else if(cmd === 104){
+          // the consolidation reference, sent just before the weights reply it belongs to
+          this.pendingRef = new Float32Array(body.buffer.slice(body.byteOffset, body.byteOffset + this.m*4));
         }
     }));
   }
@@ -157,8 +161,27 @@ export class CudaEngine extends EventEmitter {
     const chan = Array.isArray(msg.chanTau) || ArrayBuffer.isView(msg.chanTau) ? Array.from(msg.chanTau).slice(0, 6) : [];
     // short-term plasticity per rule after the rule table: a u32 class count, the class of each of the 16 rule rows, then on, U, tauD, tauF per class
     const C = rows && msg.stpTable && msg.stpClasses >= 1 ? Math.min(16, msg.stpClasses|0) : 0;
-    const stpAt = rows ? 212 + rows*RS*4 : 0;
-    const b = Buffer.alloc(rows ? stpAt + (C ? 20 + C*16 : 0) : 208);
+    // the weight exponent of soft depression at 208, where the reference starts at 212, the sliding threshold's slideK, decH and khomInit at 216, 220 and 224 (derived here as the other engines derive them from slide, slideRate, slideTau and slideInit), the global factor's switch and window at 228 and 232 (u32, then f32 ms), the rule table's count at 236 and its rows from 240
+    const stpAt = rows ? 240 + rows*RS*4 : 0;
+    // the neuromodulation block (MODEL.md 4) after the short-term classes: a marker word, then modTau, modPlast, modBase, eligTau, modStep, modDrive and modCur
+    const modAt = rows ? stpAt + (C ? 20 + C*16 : 0) : 240;
+    const b = Buffer.alloc(modAt + 32);
+    b.writeUInt32LE(0x31444F4D, modAt);
+    b.writeFloatLE(msg.modTau > 0 ? +msg.modTau : 200, modAt + 4);
+    b.writeUInt32LE((msg.modPlast|0) === 2 ? 2 : (msg.modPlast|0) === 1 ? 1 : 0, modAt + 8);
+    b.writeFloatLE(msg.modBase === undefined ? 1 : (+msg.modBase || 0), modAt + 12);
+    b.writeFloatLE(msg.eligTau > 0 ? +msg.eligTau : 1000, modAt + 16);
+    b.writeFloatLE(msg.modStep > 0 ? Math.max(1, Math.round(+msg.modStep)) : 10, modAt + 20);
+    b.writeFloatLE(+msg.modDrive || 0, modAt + 24);
+    b.writeFloatLE(+msg.modCur || 0, modAt + 28);
+    b.writeUInt32LE((msg.iGlobal|0) === 1 ? 1 : 0, 228);
+    b.writeFloatLE(msg.iTauG > 0 ? +msg.iTauG*1000 : 10000, 232);
+    b.writeFloatLE(msg.wmu === undefined ? 1 : Math.max(0, Math.min(1, +msg.wmu)), 208);
+    b.writeUInt32LE(msg.refInit|0, 212);
+    const slideTau = msg.slideTau > 0 ? +msg.slideTau : 600000;
+    b.writeFloatLE((msg.slide|0) === 1 && msg.slideRate > 0 ? 1000/(slideTau*msg.slideRate) : 0, 216);
+    b.writeFloatLE(Math.exp(-1/slideTau), 220);
+    b.writeFloatLE((msg.slideInit > 0 ? +msg.slideInit : 0)*slideTau/1000, 224);
     b.writeUInt32LE(chan.length, 120);
     chan.forEach((t, x) => b.writeFloatLE(t > 0 ? +t : 3, 124 + 4*x));
     // conductance mode's reversals at 148 (E), 152 (I), 156 (six channels)
@@ -168,6 +191,8 @@ export class CudaEngine extends EventEmitter {
     erev.forEach((v, x) => b.writeFloatLE(+v || 0, 156 + 4*x));
     const mg = Array.isArray(msg.chanMg) || ArrayBuffer.isView(msg.chanMg) ? Array.from(msg.chanMg).slice(0, 6) : [];
     mg.forEach((v, x) => b.writeFloatLE(v > 0 ? +v : 0, 184 + 4*x));
+    // the gain on the Hebbian terms at 180 (MODEL.md 4), 1 unless the message says
+    b.writeFloatLE(msg.plastGain === undefined ? 1 : Math.max(0, +msg.plastGain || 0), 180);
     b.writeUInt32LE((msg.plast|0) === 1 ? 1 : 0, 0);
     b.writeUInt32LE((msg.wdep|0) === 1 ? 1 : 0, 4);
     b.writeFloatLE(msg.aP !== undefined ? +msg.aP : 0.008, 8);
@@ -197,17 +222,17 @@ export class CudaEngine extends EventEmitter {
     b.writeFloatLE((msg.rhoMode|0) === 1 ? 1 : 0, 88);
     b.writeFloatLE(msg.calS > 0 ? +msg.calS : 10, 92);
     b.writeFloatLE(msg.tauM > 0 ? +msg.tauM : (msg.tauS > 0 ? +msg.tauS : 16.8), 96);
-    // byte 100 carries the switches: 1 is stpNorm, 2 is stpOrder (facilitation before release), 4 and 8 the scope (4 excitatory only, 8 inhibitory only), 16 is stdpAt (the pair rule timed at the synapse)
-    b.writeFloatLE(((msg.stpNorm|0) === 1 ? 1 : 0) + ((msg.stpOrder|0) === 1 ? 2 : 0) + (((msg.stpScope|0) & 3) << 2) + ((msg.stdpAt|0) === 1 ? 16 : 0), 100);
+    // byte 100 carries the switches: 32 is integ (the exponential membrane step); 1 is stpNorm, 2 is stpOrder (facilitation before release), 4 and 8 the scope (4 excitatory only, 8 inhibitory only), 16 is stdpAt (the pair rule timed at the synapse)
+    b.writeFloatLE(((msg.stpNorm|0) === 1 ? 1 : 0) + ((msg.stpOrder|0) === 1 ? 2 : 0) + (((msg.stpScope|0) & 3) << 2) + ((msg.stdpAt|0) === 1 ? 16 : 0) + ((msg.integ|0) === 2 ? 64 : (msg.integ|0) === 1 ? 32 : 0), 100);
     b.writeFloatLE((msg.commit|0) === 1 ? 1 : 0, 104);
     b.writeFloatLE(msg.tauCons > 0 ? +msg.tauCons : 1200000, 108);
     b.writeFloatLE(msg.consStep > 0 ? +msg.consStep : 1200, 112);
     b.writeFloatLE(msg.vmin === undefined ? -90 : +msg.vmin, 116);
     if(rows){
-      b.writeUInt32LE(rows, 208);
+      b.writeUInt32LE(rows, 236);
       for(let r = 0; r < rows; r++)
         for(let k = 0; k < RS; k++)
-          b.writeFloatLE(msg.ruleTable[r*RS + k] || 0, 212 + (r*RS + k)*4);
+          b.writeFloatLE(msg.ruleTable[r*RS + k] || 0, 240 + (r*RS + k)*4);
       if(C){
         b.writeUInt32LE(C, stpAt);
         for(let r = 0; r < 16; r++) b.writeUInt8((msg.stpCls && msg.stpCls[r]) | 0, stpAt + 4 + r);
@@ -215,6 +240,34 @@ export class CudaEngine extends EventEmitter {
       }
     }
     return b;
+  }
+  // The modulator sources and release arrays (MODEL.md 4) as one frame: the group count and each group's release per spike, the group each cell releases into and the one it receives from, then the time-course sources with their cells.
+  // The child evaluates the sources' time courses itself, as the stimulus protocols it does not run would need; a network without a modulator sends one group (none) and no sources.
+  _mods(msg){
+    const n = this.n;
+    const K = msg.modK && msg.modK.length >= 2 ? Float32Array.from(msg.modK) : new Float32Array(1);
+    const G = K.length;
+    const grp = G > 1 && msg.modGrp && msg.modGrp.length === n ? Uint8Array.from(msg.modGrp) : new Uint8Array(n);
+    const tgt = G > 1 && msg.modTgt && msg.modTgt.length === n ? Uint16Array.from(msg.modTgt) : new Uint16Array(n);
+    const srcs = (msg.mods || []).filter(p => p && p.idx && p.idx.length);
+    let bytes = 4 + G*4 + n*3 + 4;
+    for(const p of srcs) bytes += 28 + p.idx.length*4;
+    const b = Buffer.alloc(bytes);
+    let off = 0;
+    b.writeUInt32LE(G, off); off += 4;
+    Buffer.from(K.buffer, K.byteOffset, G*4).copy(b, off); off += G*4;
+    Buffer.from(grp.buffer, grp.byteOffset, n).copy(b, off); off += n;
+    Buffer.from(tgt.buffer, tgt.byteOffset, n*2).copy(b, off); off += n*2;
+    b.writeUInt32LE(srcs.length, off); off += 4;
+    for(const p of srcs){
+      b.writeFloatLE(+p.amp || 0, off); b.writeUInt32LE(p.mode|0, off + 4);
+      b.writeFloatLE(+p.t0 || 0, off + 8); b.writeFloatLE(p.period > 0 ? +p.period : 100, off + 12);
+      b.writeFloatLE(p.width > 0 ? +p.width : 10, off + 16); b.writeFloatLE(+p.duration || 0, off + 20);
+      b.writeUInt32LE(p.idx.length, off + 24); off += 28;
+      const idx = p.idx instanceof Uint32Array ? p.idx : Uint32Array.from(p.idx);
+      Buffer.from(idx.buffer, idx.byteOffset, idx.length*4).copy(b, off); off += idx.length*4;
+    }
+    this._send(CMD.MODS, b);
   }
   _protocols(msg){
     // mode 0 folds into a constant base drive, mode 3 into per-neuron noise amplitude; the child has no time-varying protocol, so anything else must fail loudly
@@ -279,12 +332,15 @@ export class CudaEngine extends EventEmitter {
       // the membrane (Izhikevich 2007, MODEL.md 1): the row's a, b, c, d in their arrays and its C, k, vr, vt, vpeak at the tail of the frame.
       if('form' in msg && (msg.form|0) !== 1)
         throw new Error('cuda engine: the 2003 membrane form was retired; the scene needs migrating (scene format 8)');
-      const f7 = ['C', 'k', 'vr', 'vt', 'vpeak'].map(() => new Float32Array(n));
+      // the five membrane numbers, then the rows' dynamic threshold (jump and decay), conductance adaptation flag and Poisson flag (MODEL.md 1), as floats
+      const f7 = ['C', 'k', 'vr', 'vt', 'vpeak', 'thrJump', 'thrDec', 'adaptCond', 'poisson'].map(() => new Float32Array(n));
       for(let i = 0; i < n; i++){
         const t = msg.types[msg.ntype[i]] && msg.types[msg.ntype[i]].f7;
         if(!t) throw new Error('cuda engine: every neuron type needs a 2007 row (f7)');
         a[i] = t.a; b[i] = t.b; c[i] = t.c; d[i] = t.d;
         f7[0][i] = t.C; f7[1][i] = t.k; f7[2][i] = t.vr; f7[3][i] = t.vt; f7[4][i] = t.vpeak;
+        f7[5][i] = t.thrJump > 0 ? +t.thrJump : 0; f7[6][i] = Math.exp(-1/(t.thrTau > 0 ? +t.thrTau : 5));
+        f7[7][i] = t.adaptCond ? 1 : 0; f7[8][i] = t.poisson ? 1 : 0;
       }
       // graded rows: the flag, threshold and slope per cell ride at the very end of the frame, and their outgoing synapses are frozen for the child
       const G = gradedArrays(msg.ntype, msg.types);
@@ -332,6 +388,7 @@ export class CudaEngine extends EventEmitter {
         chIdx:im.chIdx, chW:im.chW, amp:im.amp, gains:null }));
       this._send(CMD.TUNE, this._plastStruct(msg));
       this._protocols(msg);
+      this._mods(msg);
     }
     else if(msg.cmd === 'tune'){
       // A term the reference has and the child lacks belongs in a guard here rather than being dropped in silence.
@@ -342,6 +399,7 @@ export class CudaEngine extends EventEmitter {
       // Weights are bit-identical either way, because the weight trajectory washes the jitter out, which is exactly why no weight-based check could see any of this.
       this._send(CMD.TUNE, this._plastStruct(msg));
       if(msg.protocols !== undefined) this._protocols(msg);
+      if(msg.mods !== undefined || msg.modK !== undefined) this._mods(msg);
     }
     else if(msg.cmd === 'inputFrame'){
       const im = this.maps[msg.mi];
@@ -353,6 +411,7 @@ export class CudaEngine extends EventEmitter {
       this._send(CMD.TICK, b);
     }
     else if(msg.cmd === 'getWeights') this._send(CMD.GETW, null);
+    else if(msg.cmd === 'setRef') this._send(CMD.SETREF, msg.wRef);
     else if(msg.cmd === 'watch'){
       const b = Buffer.alloc(4);
       b.writeInt32LE(msg.idx | 0, 0);

@@ -48,6 +48,10 @@ export function noiseDraw(i, t, seed){
   const h = (i ^ Math.imul(t, 2654435761) ^ seed) >>> 0;
   return unif(h) + unif((h ^ 0x9e3779b9) >>> 0) - 1;
 }
+// The uniform draw a Poisson row fires on (MODEL.md 1): a pure function of (neuron, t, seed) under its own salt, so a Poisson cell under a noise stimulus is not correlated with its noise; mirrored in the WebGPU and CUDA copies.
+export function poissonDraw(i, t, seed){
+  return unif((i ^ Math.imul(t, 2654435761) ^ seed ^ 0x7f4a7c15) >>> 0);
+}
 // The draw a noise stimulus shares among its cells is keyed on the stimulus, not a cell: its index plus this base, above any cell index (ENGINE.md section 9), in every engine.
 export const NOISE_SHARED = 0x40000000;
 

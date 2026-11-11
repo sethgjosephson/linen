@@ -65,14 +65,28 @@ export function gpuMissing(net){
 // So the rule is conservative, and errs toward leaving a mid-size network on the cpu that the gpu would have won.
 // Correcting that needs points between 10M and 157M rather than a retune from one measurement.
 // Recheck GPU_BREAKEVEN if either engine changes its inner loop.
+//
+// The exact membrane step (integ 2) adds a cost per cell to the cpu engine and none the gpu engine can measure.
+// Measured 2026-11-05 with tools/enginebench.mjs at --tick 2 and --tick 20, the app's steps per frame (validation/membrane-step-0.3.0.md 6), throughput as a multiple of realtime, half steps / exact step:
+//
+//   network            synapses   cells    cpu@2        gpu@2        cpu@20       gpu@20
+//   CA3                  1.84M    7,519    5.03 / 0.96  0.61 / 0.60  5.18 / 0.97  5.74 / 5.74
+//   cortical column      9.35M   14,031    2.10 / 0.49  0.60 / 0.62  2.15 / 0.50  2.88 / 2.87
+//   balanced random     14.4M    24,127    1.72 / 0.29  0.59 / 0.60  1.66 / 0.25  2.53 / 2.41
+//
+// The same fit gives the gpu 2.8 to 3.3 ms fixed under either step and the same per-step cost, and the cpu's per-step cost under the exact step less under the half steps as 1.09e-4, 1.11e-4 and 1.43e-4 ms per cell on the three networks.
+// Under the half steps the cpu's per-step cost exceeds the gpu's by 2.5e-8 to 2.8e-8 ms per synapse on the two larger networks, so a cell on the exact step weighs about 4,000 synapses in the product above, and the rule counts it so.
+// With that weight the column, the balanced net and the shipped exact-step scenes but CA3 go to the gpu at 2 steps per frame (measured on the column: 0.62x against 0.49x), and CA3 stays on the cpu until 4 steps per frame (0.96x against 0.60x at 2).
 export const GPU_BREAKEVEN = 1.16e8;
+export const EXACT_STEP_CELL = 4000;
 export function wantGpu(net, hasGpu = typeof navigator !== 'undefined' && !!navigator.gpu){
   if(!hasGpu) return false;
   const e = net.engine|0;
   if(e === 1 || e === 3) return false;             // cpu, or the remote engine, asked for by name
   if(gpuMissing(net).length) return false;         // would throw, or worse, drift
   if(e === 2) return true;                         // gpu, asked for by name
-  return net.synCount * (net.steps || 2) >= GPU_BREAKEVEN;
+  const cells = (net.integ|0) === 2 ? EXACT_STEP_CELL * (net.count|0) : 0;   // the exact step's cost per cell, as synapses
+  return (net.synCount + cells) * (net.steps || 2) >= GPU_BREAKEVEN;
 }
 
 // Which engine a network asks for: 'remote' (an engine at the checkpoint's engine address), 'gpu' or 'cpu'.

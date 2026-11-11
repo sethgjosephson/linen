@@ -1,7 +1,7 @@
 {
  "format": 3,
  "scenario": "every node",
- "saved": "2026-09-24",
+ "saved": "2026-11-05",
  "build": [
   "note",
   "note",
@@ -42,6 +42,7 @@
   "receptor",
   "plasticity",
   "pool",
+  "modulator",
   "project",
   "connect",
   "stimulus",
@@ -376,7 +377,7 @@
     null,
     null,
     null,
-    61,
+    62,
     null
    ]
   },
@@ -408,12 +409,21 @@
    ]
   },
   {
+   "type": "modulator",
+   "x": 460,
+   "y": 2864,
+   "built": 39,
+   "inputs": [
+    38
+   ]
+  },
+  {
    "type": "project",
    "x": 220,
    "y": 3008,
-   "built": 39,
+   "built": 40,
    "inputs": [
-    38,
+    39,
     null
    ]
   },
@@ -421,24 +431,14 @@
    "type": "connect",
    "x": 220,
    "y": 3152,
-   "built": 40,
+   "built": 41,
    "inputs": [
-    39
+    40
    ]
   },
   {
    "type": "stimulus",
    "x": 220,
-   "y": 3296,
-   "built": 41,
-   "inputs": [
-    40,
-    null
-   ]
-  },
-  {
-   "type": "stimulus",
-   "x": 430,
    "y": 3296,
    "built": 42,
    "inputs": [
@@ -449,7 +449,7 @@
   {
    "type": "stimulus",
    "x": 430,
-   "y": 3440,
+   "y": 3296,
    "built": 43,
    "inputs": [
     42,
@@ -458,7 +458,7 @@
   },
   {
    "type": "stimulus",
-   "x": 220,
+   "x": 430,
    "y": 3440,
    "built": 44,
    "inputs": [
@@ -467,52 +467,62 @@
    ]
   },
   {
+   "type": "stimulus",
+   "x": 220,
+   "y": 3440,
+   "built": 45,
+   "inputs": [
+    44,
+    null
+   ]
+  },
+  {
    "type": "sphere",
    "x": 400,
    "y": 3534,
-   "built": 45,
+   "built": 46,
    "inputs": []
   },
   {
    "type": "stimulus",
    "x": 220,
    "y": 3584,
-   "built": 46,
+   "built": 47,
    "inputs": [
-    44,
-    45
+    45,
+    46
    ]
   },
   {
    "type": "box",
    "x": 400,
    "y": 3678,
-   "built": 47,
+   "built": 48,
    "inputs": []
   },
   {
    "type": "testsignal",
    "x": 560,
    "y": 3678,
-   "built": 48,
+   "built": 49,
    "inputs": []
   },
   {
    "type": "input",
    "x": 220,
    "y": 3728,
-   "built": 49,
+   "built": 50,
    "inputs": [
-    46,
     47,
-    48
+    48,
+    49
    ]
   },
   {
    "type": "curriculum",
    "x": 400,
    "y": 3822,
-   "built": 50,
+   "built": 51,
    "inputs": [
     null
    ]
@@ -521,27 +531,17 @@
    "type": "input",
    "x": 220,
    "y": 3872,
-   "built": 51,
+   "built": 52,
    "inputs": [
-    49,
-    60,
-    50
+    50,
+    61,
+    51
    ]
   },
   {
    "type": "probe",
    "x": 220,
    "y": 4016,
-   "built": 52,
-   "inputs": [
-    51,
-    null
-   ]
-  },
-  {
-   "type": "probe",
-   "x": 220,
-   "y": 4160,
    "built": 53,
    "inputs": [
     52,
@@ -551,7 +551,7 @@
   {
    "type": "probe",
    "x": 220,
-   "y": 4304,
+   "y": 4160,
    "built": 54,
    "inputs": [
     53,
@@ -561,7 +561,7 @@
   {
    "type": "probe",
    "x": 220,
-   "y": 4448,
+   "y": 4304,
    "built": 55,
    "inputs": [
     54,
@@ -569,30 +569,40 @@
    ]
   },
   {
-   "type": "analysis",
+   "type": "probe",
    "x": 220,
-   "y": 4592,
+   "y": 4448,
    "built": 56,
    "inputs": [
-    55
+    55,
+    null
    ]
   },
   {
-   "type": "checkpoint",
+   "type": "analysis",
    "x": 220,
-   "y": 4736,
+   "y": 4592,
    "built": 57,
    "inputs": [
     56
    ]
   },
   {
-   "type": "chart",
+   "type": "checkpoint",
    "x": 220,
-   "y": 4880,
+   "y": 4736,
    "built": 58,
    "inputs": [
     57
+   ]
+  },
+  {
+   "type": "chart",
+   "x": 220,
+   "y": 4880,
+   "built": 59,
+   "inputs": [
+    58
    ]
   },
   {
@@ -612,7 +622,7 @@
    "params": {},
    "name": "pin2",
    "inputs": [
-    59
+    60
    ]
   },
   {
@@ -740,7 +750,8 @@
     37,
     38,
     39,
-    40
+    40,
+    41
    ]
   },
   {
@@ -754,7 +765,6 @@
     "b": 0
    },
    "members": [
-    41,
     42,
     43,
     44,
@@ -764,7 +774,8 @@
     48,
     49,
     50,
-    51
+    51,
+    52
    ]
   },
   {
@@ -778,12 +789,12 @@
     "b": 0
    },
    "members": [
-    52,
     53,
     54,
     55,
     56,
-    58
+    57,
+    59
    ]
   },
   {
@@ -797,7 +808,7 @@
     "b": 0
    },
    "members": [
-    57
+    58
    ]
   }
  ]

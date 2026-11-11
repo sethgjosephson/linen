@@ -21,12 +21,20 @@
 #include <cstring>
 #include <vector>
 #include <algorithm>
+#include <cmath>
+#include <cstdint>
+#ifdef _WIN32
 #include <io.h>
 #include <fcntl.h>
+#else
+#include <unistd.h>
+#define _read read
+#define _write write
+#endif
 #include "kernels.cuh"
 
 // The engine contract this child implements, PROTOCOL in src/protocol.js; src/protocol.test.mjs holds the two equal.
-#define ENGINE_PROTOCOL 7
+#define ENGINE_PROTOCOL 17
 
 #define CK(x) do { cudaError_t e = (x); if(e != cudaSuccess){ \
   fprintf(stderr, "CUDA error %s at line %d\n", cudaGetErrorString(e), __LINE__); \
@@ -64,6 +72,12 @@ struct Net {
   int stpOrder = 0;                         // stp: 0 release then facilitation, 1 the reverse
   int stpScope = 0;                         // stp on every synapse (0), excitatory only (1), inhibitory only (2)
   int stdpAt = 0;                           // where the pair rule is timed: 0 at the soma, 1 at the synapse (MODEL.md 4)
+  int integ = 0;                            // the membrane step: 0 two Euler half steps, 1 two exponential half steps, 2 the equations' step (MODEL.md 1)
+  float plastGain = 1.0f;                   // the third factor: a gain on the Hebbian terms (MODEL.md 4)
+  float wmu = 1.0f;                         // the weight exponent of soft depression (MODEL.md 4)
+  int refInit = 0;                          // where the consolidation reference starts: 0 the wired weight inside the well, 1 zero, 2 consW (MODEL.md 4)
+  float *Khom = nullptr;                    // the sliding threshold's slow rate trace per cell (MODEL.md 4); (Khom slideK)^2 scales depression
+  float slideK = 0.0f, decH = 1.0f, khomInit = 0.0f;   // its target fold, its decay per step, and where it starts
   unsigned int *hist = nullptr, *dmask = nullptr;   // per cell: the spikes of the last 16 steps (bit k for k steps ago), and the delays its synapses carry (bit d)
   unsigned int *arr = nullptr, *nArr = nullptr;     // the cells with a spike arriving this step, listed by the trace step, for the arrival pass
   unsigned int psc = 0;                     // exp current scale: 0 peak, 1 charge, 2 exact integral over the step
@@ -104,6 +118,10 @@ struct Net {
   // graded rows (MODEL.md 1): a flag byte per cell, release threshold and slope
   unsigned int graded = 0;
   unsigned char *grd = nullptr; float *gthr = nullptr, *gslp = nullptr;
+  // the rows' dynamic threshold (jump, decay, state), conductance adaptation flag and Poisson flag (MODEL.md 1), null when no row asks
+  float *thrJ = nullptr, *thrDec = nullptr, *thr = nullptr, *adC = nullptr, *poi = nullptr;
+  // the global factor on the inhibitory rule (MODEL.md 4): the inhibited population's flag per cell and size, its spike count since the last fold, its low-passed count and the ratio, the switch and the window
+  unsigned char *gMask = nullptr; unsigned int gN = 0, *gCnt = nullptr, gInit = 0, iGlobal = 0; float *gState = nullptr, decG = 1.0f, tauGs = 1.0f, gInv = 0.0f;
   // receptor channels beyond E and I (MODEL.md 2): count, decay and scale per channel on the device, a conductance per cell per channel, a ring per channel
   int KX = 0; float *gX = nullptr, *ringX = nullptr, *decX = nullptr, *itauX = nullptr;
   float chanTau[6] = {0,0,0,0,0,0};
@@ -113,6 +131,14 @@ struct Net {
   float chanMg[6] = {0,0,0,0,0,0}; float *mgX = nullptr;
   float *poolK = nullptr;
   unsigned int *poolCnt = nullptr, poolG = 0;
+  // Neuromodulation (MODEL.md 4): the field per cell in two arrays swapped each step (the step reads one and writes the other), the group a cell releases into and the group it receives from, each group's release per spike (raw from the host, folded by the field's decay on the device), the groups' spike counts in two halves by parity, the time-course sources' increment per cell this step, and the eligibility trace per synapse.
+  float *mod = nullptr, *modNew = nullptr, *modStim = nullptr, *modKf = nullptr, *elig = nullptr;
+  unsigned char *modGrp = nullptr; unsigned short *modTgt = nullptr; unsigned int *modCnt = nullptr;
+  unsigned int modG = 1; int modOn = 0; std::vector<float> modKraw; std::vector<float> modStimH;
+  float modTau = 200.0f, decMod = 0.0f, modBase = 1.0f, modDrive = 0.0f, modCur = 0.0f, eligTau = 1000.0f, decElig = 0.0f, eligPay = 0.0f;
+  int modPlast = 0; unsigned int modStep = 10, modAcc = 0;
+  struct ModSrc { float amp; unsigned int mode; float t0, period, width, duration; std::vector<unsigned int> idx; float s; };
+  std::vector<ModSrc> modSrc;
   float *a, *b, *c, *d, *bias, *ext, *namp, *v, *u;
   // a noise stimulus's memory and shared part per cell (src/noisefold.js): decay, its complement, shared fraction, stimulus id, and the two filter states; noiseOn when any cell carries them
   float *nA = nullptr, *nK = nullptr, *nC = nullptr, *nz = nullptr, *nzs = nullptr; int *nId = nullptr; int noiseOn = 0;
@@ -128,6 +154,43 @@ struct Net {
   int cur = 0;
 };
 static Net N;
+
+// The field's constants from the tune, the release per spike folded by the field's decay as the reference folds it (the product in double, rounded once), and the arrays allocated on the edge where the field first runs.
+static float scaleOfSrc(const Net::ModSrc& p, unsigned int t){
+  float dt = (float)t - p.t0;
+  if(dt < 0.0f) return 0.0f;
+  if(p.duration > 0.0f && dt >= p.duration) return 0.0f;
+  if(p.mode == 1u) return fmodf(dt, p.period) < p.width ? 1.0f : 0.0f;
+  if(p.mode == 2u) return fminf(1.0f, dt/p.period);
+  return 1.0f;
+}
+static void modRefresh(){
+  N.decMod = (float)exp(-1.0/(double)N.modTau);
+  N.decElig = (float)exp(-(double)N.modStep/(double)N.eligTau);
+  N.eligPay = (float)(1.0 - (double)N.decElig);
+  N.modOn = (!N.modSrc.empty() || N.modG > 1 || N.modPlast > 0 || N.modDrive != 0.0f || N.modCur != 0.0f) ? 1 : 0;
+  if(!N.n) return;
+  if(N.modOn && !N.mod){
+    CK(cudaMalloc((void**)&N.mod, (size_t)N.n*4)); CK(cudaMemset(N.mod, 0, (size_t)N.n*4));
+    CK(cudaMalloc((void**)&N.modNew, (size_t)N.n*4)); CK(cudaMemset(N.modNew, 0, (size_t)N.n*4));
+    CK(cudaMalloc((void**)&N.modStim, (size_t)N.n*4)); CK(cudaMemset(N.modStim, 0, (size_t)N.n*4));
+    N.modStimH.assign(N.n, 0.0f);
+    N.modAcc = 0;
+  }
+  if(N.modOn && (!N.modCnt)){
+    CK(cudaMalloc((void**)&N.modCnt, (size_t)N.modG*8)); CK(cudaMemset(N.modCnt, 0, (size_t)N.modG*8));
+  }
+  if(N.modG > 1){
+    std::vector<float> kf(N.modG);
+    for(unsigned int g = 0; g < N.modG; g++) kf[g] = (float)((double)N.modKraw[g]*(1.0 - (double)N.decMod));
+    if(!N.modKf) CK(cudaMalloc((void**)&N.modKf, (size_t)N.modG*4));
+    CK(cudaMemcpy(N.modKf, kf.data(), (size_t)N.modG*4, cudaMemcpyHostToDevice));
+  }
+  for(auto& p : N.modSrc) p.s = -1.0f;
+  if(N.plast && N.modPlast == 2 && !N.elig && N.m){
+    CK(cudaMalloc((void**)&N.elig, (size_t)N.m*4)); CK(cudaMemset(N.elig, 0, (size_t)N.m*4));
+  }
+}
 
 // Where the time goes, when LINEN_PROFILE is set in the environment: each kind of launch is bracketed by events and waited for, and the totals print to stderr when the input ends.
 // The waits serialize the stream, so the run is slower than a real one; the shares are what the table is for.
@@ -147,8 +210,11 @@ static void profReport(){
 }
 
 int main(){
+#ifdef _WIN32
+  // the frames are binary, and a Windows pipe in text mode would rewrite them
   _setmode(0, _O_BINARY);
   _setmode(1, _O_BINARY);
+#endif
   PROF = getenv("LINEN_PROFILE") ? 1 : 0;
   if(PROF){ cudaEventCreate(&profA); cudaEventCreate(&profB); }
   std::vector<unsigned char> hostFired;
@@ -218,6 +284,13 @@ int main(){
         std::vector<unsigned char> maskH(m), revMask(m);
         CK(cudaMemcpy(maskH.data(), N.pmask, m, cudaMemcpyDeviceToHost));
         for(unsigned int k = 0; k < m; k++) revMask[k] = maskH[revSyn[k]];
+        // the global factor's population: every cell with an inhibitory synapse under a rule (MODEL.md 4)
+        { std::vector<float> wH(m); CK(cudaMemcpy(wH.data(), N.w, (size_t)m*4, cudaMemcpyDeviceToHost));
+          std::vector<unsigned char> gm(n, 0); unsigned int gN = 0;
+          for(unsigned int s = 0; s < m; s++) if(wH[s] < 0.0f && (maskH[s] & 31) && !gm[postH[s]]){ gm[postH[s]] = 1; gN++; }
+          N.gN = gN; N.gInit = 0;
+          if(gN){ CK(cudaMalloc((void**)&N.gMask, n)); CK(cudaMemcpy(N.gMask, gm.data(), n, cudaMemcpyHostToDevice));
+            CK(cudaMalloc((void**)&N.gCnt, 4)); CK(cudaMemset(N.gCnt, 0, 4)); CK(cudaMalloc((void**)&N.gState, 8)); CK(cudaMemset(N.gState, 0, 8)); } }
         CK(cudaMalloc((void**)&N.revMask, m));
         CK(cudaMemcpy(N.revMask, revMask.data(), m, cudaMemcpyHostToDevice));
       }
@@ -225,9 +298,9 @@ int main(){
       up((void**)&N.v, n*4); up((void**)&N.u, n*4);
       memcpy(&N.seed, p, 4); p += 4;
       memcpy(&N.poolG, p, 4); p += 4;
-      // After the pools: five f32[n] arrays (C, k, vr, vt, vpeak), then a u32 graded flag and under 1 a byte and two floats per cell (MODEL.md 1, ENGINE.md 3).
+      // After the pools: nine f32[n] arrays (C, k, vr, vt, vpeak, then the dynamic threshold's jump and decay, the conductance adaptation flag and the Poisson flag), then a u32 graded flag and under 1 a byte and two floats per cell (MODEL.md 1, ENGINE.md 3).
       size_t withPools = base + 4 + (size_t)n*2 + (size_t)N.poolG*4;
-      size_t membrane = (size_t)n*4*5;
+      size_t membrane = (size_t)n*4*9;
       if((size_t)len < withPools + membrane + 4){
         fprintf(stderr, "engine.cu: INIT payload is %u bytes, expected at least %zu for %u pools; "
           "the host and this engine.exe disagree on the protocol (rebuild)\n",
@@ -245,6 +318,12 @@ int main(){
       up((void**)&N.pool, (size_t)n*2); up((void**)&N.poolK, (size_t)N.poolG*4);
       up((void**)&N.C7, n*4); up((void**)&N.k7, n*4); up((void**)&N.vr7, n*4);
       up((void**)&N.vt7, n*4); up((void**)&N.vp7, n*4);
+      // the row features ride only when a row asks for them; a frame of zeros allocates nothing and the kernels take the plain path
+      { const float* fh = (const float*)p; unsigned int anyT = 0, anyA = 0, anyP = 0;
+        for(unsigned int i = 0; i < n; i++){ if(fh[i] > 0.0f) anyT = 1; if(fh[2*(size_t)n + i] > 0.0f) anyA = 1; if(fh[3*(size_t)n + i] > 0.0f) anyP = 1; }
+        if(anyT){ up((void**)&N.thrJ, n*4); up((void**)&N.thrDec, n*4); CK(cudaMalloc((void**)&N.thr, n*4)); CK(cudaMemset(N.thr, 0, n*4)); } else p += (size_t)n*8;
+        if(anyA) up((void**)&N.adC, n*4); else p += (size_t)n*4;
+        if(anyP) up((void**)&N.poi, n*4); else p += (size_t)n*4; }
       p += 4;                                // the graded word, read above
       if(N.graded){ up((void**)&N.grd, n); up((void**)&N.gthr, n*4); up((void**)&N.gslp, n*4); }
       CK(cudaMalloc((void**)&N.poolCnt, (size_t)N.poolG*8));
@@ -255,6 +334,7 @@ int main(){
       CK(cudaMalloc((void**)&N.gE, n*4)); CK(cudaMalloc((void**)&N.gI, n*4));
       CK(cudaMalloc((void**)&N.Kpre, n*4)); CK(cudaMalloc((void**)&N.Kpost, n*4));
       CK(cudaMalloc((void**)&N.Kslow, n*4));
+      if(N.Khom){ CK(cudaFree(N.Khom)); N.Khom = nullptr; }   // the sliding threshold's trace is sized by the tune that follows
       CK(cudaMalloc((void**)&N.refCnt, n));
       CK(cudaMemset(N.refCnt, 0, n));
       CK(cudaMalloc((void**)&N.ext, n*4)); CK(cudaMalloc((void**)&N.namp, n*4));
@@ -323,8 +403,8 @@ int main(){
         memcpy(&N.tauM, p+96, 4); memcpy(&N.stpNorm, p+100, 4);
       } else { N.tauM = N.tauS; N.stpNorm = 0; }
       if(N.tauM <= 0) N.tauM = N.tauS;
-      // byte 100 carries the switches: 1 is stpNorm, 2 is stpOrder (facilitation before release), 4 and 8 the scope, 16 stdpAt (the pair rule timed at the synapse)
-      { int code = (int)(N.stpNorm + 0.5f); N.stpOrder = (code >> 1) & 1; N.stpScope = (code >> 2) & 3; N.stdpAt = (code >> 4) & 1; N.stpNorm = (float)(code & 1); }
+      // byte 100 carries the switches: 1 is stpNorm, 2 is stpOrder (facilitation before release), 4 and 8 the scope, 16 stdpAt (the pair rule timed at the synapse), 32 integ (the exponential membrane step)
+      { int code = (int)(N.stpNorm + 0.5f); N.stpOrder = (code >> 1) & 1; N.stpScope = (code >> 2) & 3; N.stdpAt = (code >> 4) & 1; N.integ = (code >> 5) & 3; N.stpNorm = (float)(code & 1); }
       // the tables of the rule at the synapse, from the potentiation window
       { float ek[17], exd[17];
         for(int k = 0; k < 17; k++){ ek[k] = expf(-(float)k/N.tauS); exd[k] = expf((float)k/N.tauS); }
@@ -342,6 +422,9 @@ int main(){
       // receptor channels: u32 count at 120, six taus from 124.
       // Allocated on the first tune that names them, sized by the count. conductance mode's reversals: eE at 148, eI at 152, six channel reversals from 156; the rule table sits at 184
       if(len >= 180){ memcpy(&N.eE, p+148, 4); memcpy(&N.eI, p+152, 4); memcpy(N.chanErev, p+156, 24); }
+      // the gain on the Hebbian terms at 180
+      if(len >= 184) memcpy(&N.plastGain, p+180, 4); else N.plastGain = 1.0f;
+      if(!(N.plastGain >= 0.0f)) N.plastGain = 0.0f;
       if(!N.erevX) CK(cudaMalloc((void**)&N.erevX, 24));
       CK(cudaMemcpy(N.erevX, N.chanErev, 24, cudaMemcpyHostToDevice));
       // the magnesium block per channel at 184 (six f32, mM); a shorter frame means none
@@ -372,12 +455,32 @@ int main(){
       {
         float rules[RULE_MAX*RULE_STRIDE];
         memset(rules, 0, sizeof(rules));
+        // the weight exponent of soft depression at 208, where the reference starts at 212, the sliding threshold's slideK, decH and khomInit at 216, 220 and 224, the global factor at 228 and 232; the rule table's count at 236 and its rows from 232
+        if(len >= 212) memcpy(&N.wmu, p+208, 4); else N.wmu = 1.0f;
+        if(!(N.wmu >= 0.0f)) N.wmu = 0.0f; if(N.wmu > 1.0f) N.wmu = 1.0f;
+        if(len >= 216) memcpy(&N.refInit, p+212, 4); else N.refInit = 0;
+        if(len >= 220) memcpy(&N.slideK, p+216, 4); else N.slideK = 0.0f;
+        if(len >= 224) memcpy(&N.decH, p+220, 4); else N.decH = 1.0f;
+        if(len >= 228) memcpy(&N.khomInit, p+224, 4); else N.khomInit = 0.0f;
+        // the global factor's switch at 228 and its window in ms at 232 (MODEL.md 4); the population's inverse times the target follows a tuned target, and the low-passed count starts at the target times the population on the first tune, so the factor starts at zero as the authors' does
+        if(len >= 232) memcpy(&N.iGlobal, p+228, 4); else N.iGlobal = 0;
+        { float tauG = 10000.0f; if(len >= 236) memcpy(&tauG, p+232, 4); if(!(tauG > 0.0f)) tauG = 10000.0f;
+          N.decG = expf(-1.0f/tauG); N.tauGs = tauG/1000.0f;
+          N.gInv = N.gN ? (float)(1.0/((double)N.gN*(double)N.iRho)) : 0.0f;
+          if(N.gState && !N.gInit){ float g0[2] = { (float)((double)N.iRho*(double)N.gN), 0.0f }; CK(cudaMemcpy(N.gState, g0, 8, cudaMemcpyHostToDevice)); N.gInit = 1; } }
+        if(!(N.slideK > 0.0f)) N.slideK = 0.0f;
+        // the slow rate trace is allocated on the first tune and starts where khomInit says; it runs whenever plasticity does, as in the reference engine
+        if(!N.Khom && N.n){
+          CK(cudaMalloc((void**)&N.Khom, (size_t)N.n*4));
+          fillK<<<(unsigned int)((N.n + 255)/256), 256>>>((int)N.n, N.Khom, N.khomInit);
+          CK(cudaGetLastError());
+        }
         unsigned int rc = 0;
-        if(len >= 212) memcpy(&rc, p+208, 4);
+        if(len >= 240) memcpy(&rc, p+236, 4);
         if(rc > RULE_MAX) rc = RULE_MAX;
-        bool sent = rc >= 2 && len >= 212 + rc*RULE_STRIDE*4;
+        bool sent = rc >= 2 && len >= 240 + rc*RULE_STRIDE*4;
         if(sent){
-          memcpy(rules, p + 212, (size_t)rc*RULE_STRIDE*4);
+          memcpy(rules, p + 240, (size_t)rc*RULE_STRIDE*4);
           N.ruleCount = rc;
         } else {
           float* R = rules + RULE_STRIDE;             // row 1
@@ -398,8 +501,23 @@ int main(){
         // Absent means one class built from the scalars, the checkpoint's own.
         unsigned char cls[32]; memset(cls, 0, sizeof(cls));
         unsigned int C = 0;
-        const size_t off = sent ? 212 + (size_t)rc*RULE_STRIDE*4 : 0;
+        const size_t off = sent ? 240 + (size_t)rc*RULE_STRIDE*4 : 0;
         if(sent && len >= off + 20) memcpy(&C, p + off, 4);
+        // the neuromodulation block (MODEL.md 4) follows the short-term classes: a marker word, then modTau, modPlast, modBase, eligTau, modStep, modDrive and modCur; absent means the field is off
+        { const size_t modOff = (C >= 1 && C <= STP_CMAX && len >= off + 20 + C*16) ? off + 20 + (size_t)C*16 : (sent ? off : 240);
+          unsigned int marker = 0;
+          if(len >= modOff + 32) memcpy(&marker, p + modOff, 4);
+          if(marker == 0x31444F4Du){
+            float fv[7]; memcpy(fv, p + modOff + 4, 28);
+            unsigned int mp = 0; memcpy(&mp, p + modOff + 8, 4);
+            N.modTau = fv[0] > 0.0f ? fv[0] : 200.0f;
+            N.modPlast = mp == 2u ? 2 : mp == 1u ? 1 : 0;
+            N.modBase = fv[2];
+            N.eligTau = fv[3] > 0.0f ? fv[3] : 1000.0f;
+            N.modStep = fv[4] > 0.0f ? (unsigned int)(fv[4] + 0.5f) : 10u; if(N.modStep < 1u) N.modStep = 1u;
+            N.modDrive = fv[5]; N.modCur = fv[6];
+          } else { N.modTau = 200.0f; N.modPlast = 0; N.modBase = 1.0f; N.eligTau = 1000.0f; N.modStep = 10u; N.modDrive = 0.0f; N.modCur = 0.0f; }
+          modRefresh(); }
         if(C >= 1 && C <= STP_CMAX && len >= off + 20 + C*16){
           memcpy(cls, p + off + 4, 16);
           memcpy(N.stpTbl, p + off + 20, (size_t)C*16);
@@ -451,6 +569,9 @@ int main(){
         // heterosynaptic reference = the weights when het switches on, the same capture rule as the reference engine
         CK(cudaMalloc((void**)&N.wRef, (size_t)N.m*4));
         CK(cudaMemcpy(N.wRef, N.w, (size_t)N.m*4, cudaMemcpyDeviceToDevice));
+        // and clamped into its well per rule (refIntoWell in the reference engine); the rule table is already in cRules at this point of the tune
+        initRefK<<<(unsigned int)((N.m + 255)/256), 256>>>(N.m, N.wRef, N.w, N.pmask, N.refInit);
+        CK(cudaGetLastError());
       }
       fprintf(stderr, "engine.cu: tune plast=%u wdep=%u aP=%g aM=%g wmax=%g trip=%g het=%g tin=%g cons=%g consW=%g\n",
         N.plast, N.wdep, N.aP, N.aM, N.wmax, N.trip, N.het, N.tin,
@@ -460,6 +581,38 @@ int main(){
     }
     else if(cmd == 3){                     // EXT
       CK(cudaMemcpy(N.ext, p, N.n*4, cudaMemcpyHostToDevice));
+    }
+    else if(cmd == 13){                    // MODS: the modulator sources and release arrays (MODEL.md 4)
+      // u32 G, f32 K[G] (the release per spike, raw), u8 grp[n], u16 tgt[n], u32 count, then per source f32 amp, u32 mode, f32 t0, f32 period, f32 width, f32 duration, u32 cells, u32 idx[cells]
+      unsigned int G = 1; if(len >= 4) memcpy(&G, p, 4); if(G < 1) G = 1;
+      size_t need = 4 + (size_t)G*4 + (size_t)N.n*3 + 4;
+      if(len < need){ fprintf(stderr, "engine.cu: MODS frame is %u bytes, expected at least %zu; the host and this engine.exe disagree on the protocol (rebuild)\n", len, need); exit(1); }
+      if(N.modG != G && N.modCnt){ cudaFree(N.modCnt); N.modCnt = nullptr; }
+      if(N.modKf && N.modG != G){ cudaFree(N.modKf); N.modKf = nullptr; }
+      N.modG = G;
+      N.modKraw.assign((const float*)(p + 4), (const float*)(p + 4) + G);
+      const char* q = p + 4 + (size_t)G*4;
+      if(G > 1){
+        if(!N.modGrp) CK(cudaMalloc((void**)&N.modGrp, N.n));
+        if(!N.modTgt) CK(cudaMalloc((void**)&N.modTgt, (size_t)N.n*2));
+        CK(cudaMemcpy(N.modGrp, q, N.n, cudaMemcpyHostToDevice));
+        CK(cudaMemcpy(N.modTgt, q + N.n, (size_t)N.n*2, cudaMemcpyHostToDevice));
+      }
+      q += (size_t)N.n*3;
+      unsigned int nSrc = 0; memcpy(&nSrc, q, 4); q += 4;
+      N.modSrc.clear();
+      for(unsigned int k = 0; k < nSrc; k++){
+        if((size_t)(q - p) + 28 > len) break;
+        Net::ModSrc m; memcpy(&m.amp, q, 4); memcpy(&m.mode, q + 4, 4); memcpy(&m.t0, q + 8, 4); memcpy(&m.period, q + 12, 4); memcpy(&m.width, q + 16, 4); memcpy(&m.duration, q + 20, 4);
+        unsigned int cells = 0; memcpy(&cells, q + 24, 4); q += 28;
+        if((size_t)(q - p) + (size_t)cells*4 > len) break;
+        m.idx.assign((const unsigned int*)q, (const unsigned int*)q + cells); q += (size_t)cells*4;
+        if(m.period <= 0.0f) m.period = 100.0f; if(m.width <= 0.0f) m.width = 10.0f;
+        m.s = -1.0f;
+        N.modSrc.push_back(m);
+      }
+      modRefresh();
+      fprintf(stderr, "engine.cu: mods groups=%u sources=%zu on=%d\n", N.modG, N.modSrc.size(), N.modOn);
     }
     else if(cmd == 4){                     // NAMP: the amplitude, then the decay, its complement, the shared fraction and the stimulus id per cell (five arrays of n)
       if(len < (size_t)N.n*4*5){ fprintf(stderr, "engine.cu: NAMP frame is %u bytes, expected %zu; the host and this engine.exe disagree on the protocol (rebuild)\n", len, (size_t)N.n*4*5); exit(1); }
@@ -546,6 +699,21 @@ int main(){
         unsigned int par = N.t & 1u;         // which pool count half this step writes
         CK(cudaMemsetAsync(N.nSpk, 0, 4));   // the step kernel fills both lists afresh
         CK(cudaMemsetAsync(N.nDlv, 0, 4));
+        // the modulator sources' increment per cell this step, rebuilt when a source's scale changes (as updateAdd in simworker.js): the level times (1 - the field's decay), rounded once, times the scale
+        if(N.modOn && !N.modSrc.empty()){
+          bool changed = false;
+          for(auto& ps : N.modSrc){ float sc = scaleOfSrc(ps, N.t); if(sc != ps.s){ ps.s = sc; changed = true; } }
+          if(changed){
+            std::fill(N.modStimH.begin(), N.modStimH.end(), 0.0f);
+            for(const auto& ps : N.modSrc){
+              if(ps.s == 0.0f) continue;
+              const float inc = (float)((double)ps.amp*(1.0 - (double)N.decMod));
+              const double k = (double)inc*(double)ps.s;
+              for(unsigned int c : ps.idx) if(c < N.n) N.modStimH[c] = (float)((double)N.modStimH[c] + k);
+            }
+            CK(cudaMemcpyAsync(N.modStim, N.modStimH.data(), (size_t)N.n*4, cudaMemcpyHostToDevice));
+          }
+        }
         if(N.syn)
           PK(0, stepExp<<<grid, block>>>(n, cur, decE, decI, itauE, itauI,
             N.a, N.b, N.c, N.d, N.bias, N.ext, N.namp,
@@ -555,11 +723,15 @@ int main(){
             N.refCnt, N.refrac,
             N.stp > 0 ? N.stpX : nullptr, N.stpR, N.stpU, stpScale, N.stpOrder,
             N.sendT ? N.firstMs : nullptr, (int)t,
-            N.poolG > 1 ? N.pool : nullptr, N.poolK, N.poolCnt, N.poolG, par, N.vmin,
+            N.poolG > 1 ? N.pool : nullptr, N.poolK, N.poolCnt, N.poolG, par, N.vmin, N.integ,
             N.C7, N.k7, N.vr7, N.vt7, N.vp7, N.grd, N.gthr, N.gslp,
             N.KX, N.gX, N.ringX, N.decX, N.itauX, N.KX ? N.pmask : nullptr,
             N.syn == 2 ? 1 : 0, N.eE, N.eI, N.erevX, N.mgX,
-            N.spk, N.nSpk, N.dlv, N.dlvAmp, N.nDlv, N.stpC > 1 ? N.dlvAmpC : nullptr));
+            N.thrJ, N.thrDec, N.thr, N.adC, N.poi, N.gMask, N.gCnt,
+            N.spk, N.nSpk, N.dlv, N.dlvAmp, N.nDlv, N.stpC > 1 ? N.dlvAmpC : nullptr,
+            N.modOn ? N.mod : nullptr, N.modNew, N.modOn && !N.modSrc.empty() ? N.modStim : nullptr, N.modG > 1 ? N.modTgt : nullptr, N.modKf,
+            N.modCnt ? N.modCnt + (size_t)(par ^ 1u)*N.modG : nullptr, N.modCnt ? N.modCnt + (size_t)par*N.modG : nullptr, N.modG > 1 ? N.modGrp : nullptr,
+            N.decMod, N.modDrive, N.modCur, N.modOn));
         else
           PK(0, stepKick<<<grid, block>>>(n, cur,
             N.a, N.b, N.c, N.d, N.bias, N.ext, N.namp,
@@ -569,14 +741,19 @@ int main(){
             N.refCnt, N.refrac,
             N.stp > 0 ? N.stpX : nullptr, N.stpR, N.stpU, stpScale, N.stpOrder,
             N.sendT ? N.firstMs : nullptr, (int)t,
-            N.poolG > 1 ? N.pool : nullptr, N.poolK, N.poolCnt, N.poolG, par, N.vmin,
+            N.poolG > 1 ? N.pool : nullptr, N.poolK, N.poolCnt, N.poolG, par, N.vmin, N.integ,
             N.C7, N.k7, N.vr7, N.vt7, N.vp7, N.grd, N.gthr, N.gslp,
-            N.spk, N.nSpk, N.dlv, N.dlvAmp, N.nDlv, N.stpC > 1 ? N.dlvAmpC : nullptr));
+            N.thrJ, N.thrDec, N.thr, N.adC, N.poi, N.eI, N.gMask, N.gCnt,
+            N.spk, N.nSpk, N.dlv, N.dlvAmp, N.nDlv, N.stpC > 1 ? N.dlvAmpC : nullptr,
+            N.modOn ? N.mod : nullptr, N.modNew, N.modOn && !N.modSrc.empty() ? N.modStim : nullptr, N.modG > 1 ? N.modTgt : nullptr, N.modKf,
+            N.modCnt ? N.modCnt + (size_t)(par ^ 1u)*N.modG : nullptr, N.modCnt ? N.modCnt + (size_t)par*N.modG : nullptr, N.modG > 1 ? N.modGrp : nullptr,
+            N.decMod, N.modDrive, N.modCur, N.modOn));
         // at the synapse, the spikes arriving this step depress their synapses first, against Kpost as it stood before the step's spikes, as the reference does at the start of its step; the list is consumed once
         if(N.plast && N.stdpAt){
           if(!N.calibrating)
             PK(2, plastArrive<<<gridW, block>>>(N.arr, N.nArr, N.hist, N.pre, N.post, N.w, N.delay, N.pmask,
-              N.Kpost, iAlpha, N.alphaI, N.wRef, N.commit));
+              N.Kpost, iAlpha, N.alphaI, N.wRef, N.commit, N.plastGain, N.wmu, N.Khom, N.slideK, N.gState, (int)N.iGlobal,
+              N.modOn ? N.mod : nullptr, N.modOn ? N.modPlast : 0, N.modBase, N.elig));
           CK(cudaMemsetAsync(N.nArr, 0, 4));
         }
         // delivery from the step's list, before the learning passes change the weights, as the per-neuron form delivered inside the step
@@ -602,16 +779,19 @@ int main(){
           // at the soma the outgoing half runs at the spike; at the synapse it ran above, at the arrivals
           if(!N.stdpAt)
             PK(2, plastOut<<<gridW, block>>>(N.spk, N.nSpk, N.pre, N.post, N.w, N.pmask,
-              N.Kpost, iAlpha, N.alphaI, N.wRef, N.commit));
+              N.Kpost, iAlpha, N.alphaI, N.wRef, N.commit, N.plastGain, N.wmu, N.Khom, N.slideK, N.gState, (int)N.iGlobal,
+              N.modOn ? N.mod : nullptr, N.modOn ? N.modPlast : 0, N.modBase, N.elig));
           PK(3, plastIn<<<gridW, block>>>(N.spk, N.nSpk, N.inStart, N.revSyn, N.revPre,
             N.w, N.revMask, N.Kpre, N.stdpAt ? N.hist : nullptr, N.Kslow, N.wRef,
-            N.tauY*(N.iRho > 0 ? N.iRho : 5.0f)*0.001f,
-            N.rhoMode > 0 ? N.alphaI : nullptr, N.tauY/(N.tauS + N.tauM), N.commit));
+            N.Kpost, N.commit, N.plastGain, N.gState, (int)N.iGlobal,
+            N.modOn ? N.mod : nullptr, N.modOn ? N.modPlast : 0, N.modBase, N.elig));
           }
           PK(4, traceStep<<<grid, block>>>(n, N.fired, N.Kpre, N.Kpost, decS, decM,
-            N.Kslow, expf(-1.0f/N.tauY),
+            N.Kslow, expf(-1.0f/N.tauY), N.Khom, N.decH,
             (N.scaleOn > 0 || N.calibrating) ? N.spkAcc : nullptr,
             N.hist, N.dmask, N.stdpAt, N.arr, N.nArr));
+          // the global factor folds the step's count after the traces, as the reference does at the end of its step
+          if(N.gState) PK(4, gfacK<<<1, 1>>>(N.gCnt, N.gState, N.decG, N.tauGs, N.gInv));
           if(N.calibrating){
             N.calAcc += 1.0f;
             if(N.calAcc >= N.calS*1000.0f){
@@ -640,6 +820,16 @@ int main(){
                 N.consStep/N.tauCons));
             }
           }
+        }
+        // the modulator field: the new level becomes the one the next step reads, and the group counts the step read are zeroed for the step after next; the eligibility sweep reads the new level, as the reference sweeps after its field update
+        if(N.modOn){
+          if(N.plast && N.modPlast == 2 && N.elig && ++N.modAcc >= N.modStep){
+            N.modAcc = 0;
+            int mb = 256, mg = (int)((N.m + mb - 1)/mb);
+            PK(6, eligSweepK<<<mg, mb>>>(N.m, N.w, N.elig, N.post, N.pmask, N.modNew, N.modBase, N.eligPay, N.decElig, N.wRef, N.commit));
+          }
+          { float* tmp = N.mod; N.mod = N.modNew; N.modNew = tmp; }
+          if(N.modCnt) CK(cudaMemsetAsync(N.modCnt + (size_t)(par ^ 1u)*N.modG, 0, (size_t)N.modG*4));
         }
         PK(7, CK(cudaMemsetAsync(N.ring + (size_t)cur*n, 0, n*4));
           if(N.syn) CK(cudaMemsetAsync(N.ring2 + (size_t)cur*n, 0, n*4));
@@ -680,7 +870,20 @@ int main(){
       const unsigned int proto = ENGINE_PROTOCOL;
       reply(103, &proto, 4);
     }
+    else if(cmd == 12){                    // SETREF: the consolidation reference, one float per synapse, from a saved state
+      // It may arrive before plasticity has allocated a reference, so it allocates one, and the capture at switch-on, which would overwrite it with the weights, is skipped.
+      if(N.m > 0 && len >= (size_t)N.m*4){
+        if(!N.wRef) CK(cudaMalloc((void**)&N.wRef, (size_t)N.m*4));
+        CK(cudaMemcpy(N.wRef, p, (size_t)N.m*4, cudaMemcpyHostToDevice));
+      }
+    }
     else if(cmd == 6){                     // GETW
+      // The consolidation reference goes first, in a reply of its own, so the weights reply keeps its layout and the host attaches the reference to it.
+      if(N.wRef){
+        std::vector<float> rf((size_t)N.m);
+        CK(cudaMemcpy(rf.data(), N.wRef, (size_t)N.m*4, cudaMemcpyDeviceToHost));
+        reply(104, rf.data(), (size_t)N.m*4);
+      }
       const unsigned int extra = N.rhoI ? N.n : 0;
       std::vector<float> wf((size_t)N.m + extra);
       CK(cudaMemcpy(wf.data(), N.w, (size_t)N.m*4, cudaMemcpyDeviceToHost));

@@ -1,0 +1,18 @@
+# The pure JS suites on every push and pull request: no GPU, no server,
+# no Python (`node tools/test.mjs --quick`, the same set the pre-commit
+# hook runs). The CUDA, server and Brian 2 suites and the statistics
+# battery are run by hand before a release (EXTENDING.md, the gates).
+name: tests
+on:
+  push:
+    branches: [main]
+  pull_request:
+jobs:
+  quick:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: node tools/test.mjs --quick

@@ -40,6 +40,7 @@ import { layoutSlug, layoutRecord, applyLayoutRecord, markBuilt, builtTypes, isB
 import { nameNodes } from './nodenames.js';
 import { Recording, weightSummary, changedKeys } from './recording.js';
 import { SceneTabs, initMessage, tuneMessage, engineInputs, engineTerms, engineKind, wantGpu, gpuMissing } from './document.js';
+import { modsGated } from './nodes.js';
 import { neuronsCsv, synapsesCsv } from './export.js';
 import { csv, download, downloadText, canvasPng, seriesCsv, multiSeriesCsv, bandSeriesCsv, rasterCsv, spikeTrainsAscii, histogramCsv, matrixCsv, figureName } from './figure.js';
 import { withMeta } from './png.js';
@@ -96,8 +97,8 @@ function transformChainFor(node){
 const editor = new NodeEditor(document.getElementById('graph'), {
   onError: msg => status(msg, true),   // a handler that threw, named, instead of a pane gone quiet
   onSelect: n => viewer.focusPopulationBySrc(n && n.id),   // its box, if it made one
-  onInspect: n => showProps(n),
-  onInspectGroup: g => showGroupProps(g),
+  onInspect: n => { showProps(n); revealProps(); },
+  onInspectGroup: g => { showGroupProps(g); revealProps(); },
   onChange: () => {
     if(propsNode && !editor.nodes.includes(propsNode)) showProps(null);
     if(propsGroup && !editor.groups.includes(propsGroup)) showProps(null);
@@ -182,7 +183,7 @@ function throttleProps(node){
 const inShownTab = then => { if(tabs.cur === tabs.shown) then(); else switchTab(tabs.shown).then(ok => { if(ok) then(); }); };
 viewer.onPickSource = id => inShownTab(() => {
   const n = editor.byId(id);
-  if(n) editor.selectExternal(n);
+  if(n){ editor.selectExternal(n); revealProps(); }
 });
 // the panel row for whatever the pointer is over in the viewer, so the two lists of regions agree about which one is live
 const regionsEl = document.getElementById('regions');   // by reference: it moves to the viewer window with the rest of the viewer
@@ -451,6 +452,12 @@ tabs.reset(null, '');
 let doc = tabs.shown.doc;
 let pendingWeights = null, fitNextCompute = false;
 const io = new IORuntime(msg => status(msg, true));
+// A modulator source gated to the presentations (a modulator node's time course "presentations") follows the curriculum's gate on the page as it does in a training run: its level while a presentation is on, zero otherwise.
+// Every init and tune passes through here, so the gate's state is never lost to a settings edit.
+io.gateMode = 1;
+io.onGate = on => { if(worker && doc.curNet && !helloPending) worker.postMessage(gatedTune(doc.curNet)); };
+const gatedInit = net => ({ ...initMessage(net), mods:modsGated(net.modSrc, !!io.gateOn) });
+const gatedTune = net => ({ ...tuneMessage(net), mods:modsGated(net.modSrc, !!io.gateOn) });
 // mesh files are read from the project folder, through the store the page is on (the server folder or the browser fallback)
 setFileReader(async path => (await store()).read(path));
 attachProbes(document.getElementById('probes'));
@@ -2400,7 +2407,7 @@ async function recompute(){
         return;
       }
       // an engine still answering hello has had no init yet, and the init it gets carries this network's settings
-      if(!helloPending){ worker.postMessage(tuneMessage(net)); io.attach(worker, net.inputMaps, net.seed); }
+      if(!helloPending){ worker.postMessage(gatedTune(net)); io.attach(worker, net.inputMaps, net.seed); }
       if(viewer.mode !== 'net') viewer.setNetwork(net);   // back from a preview: reattach, no reset
     }
     else {
@@ -2547,10 +2554,12 @@ function startSim(net, forceCpu){
     const big = cur.synCount*13 + cur.count*25 > 1.6e9;
     // A big net transfers its synapse arrays instead of cloning them, and a transfer detaches them here. doc.curNet.pmask is read afterwards by the weight readback, so it is copied first; below full density this costs nothing because the branch does not transfer at all.
     const pmask0 = cur.pmask ? cur.pmask.slice() : null;
-    w.postMessage(initMessage(cur),
+    w.postMessage(gatedInit(cur),
       big ? [cur.preStart.buffer, cur.post.buffer, cur.w.buffer, cur.delay.buffer,
         ...(cur.pmask ? [cur.pmask.buffer] : [])] : []);
     if(cur.pmask){ cur.pmask = pmask0; net.pmask = pmask0; }   // put the readable copy back in its place
+    // a loaded brain's consolidation reference, which the engine takes in place of capturing one from the weights
+    if(cur.wRef0) w.postMessage({ cmd:'setRef', wRef:cur.wRef0 });
     io.attach(w, cur.inputMaps, cur.seed);
   };
   worker.onmessage = e => {
@@ -2749,7 +2758,7 @@ setSpeed(2);
     }, true);
     backBtn.hidden = false;
     btn.classList.add('on');
-    maxPane = null;
+    maxPane = null; maxProps = false;
     applyPanels();                               // the graph and the properties take the viewer's room
     window.dispatchEvent(new Event('resize'));
     requestAnimationFrame(() => editor.draw());
@@ -2877,7 +2886,7 @@ const LAYOUT_ORDER = ['right', 'classic', 'left', 'wide'];
 const panels = { train:240, layout:'classic', sizes:{} };
 // The pane filling the window, 'viewer' or 'graph', or null for the layout.
 // Not saved: the app always opens in its layout.
-let maxPane = null;
+let maxPane = null, maxProps = false;   // maxProps: the properties column is back beside the pane that fills the window
 try {
   const saved = JSON.parse(localStorage.getItem(UI_STORE)) || {};
   // sizes kept before there were layouts belong to the one there was
@@ -2906,13 +2915,16 @@ function applyPanels(){
   appEl.dataset.layout = panels.layout;
   if(maxPane){
     appEl.dataset.max = maxPane;
-    appEl.style.gridTemplateAreas = `"top" "${maxPane}"`;
-    appEl.style.gridTemplateColumns = 'minmax(0,1fr)';
+    if(maxProps) appEl.dataset.maxprops = '1'; else delete appEl.dataset.maxprops;
+    appEl.style.gridTemplateAreas = !maxProps ? `"top" "${maxPane}"`
+      : L.sideLeft ? `"top top top" "props vsplit ${maxPane}"` : `"top top top" "${maxPane} vsplit props"`;
+    appEl.style.gridTemplateColumns = !maxProps ? 'minmax(0,1fr)' : L.sideLeft ? `${side} 5px minmax(0,1fr)` : `minmax(0,1fr) 5px ${side}`;
     appEl.style.gridTemplateRows = `${Math.round(28*ui)}px minmax(0,1fr)`;
     try { localStorage.setItem(UI_STORE, JSON.stringify(panels)); } catch(e){}
     return;
   }
   delete appEl.dataset.max;
+  delete appEl.dataset.maxprops;
   if(viewerWin){
     // The viewer is in its own window: the graph and the properties share the page below the top bar, on the sides this layout gives them.
     appEl.dataset.popped = '1';
@@ -2970,7 +2982,7 @@ function bindSplit(id, key, vertical){
     btn.title = 'pane layout: ' + L.tip + '. Click for the next one; each layout keeps the pane sizes you gave it.';
   };
   btn.onclick = () => {
-    maxPane = null;
+    maxPane = null; maxProps = false;
     panels.layout = LAYOUT_ORDER[(LAYOUT_ORDER.indexOf(panels.layout) + 1) % LAYOUT_ORDER.length];
     applyPanels(); show();
     window.dispatchEvent(new Event('resize'));     // the viewer's canvas and the graph take their new boxes
@@ -2979,6 +2991,14 @@ function bindSplit(id, key, vertical){
     status('pane layout: ' + LAYOUTS[panels.layout].name);
   };
   show();
+}
+// Opening a node's properties while a pane fills the window brings the properties column back beside it; the maximize key still puts the whole layout back.
+function revealProps(){
+  if(!maxPane || maxProps) return;
+  maxProps = true;
+  applyPanels();
+  window.dispatchEvent(new Event('resize'));
+  requestAnimationFrame(() => editor.draw());
 }
 // The maximize key, as in a compositor: over the viewer or the node graph it fills the window with that pane, and pressed again anywhere it puts the layout back.
 // The pane is the one under the pointer when the key goes down.
@@ -2999,7 +3019,7 @@ function bindSplit(id, key, vertical){
       if(next === 'viewer' && viewerWin) return;    // the viewer is in its own window
     }
     e.preventDefault();          // a focused button would also take the spacebar as a click
-    maxPane = next;
+    maxPane = next; maxProps = false;
     applyPanels();
     window.dispatchEvent(new Event('resize'));   // the viewer's canvas and the graph take their new boxes
     requestAnimationFrame(() => editor.draw());
@@ -3329,13 +3349,13 @@ function saveBrain(){
   }
   if(!offers(worker, 'getWeights', 'weight readback, so no brain can be saved from it')) return;
   new Promise(res => { pendingWeights = res; worker.postMessage({ cmd:'getWeights' }); })
-    .then(({ w, t }) => {
+    .then(({ w, t, ref }) => {
       const graph = { ...editor.toJSON(), resolution:+resEl.value };
       // pair identity is 20 bytes a synapse and a single ArrayBuffer caps near 2 GB, so past that size the save drops to weights-only, which reloads onto the wiring of this same graph but not onto an edited one.
       // A network whose buffers moved into the sim is past that size too, and the weights-only file needs only what the worker just returned.
       const big = pairFileBytes(doc.curNet.synCount) > MAX_BUFFER || doc.curNet.post.byteLength === 0;
-      const buf = big ? buildWeightsFile(graph, doc.curNet, w, t, null)
-                      : buildBrainFile(graph, doc.curNet, w, t, null);
+      const buf = big ? buildWeightsFile(graph, doc.curNet, w, t, null, ref)
+                      : buildBrainFile(graph, doc.curNet, w, t, null, ref);
       const ts = new Date().toISOString().replace(/[-:]/g, '').slice(0, 15);
       const name = `brain-${ts}.npb`;
       const note = big
@@ -3560,7 +3580,7 @@ async function listSavedBrains(){
 }
 // Training is started from a checkpoint node, not from a button in the top bar.
 // A run is that checkpoint left going with plasticity on, so its settings belong on the node, travel with the saved graph, and sit next to the plasticity parameters they interact with.
-// All this dialog still asks is the one thing the graph cannot carry: which saved brain to resume from.
+// The dialog's one choice of its own is which saved brain to resume from, and the checkpoint's start-from-brain setting makes that choice too.
 let trainNode = null, trainingRunning = false;
 
 // Is a host listening?
@@ -3660,6 +3680,14 @@ async function openTrainDialog(node){
     });
   }
   await listSavedBrains();
+  // the checkpoint's own starting brain, when it names one: the node setting selects it, and a run from a scene link starts from it without anyone touching the dialog
+  if(p.trBrain){
+    const sel = document.getElementById('trBrain');
+    if(![...sel.options].some(o => o.value === p.trBrain)){
+      const o = document.createElement('option'); o.value = p.trBrain; o.textContent = p.trBrain + ' (the checkpoint setting)'; sel.appendChild(o);
+    }
+    sel.value = p.trBrain;
+  }
   trainDlg.style.display = 'flex';
 }
 document.getElementById('trCancel').onclick = () => { trainDlg.style.display = 'none'; };

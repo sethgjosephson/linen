@@ -3,6 +3,7 @@ import { h32, pairHash, pairGauss, rng } from './rand.js';
 import { classicRow } from './form.js';
 import { PROTOCOL } from './protocol.js';
 import { parsePhases } from './curriculum.js';
+import { LOCAL_SETS } from './localsets.js';
 
 // Neuron presets: the seven Izhikevich (2003) parameter sets and the fly rows. sign = excitatory(+1)/inhibitory(-1) for Dale's law (TC relay cells are glutamatergic; RZ is used here as a resonator interneuron).
 // Every row runs as an Izhikevich 2007 row (f7; Dynamical Systems in Neuroscience, chapter 8): C dv/dt = k (v - vr)(v - vt) - u + I, du/dt = a (b (v - vr) - u), spike at vpeak (MODEL.md 1).
@@ -64,6 +65,9 @@ NEURON_TYPES.push(
     f7:{ C:100, k:0.7, vr:-60, vt:-40, vpeak:35, a:0.1,  b:5,    c:-60, d:10 } },
 );
 CELL_PRESETS.push(...NEURON_TYPES.filter(t => !t.custom));
+// A row's name in a select is its key and type name; its class and source go in the option's tooltip.
+export const typeOption = t => String(t.name || '').replace(', 2007 measured', ' 2007').replace(/ \((exc|inh)\)$/, '');
+export const typeTip = t => (t.sign < 0 ? 'Inhibitory.' : 'Excitatory.') + (t.measured ? ' The 2007 measured row, in picoamps.' : '');
 // A scene's own cell types join the type table by name (the cell type node): a new name is appended, a known one is updated in place so its index, and every ntype pointing at it, stays valid.
 // Indices above the built-in rows belong to these.
 // The computing thread is the authority on where a row sits: a row that rides on a stream carries its index (`index`), and a wiring worker puts it there.
@@ -173,7 +177,7 @@ function freshLidx(n){ return Uint32Array.from({ length:n }, (_, i) => i); }
 export function clonePts(p){ return { kind:'points', count:p.count, pos:p.pos.slice(),
   ntype:p.ntype.slice(), bias:p.bias.slice(), ...(p.comp ? { comp:p.comp } : {}),
   ...(p.projs ? { projs:p.projs } : {}), ...(p.rules ? { rules:p.rules } : {}),
-  ...(p.pools ? { pools:p.pools } : {}), ...(p.ids ? { ids:p.ids.slice() } : {}),
+  ...(p.pools ? { pools:p.pools } : {}), ...(p.mods ? { mods:p.mods } : {}), ...(p.ids ? { ids:p.ids.slice() } : {}),
   ...(p.connectionTables ? { connectionTables:p.connectionTables } : {}), ...(p.receptors ? { receptors:p.receptors } : {}),
   ...(p.cellTypes ? { cellTypes:p.cellTypes } : {}), ...(p.hues ? { hues:p.hues } : {}),
   src:p.src ? p.src.slice() : new Int32Array(p.count).fill(-1),
@@ -268,6 +272,15 @@ function repeatCompute(pts, p){
           : [pl])
       : pts.pools.slice();
   }
+  // a modulator on one of the stream's own populations, as a target or as the releasing population, is one per numbered copy; any other is carried as it is
+  if(pts.mods){
+    const own = Object.values(tags0);
+    const ren = t => { const o = own.find(x => sameTag(x, t)); return o ? k => nameOf(o, k) : null; };
+    out.mods = numbered
+      ? pts.mods.flatMap(md => { const rt = ren(md.tag), rf = md.from ? ren(md.from) : null;
+          return (rt || rf) ? Array.from({ length:N }, (_, k) => ({ ...md, tag:rt ? rt(k) : md.tag, from:rf ? rf(k) : md.from })) : [md]; })
+      : pts.mods.slice();
+  }
   if(pts.connectionTables) out.connectionTables = pts.connectionTables;   // ids do not survive a repeat, so this lands nothing there
   return out;
 }
@@ -286,6 +299,7 @@ function pickPts(pts, idx){
   if(pts.projs) out.projs = pts.projs;
   if(pts.rules) out.rules = pts.rules;
   if(pts.pools) out.pools = pts.pools;
+  if(pts.mods) out.mods = pts.mods;
   if(pts.ids) out.ids = Array.from(idx, i => pts.ids[i]);
   if(pts.connectionTables) out.connectionTables = pts.connectionTables;
   if(pts.receptors) out.receptors = pts.receptors;
@@ -1068,6 +1082,7 @@ function mergeCompute(ins){
     if(p.projs) out.projs = [...(out.projs || []), ...p.projs];
     if(p.rules) out.rules = [...(out.rules || []), ...p.rules];
     if(p.pools) out.pools = [...(out.pools || []), ...p.pools];
+    if(p.mods) out.mods = [...(out.mods || []), ...p.mods];
     if(p.connectionTables) out.connectionTables = [...(out.connectionTables || []), ...p.connectionTables];
     if(p.receptors){ if(out.receptors && out.receptors !== p.receptors) throw new Error('merge: two receptor declarations meet; a scene has one receptor node'); out.receptors = p.receptors; }
     if(p.cellTypes){ const have = out.cellTypes || []; out.cellTypes = [...have.filter(r => !p.cellTypes.some(q => q.key === r.key)), ...p.cellTypes]; }
@@ -1145,12 +1160,23 @@ export function engineConfig(net){
     // conductance mode (syn 2): the reversal potentials of E, I and each receptor channel (a channel without one takes 0 for + and -70 for -)
     eRevE:Number.isFinite(+net.eRevE) ? +net.eRevE : 0, eRevI:Number.isFinite(+net.eRevI) ? +net.eRevI : -70,
     chanErev:(receptorChannels(net) || []).map(c => Number.isFinite(c.erev) ? c.erev : (c.sign > 0 ? 0 : -70)),
-    protocols:net.protocols || [],
+    protocols:net.protocols || [], integ:net.integ|0,
     plast:net.plast, aP:net.aP, aM:net.aM, tauS:net.tauS, tauM:net.tauM,
-    wmax:net.wmax, wdep:net.wdep, stdpAt:net.stdpAt|0, iEta:net.iEta, iRho:net.iRho,
+    wmax:net.wmax, wdep:net.wdep, wmu:net.wmu === undefined ? 1 : Math.max(0, Math.min(1, +net.wmu)), stdpAt:net.stdpAt|0, iEta:net.iEta, iRho:net.iRho,
+    // the third factor: the gain on the Hebbian terms (1 unless a run sets it) and the gate mode the trainer reads to set it
+    plastGain:net.plastGain === undefined ? 1 : Math.max(0, +net.plastGain || 0), plastGate:net.plastGate|0,
+    // neuromodulation (MODEL.md 4): the field's time constant, what reads it, and what writes it (the time-course sources and the release arrays wireMods resolved)
+    modTau:net.modTau > 0 ? +net.modTau : 200, modPlast:net.modPlast|0, modBase:net.modBase === undefined ? 1 : (+net.modBase || 0),
+    eligTau:net.eligTau > 0 ? +net.eligTau : 1000, modStep:net.modStep > 0 ? +net.modStep : 10,
+    modDrive:+net.modDrive || 0, modCur:+net.modCur || 0,
+    mods:net.modSrc || [], modGrp:net.modGrp, modTgt:net.modTgt, modK:net.modK,
     rhoMode:net.rhoMode, calS:net.calS, scale:net.scale, sEta:net.sEta,
     trip:net.trip, tauY:net.tauY, het:net.het, tin:net.tin,
-    cons:net.cons, consW:net.consW, consP:net.consP, commit:net.commit|0,
+    cons:net.cons, consW:net.consW, consP:net.consP, commit:net.commit|0, refInit:net.refInit|0,
+    // the sliding threshold on depression (MODEL.md 4): the switch, its target rate, the slow estimate's time constant (seconds on the panel, ms in the engine) and where the estimate starts
+    slide:net.slide|0, slideRate:net.slideRate > 0 ? +net.slideRate : 10, slideTau:net.slideTau > 0 ? net.slideTau*1000 : 600000,
+    slideInit:net.slideInit === undefined ? 1 : Math.max(0, +net.slideInit || 0),
+    iGlobal:net.iGlobal|0, iTauG:net.iTauG > 0 ? +net.iTauG : 10,
     tauCons:net.tauCons > 0 ? net.tauCons*60000 : 0,   // sim-minutes in the panel, ms in the engine
     consStep:net.consStep > 0 ? net.consStep*1000 : 0,  // sim-seconds in the panel, ms in the engine
     stpNorm:net.stpNorm|0, stpOrder:net.stpOrder|0, stpScope:net.stpScope|0,
@@ -1213,6 +1239,65 @@ export function wirePools(pts){
     }
   }
   return { pool, poolK:Float32Array.from(K), poolInfo:info };
+}
+
+// Neuromodulation, resolved at wiring time (MODEL.md 4).
+// Each modulator node names a target population and either a time course, which becomes a source the engines evaluate per step as they do a stimulus, or a releasing population, whose spikes raise the field at the target.
+// A releasing population is a group: every spike in it adds level times 1000 / N to the field of every target cell, so a steady level reads as the level times the group's mean rate in Hz, as a pool's gain does.
+// A cell releases into at most one group and receives from at most one; a second claim is refused rather than summed.
+// A source whose mode is presentations is constant and gated: the sender sets its amplitude to zero while no presentation is on (modsGated).
+// Returns null when nothing declares a modulator.
+export function wireMods(pts){
+  const list = pts.mods || [];
+  if(!list.length) return null;
+  const n = pts.count, tags = pts.tags || {}, src = pts.src, nt = pts.ntype;
+  const all = [...new Set(Object.values(tags))];
+  const members = (tag, what) => {
+    const t = String(tag || '').trim();
+    const out = [];
+    if(!t){ for(let i=0;i<n;i++) out.push(i); }
+    else if(t === 'E' || t === 'I'){ const sg = t === 'E' ? 1 : -1; for(let i=0;i<n;i++) if(Math.sign(NEURON_TYPES[nt[i]].sign) === sg) out.push(i); }
+    else {
+      const ids = new Set();
+      for(const x of all) if(tagMatch(x, t) !== null) for(const id of Object.keys(tags)) if(sameTag(tags[id], x)) ids.add(Number(id));
+      if(!ids.size) throw new Error(what + ': no population matches "' + t + '"');
+      for(let i=0;i<n;i++) if(ids.has(src[i])) out.push(i);
+    }
+    if(!out.length) throw new Error(what + ': the population ' + (t || 'every cell') + ' has no cells');
+    return out;
+  };
+  const modGrp = new Uint8Array(n), modTgt = new Uint16Array(n);
+  const K = [0], info = [], modSrc = [];
+  for(const md of list){
+    const level = Number.isFinite(+md.level) ? +md.level : 0;
+    const tgt = members(md.tag, 'modulator');
+    if((md.source|0) === 1){
+      const g = K.length;
+      if(g > 255) throw new Error('modulator: more than 255 releasing populations');
+      const from = members(md.from, 'modulator');
+      for(const i of from){
+        if(modGrp[i]) throw new Error('modulator: a cell of ' + (String(md.from || '').trim() || 'every cell') + ' already releases into ' + info[modGrp[i]-1].name + '; a cell releases into one');
+        modGrp[i] = g;
+      }
+      for(const i of tgt){
+        if(modTgt[i]) throw new Error('modulator: a cell of ' + (String(md.tag || '').trim() || 'every cell') + ' already receives ' + info[modTgt[i]-1].name + '; a cell receives one released modulator');
+        modTgt[i] = g;
+      }
+      K.push(level*1000/from.length);
+      info.push({ name:(String(md.from || '').trim() || 'every cell') + ' onto ' + (String(md.tag || '').trim() || 'every cell'), from:from.length, count:tgt.length, level, node:md.node });
+    } else {
+      const mode = md.mode|0;
+      modSrc.push({ idx:Uint32Array.from(tgt), amp:level, mode:mode === 3 ? 0 : mode,
+        period:Math.max(1, +md.period || 100), width:Math.max(1, +md.width || 10),
+        t0:Math.max(0, +md.t0 || 0), duration:Math.max(0, +md.duration || 0),
+        gated:mode === 3 ? 1 : 0, node:md.node });
+    }
+  }
+  return { modGrp, modTgt, modK:Float32Array.from(K), modSrc, modInfo:info };
+}
+// The time-course sources with the gated ones (mode presentations) at their level while a presentation is on and at zero otherwise, for the sender's init and every tune.
+export function modsGated(mods, open){
+  return (mods || []).map(s => s.gated ? { ...s, amp:open ? s.amp : 0 } : s);
 }
 
 // Short-term plasticity per rule, as classes: each distinct set of settings is a class, with state per presynaptic cell and class, so rules with the same settings share it and a scene whose rules all inherit the checkpoint has one class, as before.
@@ -1379,6 +1464,20 @@ export function wireConnect(pts, p, onProgress, opts){   // runs inside computew
   const prRule = pr => { if(pr.frozen) return 0;
     try { return parseRuleRef(pr.rule, prNames); }
     catch(e){ prWarn.push(String(pr.rule).trim()); return 1; } };
+  // A projection may name a receptor channel (channel on the project node): its synapses carry that channel in the top three bits beside the rule, as a from: population's do, and the channel's sign has to be the source cells'.
+  // A from: population on the receptors node is applied after the wiring and wins over this for the synapses it covers.
+  const prChans = receptorChannels(pts) || [];
+  const prChan = (pr, A) => {
+    const name = String(pr.channel || '').trim().toLowerCase();
+    if(!name) return 0;
+    const k = prChans.findIndex(c => c.name === name);
+    if(k < 0) throw new Error('projection: no receptor channel named "' + pr.channel + '"' +
+      (prChans.length ? '; declared: ' + prChans.map(c => c.name).join(', ') : '; the scene has no receptors node above the connect node'));
+    for(const i of A) if(NEURON_TYPES[pts.ntype[i]].sign !== prChans[k].sign)
+      throw new Error('projection: channel ' + prChans[k].name + ' is ' + (prChans[k].sign > 0 ? '+' : '-') + ' and the cells of ' + pr.from +
+        ' are ' + (NEURON_TYPES[pts.ntype[i]].sign > 0 ? 'excitatory' : 'inhibitory'));
+    return (k + 2) << 5;
+  };
   const R = p.radius, R2 = R*R, s2 = 2*p.sigma*p.sigma;
   const grid = new Map();
   const ck = gridKey;
@@ -1386,7 +1485,7 @@ export function wireConnect(pts, p, onProgress, opts){   // runs inside computew
   for(let i=0;i<n;i++){ const k = ck(...cell(i));
     let a = grid.get(k); if(!a){ a=[]; grid.set(k,a); } a.push(i); }
   const MAX_SYN = Math.max(1e6, p.__maxSyn || 5e7);
-  const logn = (p.wdist|0) === 1, sg = p.wsigma || 1;
+  const logn = (p.wdist|0) === 1, sg = p.wsigma || 1, weq = (p.wdist|0) === 2;
   // proxy downscaling (van Albada, Helias & Diesmann 2015; NEST microcircuit K-scaling): the incoming points represent `density`% of real density, so weights scale by 1/sqrt(density) to preserve input variance, and a per-neuron DC (from realized in-degrees and target rates) restores the mean.
   // Rates and regime are preserved; correlations shrink with size (a known limit).
   // Three independent things reduce realized in-degree and all three want the same correction, because the compensation depends on how far the in-degree falls short of full scale and not on the reason it does.
@@ -1453,7 +1552,7 @@ export function wireConnect(pts, p, onProgress, opts){   // runs inside computew
               < p.prob * T.probMul[tCell] * Math.exp(-d2/s2)){
             if(counting){ emit(i, j, 0, 0, 0, j, wbase); continue; }
             // lognormal (Song et al 2005): mean-preserving so total drive matches wbase
-            const wv = (logn
+            const wv = (weq ? wbase : logn
               ? wbase*Math.exp(sg*pairGauss(src[i], lidx[i], src[j], lidx[j], seed) - sg*sg/2)
               : wbase*(0.5 + pairHash(src[i], lidx[i], src[j], lidx[j], seed + 101)))
               *wScale*T.wMul[tCell];
@@ -1476,6 +1575,7 @@ export function wireConnect(pts, p, onProgress, opts){   // runs inside computew
       }
       if(!A.length) throw new Error(`projection: no neurons tagged "${pr.from}"`);
       if(!B.length) throw new Error(`projection: no neurons tagged "${pr.to}"`);
+      const prByte = prRule(pr) | prChan(pr, A);   // the synapse byte: the rule in the low five bits, the channel in the top three
       const lat = ax => ax===0 ? [1,2] : ax===2 ? [0,1] : [0,2];
       const [a1,a2] = lat(pr.axisFrom|0), [b1,b2] = lat(pr.axisTo|0);
       const bb = (set, x1, x2) => {
@@ -1507,12 +1607,12 @@ export function wireConnect(pts, p, onProgress, opts){   // runs inside computew
             if(j === i) continue;
             if(pairHash(src[i], lidx[i], src[j], lidx[j], pseed) >= pp) continue;
             if(counting){ emit(i, j, 0, 0, 0, j, wbase); continue; }
-            const wv = (logn
+            const wv = (weq ? wbase : logn
               ? wbase*Math.exp(sg*pairGauss(src[i], lidx[i], src[j], lidx[j], pseed) - sg*sg/2)
               : wbase*(0.5 + pairHash(src[i], lidx[i], src[j], lidx[j], pseed + 101)))
               *wScale;
             emit(i, j, wv, qd(baseMs),
-              prRule(pr), j, wbase);
+              prByte, j, wbase);
           }
         }
         continue;
@@ -1548,11 +1648,11 @@ export function wireConnect(pts, p, onProgress, opts){   // runs inside computew
               if(d2 > mreach2) continue;
               if(pairHash(src[i], lidx[i], src[j], lidx[j], pseed) < pr.prob * Math.exp(-d2/ms2)){
                 if(counting){ emit(i, j, 0, 0, 0, j, wbase); continue; }
-                const wv = (logn
+                const wv = (weq ? wbase : logn
                   ? wbase*Math.exp(sg*pairGauss(src[i], lidx[i], src[j], lidx[j], pseed) - sg*sg/2)
                   : wbase*(0.5 + pairHash(src[i], lidx[i], src[j], lidx[j], pseed + 101)))
                   *wScale;
-                emit(i, j, wv, qd(baseMs), prRule(pr), j, wbase);
+                emit(i, j, wv, qd(baseMs), prByte, j, wbase);
               }
             }
           }
@@ -1583,11 +1683,11 @@ export function wireConnect(pts, p, onProgress, opts){   // runs inside computew
               if(d2 > reach2) continue;
               if(pairHash(src[i], lidx[i], src[j], lidx[j], pseed) < pr.prob * Math.exp(-d2/ps2)){
                 if(counting){ emit(i, j, 0, 0, 0, j, wbase); continue; }
-                const wv = (logn
+                const wv = (weq ? wbase : logn
                   ? wbase*Math.exp(sg*pairGauss(src[i], lidx[i], src[j], lidx[j], pseed) - sg*sg/2)
                   : wbase*(0.5 + pairHash(src[i], lidx[i], src[j], lidx[j], pseed + 101)))
                   *wScale;
-                emit(i, j, wv, qd(Math.sqrt(d2)/vel), prRule(pr), j, wbase);
+                emit(i, j, wv, qd(Math.sqrt(d2)/vel), prByte, j, wbase);
               }
             }
           }
@@ -1617,11 +1717,11 @@ export function wireConnect(pts, p, onProgress, opts){   // runs inside computew
             if(pairHash(src[i], lidx[i], src[j], lidx[j], pseed)
                 < pr.prob * Math.exp(-d2/ps2)){
               if(counting){ emit(i, j, 0, 0, 0, j, wbase); continue; }
-              const wv = (logn
+              const wv = (weq ? wbase : logn
                 ? wbase*Math.exp(sg*pairGauss(src[i], lidx[i], src[j], lidx[j], pseed) - sg*sg/2)
                 : wbase*(0.5 + pairHash(src[i], lidx[i], src[j], lidx[j], pseed + 101)))
                 *wScale;
-              emit(i, j, wv, qd(baseMs + Math.sqrt(d2)/vel), prRule(pr), j, wbase);
+              emit(i, j, wv, qd(baseMs + Math.sqrt(d2)/vel), prByte, j, wbase);
             }
           }
         }
@@ -1643,7 +1743,7 @@ export function wireConnect(pts, p, onProgress, opts){   // runs inside computew
     post:postA, w:wA, delay:delA, pmask:pmA, synCount:m, KE, KI, clampedDelay };
 
   return finishConnect(pts, p, { preStart, post:postA, w:wA, delay:delA,
-    pmask:pmA, m, KE, KI, T, lidx, R2, logn, sg, wScale, MAX_SYN, clampedDelay });
+    pmask:pmA, m, KE, KI, T, lidx, R2, logn, sg, weq, wScale, MAX_SYN, clampedDelay });
 }
 
 // The part of the wiring that is not per-presynaptic-neuron: triadic closure, which samples the finished network with one sequential stream, and the proxy mean compensation, which needs the in-degree tallies from every slice.
@@ -1654,6 +1754,7 @@ function finishConnect(pts, p, st, onProgress){
   const T = st.T || buildPairLUT(pts, p.table, pts.rules);
   const R2 = st.R2 !== undefined ? st.R2 : p.radius*p.radius;
   const logn = st.logn !== undefined ? st.logn : (p.wdist|0) === 1;
+  const weq = st.weq !== undefined ? st.weq : (p.wdist|0) === 2;
   const sg = st.sg !== undefined ? st.sg : (p.wsigma || 1);
   const declared = (p.density === undefined ? 100 : p.density)/100;
   const kscale = (p.kscale === undefined ? 100 : p.kscale)/100;
@@ -1689,7 +1790,7 @@ function finishConnect(pts, p, st, onProgress){
       if(d2 > R2) continue;
       const base = NEURON_TYPES[pts.ntype[i]].sign > 0 ? p.wExc : p.wInh;
       eP[added] = i; eQ[added] = k;
-      eW[added] = (logn ? base*Math.exp(sg*gaussRand(rc) - sg*sg/2) : base*(0.5+rc()))
+      eW[added] = (weq ? base : logn ? base*Math.exp(sg*gaussRand(rc) - sg*sg/2) : base*(0.5+rc()))
         *wScale*T.wMul[T.gIdx[i]*T.G + T.gIdx[k]];
       const dr = Math.max(1, Math.round(Math.sqrt(d2)/p.velocity));
       if(dr > MAX_DELAY) st.clampedDelay = (st.clampedDelay || 0) + 1;   // counted as the sweep's are
@@ -1754,10 +1855,11 @@ function finishConnect(pts, p, st, onProgress){
     comp = { e, i:i2 };
   }
   const pools = wirePools(pts);
+  const mods = wireMods(pts);
   return { kind:'net', count:n, pos:pts.pos, ntype:pts.ntype, bias:pts.bias, src:pts.src, ...(comp ? { comp } : {}),
     lidx, tags:pts.tags || {}, preStart, post:postA, w:wA, delay:delA,
     pmask:pmA, synCount:m,
-    hues:pts.hues, receptors:pts.receptors, ...(pools || {}),
+    hues:pts.hues, receptors:pts.receptors, ...(pools || {}), ...(mods || {}),
     // the declared rules ride along so the checkpoint can build the table the engines index with the per-synapse byte
     rules: pts.rules && pts.rules.length ? pts.rules : undefined,
     // names the wiring could not resolve to a rule, so the status line can say so without the wiring having failed
@@ -1930,7 +2032,7 @@ async function connectCompute(ins, p){
   const pts = { count:src.count, pos:src.pos, ntype:src.ntype, bias:src.bias,
     src:src.src, lidx:src.lidx, tags:src.tags, projs:src.projs, rules:src.rules,
     // the pools travel with the rules and the projections: this copy is the stream the wiring sees, and a field left off it is a mechanism that computes and is never wired
-    pools:src.pools, ids:src.ids, connectionTables:src.connectionTables, receptors:src.receptors, cellTypes:src.cellTypes, hues:src.hues };
+    pools:src.pools, mods:src.mods, ids:src.ids, connectionTables:src.connectionTables, receptors:src.receptors, cellTypes:src.cellTypes, hues:src.hues };
   const params = { ...p, __maxSyn:maxSynLimit(), __res:simResolution,
     __rateHint:rateHint };
   // Fan the sweep out when there is enough of it to be worth the fixed cost of starting workers and shipping the point cloud to each.
@@ -2382,9 +2484,9 @@ export const NODE_DEFS = {
       { k:'file', label:'mesh file (OBJ or GLB, in the project)', t:'str', def:'' },
       { k:'object', label:'object (blank: all)', t:'str', def:'' },
       { k:'scale', label:'file units to µm', t:'float', def:1, min:1e-6, s:[0.001,1000] },
-      { k:'up', label:'up axis', t:'select', def:0, options:['as authored (Y up)', 'Z up in the file'] },
-      { k:'center', label:'position', t:'select', def:0, options:['as authored', 'centered at the origin'] },
-      { k:'reload', label:'reload the file', t:'action', action:'meshReload' } ],
+      { k:'up', label:'up axis', t:'select', def:0, options:['Y up', 'Z up'], tips:['As authored, Y up.', 'The file is Z up.'] },
+      { k:'center', label:'position', t:'select', def:0, options:['as authored', 'centered'], tips:['', 'Centered at the origin.'] },
+      { k:'reload', label:'reload', t:'action', action:'meshReload' } ],
     compute: async (ins, p) => {
       const path = String(p.file || '').trim().replace(/^\/+/, '');
       if(!path) throw new Error('mesh: name a mesh file in the project folder, for example meshes/brain.obj or meshes/brain.glb');
@@ -2414,7 +2516,7 @@ export const NODE_DEFS = {
   noisefield: { title:'noise field', cat:'regions', color:'hsl(25,70%,60%)', inputs:0, params:[
       { k:'center', label:'center µm', t:'vec3', def:[0,0,0] },
       { k:'size', label:'bounds µm', t:'vec3', def:[2000,2000,2000] },
-      { k:'pattern', label:'pattern', t:'select', def:0, options:['blobs (fBm)','patches','stripes'] },
+      { k:'pattern', label:'pattern', t:'select', def:0, options:['blobs','patches','stripes'], tips:['Fractal Brownian motion (fBm).', '', ''] },
       { k:'scale', label:'feature µm', t:'float', def:400, min:10, s:[50,1500] },
       { k:'coverage', label:'coverage', t:'float', def:0.4, min:0.05, max:1 },
       { k:'octaves', label:'octaves', t:'int', def:2, min:1, max:4, cond:q => (q.pattern|0) === 0 },
@@ -2426,10 +2528,10 @@ export const NODE_DEFS = {
   scatter: { title:'neuron scatter', stem:'scatter', cat:'cells', color:'hsl(190,75%,55%)', inputs:1, params:[
       // A population is a density in a volume before it is a count: 90,000 per mm3 is mouse cortex (Herculano-Houzel et al. 2013), and the resolution slider is what makes a smaller build of it.
       // Count is the authored number for a scene that wants one.
-      { k:'fill', label:'fill', t:'select', def:1, options:['by count', 'at density (per mm3)'] },
+      { k:'fill', label:'fill', t:'select', def:1, options:['count', 'density'], tips:['A fixed number of cells.', 'Cells per mm3.'] },
       { k:'density', label:'density per mm3', t:'float', def:90000, min:1, s:[1000,150000], cond:q => (q.fill|0) === 1 },
       { k:'count', label:'count', t:'int', def:2000, min:1, s:[100,50000], cond:q => (q.fill|0) !== 1 },
-      { k:'type', label:'neuron type', t:'select', def:0, options:NEURON_TYPES.map(t=>t.name), hideOption:i => !!(NEURON_TYPES[i] && NEURON_TYPES[i].hidden) },
+      { k:'type', label:'neuron type', t:'select', def:0, options:NEURON_TYPES.map(typeOption), tips:NEURON_TYPES.map(typeTip), hideOption:i => !!(NEURON_TYPES[i] && NEURON_TYPES[i].hidden) },
       // identity: this tag names the population, so a new node adopts its name as the tag and the tag follows a rename (tagname.js).
       // The probe and stimulus tags are filters where blank means every cell, and must never be filled in by a name.
       { k:'tag', label:'population tag', t:'str', def:'', identity:true },
@@ -2448,20 +2550,20 @@ export const NODE_DEFS = {
       { k:'columns', label:'x y z columns (blank: auto)', t:'str', def:'' },
       { k:'id', label:'id column (blank: none)', t:'str', def:'' },
       { k:'scale', label:'file units to µm', t:'float', def:1, min:1e-9, s:[0.001,1000] },
-      { k:'up', label:'up axis', t:'select', def:0, options:['as authored (Y up)', 'Z up in the file'] },
-      { k:'type', label:'neuron type', t:'select', def:0, options:NEURON_TYPES.map(t=>t.name), hideOption:i => !!(NEURON_TYPES[i] && NEURON_TYPES[i].hidden) },
+      { k:'up', label:'up axis', t:'select', def:0, options:['Y up', 'Z up'], tips:['As authored, Y up.', 'The file is Z up.'] },
+      { k:'type', label:'neuron type', t:'select', def:0, options:NEURON_TYPES.map(typeOption), tips:NEURON_TYPES.map(typeTip), hideOption:i => !!(NEURON_TYPES[i] && NEURON_TYPES[i].hidden) },
       { k:'tag', label:'population tag', t:'str', def:'', identity:true },
       // one file, many populations: every distinct value of this column is its own population, tagged tag.value, with its own identity the way a repeat numbers its copies (a connectome's superclass, type, neuromere, side or transmitter column)
-      { k:'tagColumn', g:'populations', label:'population per value of column (blank: one)', t:'str', def:'' },
+      { k:'tagColumn', g:'populations', label:'population column', t:'str', def:'' },
       { k:'hue', g:'populations', label:'color hue (-1: automatic)', t:'int', def:-1, min:-1, max:360, cond:q => !String(q.tagColumn || '').trim() },
-      { k:'filter', g:'populations', label:'keep rows where (column=value; ...)', t:'str', def:'' },
+      { k:'filter', g:'populations', label:'row filter', t:'str', def:'' },
       // one node per population, laid out in a row and merged back, so each can be viewed and edited on its own
-      { k:'expand', g:'populations', label:'expand into one node per population', t:'action', action:'expandPops',
+      { k:'expand', g:'populations', label:'expand', t:'action', action:'expandPops',
         cond:(q, n, nodes) => !!String(q.tagColumn || '').trim() &&
           !(nodes || []).some(m => m.type === 'population' && m.inputs && m.inputs[0] && n && m.inputs[0].id === n.id) },
-      { k:'collapse', g:'populations', label:'collapse the populations back', t:'action', action:'collapsePops',
+      { k:'collapse', g:'populations', label:'collapse', t:'action', action:'collapsePops',
         cond:(q, n, nodes) => (nodes || []).some(m => m.type === 'population' && m.inputs && m.inputs[0] && n && m.inputs[0].id === n.id) },
-      { k:'reload', g:'populations', label:'reload the file', t:'action', action:'pointsReload' } ],
+      { k:'reload', g:'populations', label:'reload', t:'action', action:'pointsReload' } ],
     compute: async (ins, p, node) => {
       const path = String(p.file || '').trim().replace(/^\/+/, '');
       if(!path) throw new Error('points file: name a CSV or PLY in the project folder, for example points/somas.csv');
@@ -2550,7 +2652,7 @@ export const NODE_DEFS = {
   // A custom row joins the type table by name, so a later computation with other numbers updates it and every engine reads the current numbers at init; the numbers ride on the stream so a change rewires the network where the sign matters.
   celltype: { title:'cell type', cat:'celltypes', color:'hsl(300,70%,66%)', inputs:1, params:[
       { k:'row', label:'cell type', t:'select', def:1,
-        options:['custom (the numbers below)', ...CELL_PRESETS.map(t => t.name)],
+        options:['custom', ...CELL_PRESETS.map(typeOption)], tips:['The numbers below.', ...CELL_PRESETS.map(typeTip)],
         hideOption:i => i > 0 && !!(CELL_PRESETS[i - 1] && CELL_PRESETS[i - 1].hidden) },
       // blank is every cell; a tag (or a pattern with one *, or E or I) takes one population of a stream that carries many, so a file with a region column can give each region its own cell type
       { k:'tag', label:'population (blank: all)', t:'tag', def:'' },
@@ -2558,8 +2660,8 @@ export const NODE_DEFS = {
       { k:'name', label:'name', t:'str', def:'mycell', cond:q => (q.row|0) === 0 },
       // The published rows as a starting point: choosing one writes every number below, then the numbers are the scene's to edit.
       // The defaults are the RS row of Izhikevich 2007 chapter 8.
-      { k:'preset', label:'copy the numbers of', t:'select', def:0, cond:q => (q.row|0) === 0,
-        options:['custom', ...CELL_PRESETS.map(t => t.name)],
+      { k:'preset', label:'preset', t:'select', def:0, cond:q => (q.row|0) === 0,
+        options:['custom', ...CELL_PRESETS.map(typeOption)], tips:['', ...CELL_PRESETS.map(typeTip)],
         apply:(q, i) => {
           const t = CELL_PRESETS[i - 1];
           if(!t) return;                     // custom writes nothing
@@ -2569,7 +2671,7 @@ export const NODE_DEFS = {
             thr:f.graded ? f.graded.thr : q.thr, slope:f.graded ? f.graded.slope : q.slope });
         } },
       { k:'sign', label:'class', t:'select', def:0, options:['excitatory', 'inhibitory'], cond:q => (q.row|0) === 0 },
-      { k:'kind', label:'output', t:'select', def:0, options:['spiking', 'graded (release, no spikes)'], cond:q => (q.row|0) === 0 },
+      { k:'kind', label:'output', t:'select', def:0, options:['spiking', 'graded', 'Poisson'], tips:['', 'Releases transmitter in proportion to the membrane, with no spikes.', 'Fires at the input current, read in hertz.'], cond:q => (q.row|0) === 0 },
       { k:'C', g:'membrane', label:'C pF', t:'float', def:100, min:0.1, s:[1,300], cond:q => (q.row|0) === 0 },
       { k:'k', g:'membrane', label:'k nS/mV', t:'float', def:0.7, min:0.001, s:[0.01,2], cond:q => (q.row|0) === 0 },
       { k:'vr', g:'membrane', label:'rest mV', t:'float', def:-60, s:[-90,-40], cond:q => (q.row|0) === 0 },
@@ -2579,6 +2681,11 @@ export const NODE_DEFS = {
       { k:'b', g:'recovery', label:'b', t:'float', def:-2, s:[-5,15], cond:q => (q.row|0) === 0 },
       { k:'c', g:'recovery', label:'c reset mV', t:'float', def:-50, s:[-80,-30], cond:q => (q.row|0) === 0 },
       { k:'d', g:'recovery', label:'d', t:'float', def:100, s:[0,200], cond:q => (q.row|0) === 0 },
+      // u as a conductance (Zenke et al. 2015, Auryn's AIFGroup): the jump d in nanosiemens, the current u times (v minus the inhibitory reversal)
+      { k:'adapt', g:'recovery', label:'u is', t:'select', def:0, options:['current', 'conductance'], tips:['In pA.', 'In nS, toward the inhibitory reversal.'], cond:q => (q.row|0) === 0 && (q.kind|0) === 0 },
+      // the dynamic threshold (Auryn's IFGroup): the threshold jumps at a spike and relaxes, which is the refractoriness of their cells
+      { k:'thrJump', g:'threshold', label:'threshold jump mV (0: off)', t:'float', def:0, min:0, s:[0,100], cond:q => (q.row|0) === 0 && (q.kind|0) === 0 },
+      { k:'thrTau', g:'threshold', label:'threshold decay ms', t:'float', def:5, min:0.1, s:[1,50], cond:q => (q.row|0) === 0 && (q.kind|0) === 0 && q.thrJump > 0 },
       { k:'thr', g:'release', label:'release threshold mV', t:'float', def:-55, s:[-80,-30], cond:q => (q.row|0) === 0 && (q.kind|0) === 1 },
       { k:'slope', g:'release', label:'release slope mV', t:'float', def:10, min:0.1, s:[1,30], cond:q => (q.row|0) === 0 && (q.kind|0) === 1 },
       { k:'hue', label:'color hue', t:'int', def:300, min:0, max:360, cond:q => (q.row|0) === 0 } ],
@@ -2590,10 +2697,13 @@ export const NODE_DEFS = {
       if(NEURON_TYPES.some(t => !t.custom && t.key.toLowerCase() === name)) throw new Error('cell type: ' + name + ' is a built-in row; pick another name');
       const hue = ((p.hue|0) % 360 + 360) % 360;
       const rgb = hueRgb(hue);
-      const row = { key:name, name:name + (p.kind|0 ? ' (graded, ' : ' (') + ((p.sign|0) === 1 ? 'inh)' : 'exc)'), custom:true,
+      const row = { key:name, name:name + ((p.kind|0) === 1 ? ' (graded, ' : (p.kind|0) === 2 ? ' (Poisson, ' : ' (') + ((p.sign|0) === 1 ? 'inh)' : 'exc)'), custom:true,
         sign:(p.sign|0) === 1 ? -1 : 1, color:[rgb[0], rgb[1], rgb[2]],
         f7:{ C:+p.C || 100, k:+p.k || 0.7, vr:+p.vr, vt:+p.vt, vpeak:+p.vpeak, a:+p.a, b:+p.b, c:+p.c, d:+p.d,
-          ...((p.kind|0) === 1 ? { graded:{ thr:+p.thr, slope:+p.slope > 0 ? +p.slope : 1 } } : {}) } };
+          ...((p.kind|0) === 1 ? { graded:{ thr:+p.thr, slope:+p.slope > 0 ? +p.slope : 1 } } : {}),
+          ...((p.kind|0) === 2 ? { poisson:1 } : {}),
+          ...((p.kind|0) === 0 && (p.adapt|0) === 1 ? { adaptCond:1 } : {}),
+          ...((p.kind|0) === 0 && +p.thrJump > 0 ? { thrJump:+p.thrJump, thrTau:+p.thrTau > 0 ? +p.thrTau : 5 } : {}) } };
       if(!(row.f7.vt > row.f7.vr)) throw new Error('cell type: the threshold has to sit above the rest');
       const at = registerCellType(row);
       row.index = at;                      // where the computation put it, for the wiring workers
@@ -2627,7 +2737,7 @@ export const NODE_DEFS = {
           const fr = /^from:(.+)$/i.exec(x); if(fr){ from.push(fr[1]); return false; }
           return true; });
         if(!(mg >= 0)) throw new Error('receptors: ' + f[0] + ' has a magnesium concentration that is not a number');
-        if(!rest.length && !from.length) throw new Error('receptors: ' + f[0] + ' names no transmitter and no population (from:<tag>)');
+        // a channel with no transmitter and no population takes the synapses of the project nodes that name it (channel on the project node)
         channels.push({ name:f[0].toLowerCase(), tau, sign:f[2] === '+' ? 1 : -1, erev, mg, transmitters:rest.map(x => x.toLowerCase()), from });
       }
       if(!channels.length) throw new Error('receptors: no channel declared');
@@ -2690,13 +2800,13 @@ export const NODE_DEFS = {
   repeat: { title:'repeat', cat:'arrange', color:'hsl(270,70%,70%)', inputs:1, params:[
       { k:'copies', label:'copies', t:'int', def:2, min:2, s:[2,64] },
       { k:'pops', label:'populations', t:'select', def:0,
-        options:['numbered per copy', 'shared across copies'] },
-      { k:'tag', label:'tag copies as', t:'str', def:'', cond:q => (q.pops|0) === 0 },
+        options:['per copy', 'shared'], tips:['Numbered per copy.', 'Shared across copies.'] },
+      { k:'tag', label:'copy tag', t:'str', def:'', cond:q => (q.pops|0) === 0 },
       { k:'translate', label:'step translate µm', t:'vec3', def:[0,0,0] },
       { k:'rotate', label:'step rotate deg', t:'vec3', def:[0,0,0] },
       { k:'scale', label:'step scale', t:'vec3', def:[1,1,1] },
       { k:'pivot', label:'pivot µm', t:'vec3', def:[0,0,0] },
-      { k:'mirror', label:'mirror alternate copies', t:'select', def:0,
+      { k:'mirror', label:'mirror', t:'select', def:0,
         options:['no', 'in x', 'in y', 'in z'] } ],
     compute:(ins, p) => repeatCompute(need(ins[0], 'points', 'repeat needs points'), p) },
   noisewarp: { title:'noise warp', cat:'arrange', color:'hsl(270,75%,65%)', inputs:1, params:[
@@ -2781,7 +2891,7 @@ export const NODE_DEFS = {
       { k:'d', label:'d', t:'float', def:0, s:[-100,100] },
       { k:'seed', label:'seed', t:'int', def:1, s:[1,99] },
       // the control for anything read off position: the cells keep their identity and wiring and swap positions by a seeded permutation, so a stimulus mapped by position loses retinotopy and a readout that survives the shuffle was never spatial
-      { k:'shuffle', label:'positions', t:'select', def:0, options:['as they are', 'shuffled among the cells (control)'] } ],
+      { k:'shuffle', label:'positions', t:'select', def:0, options:['as is', 'shuffled'], tips:['', 'Shuffled among the cells, as a control.'] } ],
     compute:(ins,p)=>{
       const pts = need(ins[0], 'points', 'operations needs points');
       const out = clonePts(pts);
@@ -2863,10 +2973,16 @@ export const NODE_DEFS = {
       { k:'offset', g:'stream', label:'offset from followed (ms)', t:'float', def:0, s:[-200,200],
         cond:(q, n, nodes) => followsCurriculum(n, nodes) },
       // Every entry of SETS in curriculum.js has to appear here, or a scene on a set past the list shows an empty dropdown and any other edit silently resets the lesson.
+      // A checkout's own sets (localsets.js) follow the shipped ones under their own names.
       { k:'set', g:'lesson', label:'lesson set', t:'select', def:0,
-        options:['alphabet A-Z','letters, phonics order','vowels A E I O U',
-          'digits 0-9','shapes','objects (spoken names)','written words',
-          'picture book (image + word)','spots and tones (abstract pairs)'],
+        options:['alphabet','phonics','vowels',
+          'digits','shapes','objects','words',
+          'picture book','spots and tones',
+          ...LOCAL_SETS.map(s => s.name)],
+        tips:['A to Z.', 'Letters in phonics order.', 'A E I O U.',
+          '0 to 9.', '', 'Spoken names.', 'Written words.',
+          'An image and a word.', 'Abstract pairs.',
+          ...LOCAL_SETS.map(s => s.tip || '')],
         cond:(q, n, nodes) => !followsCurriculum(n, nodes) },
       { k:'order', g:'lesson', label:'order', t:'select', def:1, options:['sequential','shuffled'],
         cond:(q, n, nodes) => !followsCurriculum(n, nodes) },
@@ -2874,28 +2990,34 @@ export const NODE_DEFS = {
         cond:(q, n, nodes) => !followsCurriculum(n, nodes) },
       { k:'offMs', g:'lesson', label:'gap ms', t:'float', def:350, min:0, s:[0,2000],
         cond:(q, n, nodes) => !followsCurriculum(n, nodes) },
+      // fixed durations, or the random ones of Zenke et al. 2015 (a normal presentation, an exponential gap); the calibration sweep keeps fixed timing either way
+      { k:'timing', g:'lesson', label:'timing', t:'select', def:0, options:['fixed', 'random'], tips:['', 'A normal presentation (SD a third) and an exponential gap.'],
+        cond:(q, n, nodes) => !followsCurriculum(n, nodes) },
       { k:'phases', g:'lesson', label:'training blocks', t:'str', def:'', cond:(q, n, nodes) => !followsCurriculum(n, nodes) },
-      { k:'scramble', g:'lesson', label:'scramble the pairing', t:'select', def:0, options:['no','yes'],
+      { k:'scramble', g:'lesson', label:'scramble', t:'select', def:0, options:['no','yes'],
         cond:(q, n, nodes) => !followsCurriculum(n, nodes) },
       // Where each item lands on the input: the whole sheet (glyphs and spectra overlap heavily), its own tile of the sheet and block of the bands (distinct, sparse, small), or its own offset (full size, shifted per item, partly overlapping).
       // The tile and offset stand in for a separation stage before the input.
       { k:'place', g:'lesson', label:'placement', t:'select', def:0,
-        options:['whole sheet', 'own tile per item', 'own offset per item'],
+        options:['whole sheet', 'tile per item', 'offset per item'], tips:['', 'Each item has its own tile.', 'Each item has its own offset.'],
         cond:(q, n, nodes) => !followsCurriculum(n, nodes) },
       // Whether sound uses the same tile order as sight.
       // With the same order, position carries identity across the senses and a core sector both reach reads one item from the other by wiring alone (cross decoding 0.54 with every plasticity term off, 2026-09-09).
       // Shuffled, by the seed, no item shares a tile, so a cross-modal number has to be learned.
       { k:'placeOrder', g:'lesson', label:'tile order', t:'select', def:0,
-        options:['same for both senses', 'shuffled for sound (by seed)'],
+        options:['same', 'shuffled'], tips:['The same tile order for both senses.', 'Sound takes a tile order shuffled by the seed.'],
         cond:(q, n, nodes) => !followsCurriculum(n, nodes) && (q.place|0) > 0 },
       { k:'seed', g:'lesson', label:'seed', t:'int', def:1, s:[1,999], cond:(q, n, nodes) => !followsCurriculum(n, nodes) },
-      { k:'probeEvery', g:'probes', label:'unimodal probe every', t:'int', def:0, min:0, s:[0,20],
+      { k:'probeEvery', g:'probes', label:'probe every', t:'int', def:0, min:0, s:[0,20],
         cond:(q, n, nodes) => !followsCurriculum(n, nodes) },
-      { k:'condNames', g:'probes', label:'probe condition names', t:'str', def:'both, sight, sound',
+      { k:'condNames', g:'probes', label:'condition names', t:'str', def:'both, sight, sound',
         cond:(q, n, nodes) => !followsCurriculum(n, nodes) && (q.probeEvery|0) > 0 },
       { k:'calCycles', g:'probes', label:'calibration passes', t:'int', def:0, min:0, s:[0,5],
         cond:(q, n, nodes) => !followsCurriculum(n, nodes) },
-      { k:'reSweepEvery', g:'probes', label:'re-sweep every (presentations)', t:'int', def:0, min:0, s:[0,5000],
+      { k:'reSweepEvery', g:'probes', label:'re-sweep every', t:'int', def:0, min:0, s:[0,5000],
+        cond:(q, n, nodes) => !followsCurriculum(n, nodes) },
+      // delay activity: the first part of every gap is recorded as trials of a fourth condition labeled with the item just shown, so a readout can ask whether the item's cells keep firing after it is gone
+      { k:'afterMs', g:'probes', label:'record after offset (ms)', t:'float', def:0, min:0, s:[0,5000],
         cond:(q, n, nodes) => !followsCurriculum(n, nodes) } ],
     // a generated lesson stream: the same schedule drives every input node wired to it (item, timing, and per-presentation jitter derive from the simulated clock and the seed), so a visual node and an audio node see the same letter at the same moment: synchronized multimodal input without any shared state (Bahrick and Lickliter intersensory redundancy).
     // The compute emits only the descriptor; rendering happens in the io runtime.
@@ -2905,8 +3027,8 @@ export const NODE_DEFS = {
         throw new Error('a curriculum can only follow another curriculum');
       // the schedule: this node's own, or the one it follows
       const sched = up ? up : {
-        set:p.set|0, order:p.order|0, onMs:p.onMs, offMs:p.offMs,
-        probeEvery:p.probeEvery|0, calCycles:p.calCycles|0, reSweepEvery:p.reSweepEvery|0,
+        set:p.set|0, order:p.order|0, onMs:p.onMs, offMs:p.offMs, timing:p.timing|0,
+        probeEvery:p.probeEvery|0, calCycles:p.calCycles|0, reSweepEvery:p.reSweepEvery|0, afterMs:+p.afterMs || 0,
         // condition 0, 1, 2 ... named, so an analysis can say which cells it means in words the experiment uses rather than in indices only this scenario understands
         condNames:String(p.condNames || '').split(',').map(x => x.trim()).filter(Boolean),
         // a training schedule in blocks of simulated minutes, empty for the usual stream where every training trial drives every channel
@@ -2929,7 +3051,7 @@ export const NODE_DEFS = {
       { k:'pattern', label:'pattern', t:'select', def:0, options:['bar sweep'] },
       { k:'period', label:'sweep period ms', t:'float', def:1500, min:100, s:[200,6000] },
       // the sweep runs both ways so a direction-selective cell (the fly's T4 and T5) can be read as its rate one way against the other; alternate is one sweep forward, the next backward, and the probes then report a rate per direction and the index between them
-      { k:'direction', label:'direction', t:'select', def:0, options:['forward', 'backward', 'alternate every sweep'] } ],
+      { k:'direction', label:'direction', t:'select', def:0, options:['forward', 'backward', 'alternate'], tips:['', '', 'Turns around every sweep.'] } ],
     compute:(ins, p) => ({ kind:'signal', src:'sweep', period:p.period, direction:Math.max(0, Math.min(2, p.direction|0)) }) },
   // The input node is the mapping: which cells a signal lands on and how its channels lie over them.
   // What the signal is comes from the node on its signal port (curriculum, test signal, live, read).
@@ -2937,9 +3059,9 @@ export const NODE_DEFS = {
     sideLabels:['mask', 'signal'], params:[
       { k:'tag', g:'mapping', label:'population', t:'tag', def:'' },
       { k:'map', g:'mapping', label:'mapping', t:'select', def:0,
-        options:['sheet (topographic 2D)','bands (tonotopic 1D)','distributed (random)'] },
+        options:['sheet','bands','distributed'], tips:['Topographic, 2D.', 'Tonotopic, 1D.', 'Random.'] },
       { k:'code', g:'coding', label:'coding', t:'select', def:1,
-        options:['raw luminance','retinal contrast (ON/OFF)'] },
+        options:['luminance','ON/OFF contrast'], tips:['Raw luminance.', 'Retinal contrast, ON and OFF cells.'] },
       { k:'axis', g:'mapping', label:'axis', t:'select', def:1, options:['x','y','z'], cond:q => (q.map|0) < 2 },
       { k:'cols', g:'mapping', label:'channels across', t:'int', def:16, min:2, s:[2,64] },
       { k:'rows', g:'mapping', label:'channels down', t:'int', def:16, min:2, s:[2,64], cond:q => (q.map|0) !== 1 },
@@ -2958,12 +3080,15 @@ export const NODE_DEFS = {
   // Like the analysis node it passes the network through untouched and only declares what to show, so it can sit anywhere in the readout chain and adding one never changes what is simulated. view: every setting on this node is display only, so the run lock leaves it live, since a chart is for watching a run develop.
   chart: { title:'chart', cat:'readout', color:'hsl(175,60%,55%)', inputs:1, view:true, params:[
       { k:'plot', g:'plot', label:'plot', t:'select', def:0,
-        options:['a measure over time', 'weight distribution', 'response matrix',
-          'similarity matrix', 'PSTH (items by time)', 'weight block matrix', 'confusion matrix',
+        options:['measure over time', 'weight distribution', 'response matrix',
+          'similarity matrix', 'PSTH', 'weight block matrix', 'confusion matrix',
           // the live plots read the page's recording of what the probes see (record.js): no training run needed
-          'rate over time (live)', 'spike raster (live)', 'interval histogram (live)', 'membrane trace (selected cell)',
+          'live rate', 'live raster', 'live intervals', 'membrane trace',
           // the REC recording: every probe rate since REC was pressed, with the edits marked
-          'recording (rates and edits)'] },
+          'recording'],
+        tips:['', '', '', '', 'Items by time.', '', '',
+          'Rate over time, live.', 'Spike raster, live.', 'Interval histogram, live.', 'The selected cell.',
+          'Rates and edits since REC was pressed.'] },
       { k:'pop', g:'plot', label:'population', t:'str', def:'' },
       { k:'window', g:'plot', label:'window (s)', t:'float', def:5, min:0.1, s:[1,60], cond:q => (q.plot|0) >= 7 && (q.plot|0) <= 8 },
       { k:'smooth', g:'plot', label:'moving average (ms)', t:'float', def:0, min:0, s:[0,500], cond:q => (q.plot|0) === 7 || (q.plot|0) === 11 },
@@ -2989,55 +3114,56 @@ export const NODE_DEFS = {
       { k:'grid', g:'look', label:'grid lines', t:'select', def:1, options:['off', 'on'] },
       { k:'legend', g:'look', label:'legend', t:'select', def:1, options:['off', 'on'] },
       { k:'cmap', g:'look', label:'color map', t:'select', def:0,
-        options:['the theme\'s', 'viridis', 'gray (white to black)', 'teal (black to white)'],
+        options:['the theme\'s', 'viridis', 'gray', 'teal'], tips:['', '', 'White to black.', 'Black to white.'],
         cond:q => (q.plot|0) >= 2 && (q.plot|0) <= 6 },
       // The figure that leaves the app: drawn again at the size, resolution and style set here (chartpaint.js), not copied from the panel, whose canvas is a few hundred pixels wide.
       // Sizes are physical because that is how a journal or a slide states them; the font and line sizes are in points on the page whatever the resolution.
-      { k:'preview', g:'figure', label:'panel shows', t:'select', def:0, options:['the working plot', 'the figure as it will be saved'] },
-      { k:'format', g:'figure', label:'format', t:'select', def:0, options:['PNG', 'SVG (vector)', 'both'] },
+      { k:'preview', g:'figure', label:'panel shows', t:'select', def:0, options:['working plot', 'saved figure'], tips:['', 'The figure as it will be saved.'] },
+      { k:'format', g:'figure', label:'format', t:'select', def:0, options:['PNG', 'SVG', 'both'], tips:['', 'Vector.', ''] },
       { k:'sizePreset', g:'figure', label:'size', t:'select', def:0,
-        options:['custom', 'one column (85 x 60 mm)', 'one and a half columns (114 x 80 mm)', 'two columns (180 x 100 mm)', 'slide, 16:9 (254 x 143 mm)', 'square (120 x 120 mm)'],
+        options:['custom', 'one column', '1.5 columns', 'two columns', 'slide', 'square'],
+        tips:['', '85 x 60 mm.', '114 x 80 mm.', '180 x 100 mm.', '16:9, 254 x 143 mm.', '120 x 120 mm.'],
         apply:(q, i) => { const s = [null, [85, 60], [114, 80], [180, 100], [254, 143], [120, 120]][i]; if(s){ q.figW = s[0]; q.figH = s[1]; } } },
       { k:'figW', g:'figure', label:'width (mm)', t:'float', def:180, min:20, max:1000, s:[40,300] },
       { k:'figH', g:'figure', label:'height (mm)', t:'float', def:100, min:15, max:1000, s:[30,300] },
       { k:'dpi', g:'figure', label:'resolution (dots per inch)', t:'int', def:300, min:72, max:1200, s:[72,600], cond:q => (q.format|0) !== 1 },
-      { k:'theme', g:'figure', label:'theme', t:'select', def:0, options:['light (print)', 'light, transparent background', 'dark'] },
-      { k:'figFont', g:'figure', label:'font', t:'select', def:0, options:['sans serif (Arial, Helvetica)', 'serif (Times)', 'monospace'] },
+      { k:'theme', g:'figure', label:'theme', t:'select', def:0, options:['light', 'transparent', 'dark'], tips:['For print.', 'Light, on a transparent background.', ''] },
+      { k:'figFont', g:'figure', label:'font', t:'select', def:0, options:['sans serif', 'serif', 'monospace'], tips:['Arial, Helvetica.', 'Times.', ''] },
       { k:'fontPt', g:'figure', label:'font size (pt)', t:'float', def:8, min:4, max:24, s:[5,14] },
       { k:'linePt', g:'figure', label:'line width (pt)', t:'float', def:1, min:0.1, max:6, s:[0.25,3] },
-      { k:'caption', g:'figure', label:'provenance', t:'select', def:0, options:['a caption under the figure', 'in the file only'] },
+      { k:'caption', g:'figure', label:'provenance', t:'select', def:0, options:['caption', 'file only'], tips:['A caption under the figure.', 'In the file only.'] },
       { k:'savePng', g:'figure', label:'save figure', t:'action', action:'chartPng' },
       { k:'saveCsv', g:'figure', label:'save data', t:'action', action:'chartCsv' } ],
     // A chart declares what to draw and nothing else, so it passes the network through untouched.
     // It belongs after the checkpoint: what it draws is what the checkpoint's run produced, and a node that reads a run's output sitting upstream of the node that produces it was the one place in the graph where the wire ran against the data.
     compute:(ins, p) => ins[0] },
   analysis: { title:'analysis', cat:'readout', color:'hsl(175,50%,42%)', inputs:1, params:[
-      { k:'cap', label:'cells sampled per probe', t:'int', def:8192, min:64, s:[256,16384] },
-      { k:'topQ', label:'response set: top fraction', t:'float', def:0.1, min:0.01, max:0.5,
+      { k:'cap', label:'cells per probe', t:'int', def:8192, min:64, s:[256,16384] },
+      { k:'topQ', label:'response fraction', t:'float', def:0.1, min:0.01, max:0.5,
         cond:q => (q.doBind|0) === 1 },
       { k:'setExpr', label:'cells of interest', t:'str',
         def:'both and not sight and not sound',
         cond:q => (q.doBind|0) === 1 },
-      { k:'probeWith', label:'test recall with', t:'str', def:'sight, sound',
+      { k:'probeWith', label:'recall conditions', t:'str', def:'sight, sound',
         cond:q => (q.doBind|0) === 1 || (q.doDecode|0) === 1 },
       { k:'margin', label:'conjunction rank margin', t:'float', def:0.15, min:0, max:0.9,
         cond:q => (q.doBind|0) === 1 },
-      { k:'minCells', label:'timing needs at least (cells)', t:'int', def:4, min:2, s:[2,64],
+      { k:'minCells', label:'timing min cells', t:'int', def:4, min:2, s:[2,64],
         cond:q => (q.doTiming|0) === 1 },
-      { k:'minTrials', label:'decode needs per item (trials)', t:'int', def:2, min:1, s:[1,20],
+      { k:'minTrials', label:'decode min trials', t:'int', def:2, min:1, s:[1,20],
         cond:q => (q.doDecode|0) === 1 },
       { k:'nPerm', label:'cross-decode permutations', t:'int', def:40, min:0, s:[0,500],
         cond:q => (q.doDecode|0) === 1 },
       { k:'doDecode', label:'decode', t:'select', def:1, options:['off','on'] },
       // these three run inside the decode pass
-      { k:'doBind', label:'conjunction and binding', t:'select', def:1, options:['off','on'],
+      { k:'doBind', label:'binding', t:'select', def:1, options:['off','on'],
         cond:q => (q.doDecode|0) === 1 },
-      { k:'doTiming', label:'spike timing agreement', t:'select', def:1, options:['off','on'],
+      { k:'doTiming', label:'timing', t:'select', def:1, options:['off','on'],
         cond:q => (q.doDecode|0) === 1 },
       { k:'doLike', label:'like-to-like connectivity', t:'select', def:1, options:['off','on'],
         cond:q => (q.doDecode|0) === 1 },
-      { k:'exportTrials', label:'export the trial matrix', t:'select', def:0,
-        options:['off','on (recording probes)'] } ],
+      { k:'exportTrials', label:'export trials', t:'select', def:0,
+        options:['off','on'], tips:['', 'From the recording probes.'] } ],
     compute:(ins, p) => {
       const net = ins[0];
       if(!net || net.kind !== 'net') return net;
@@ -3054,10 +3180,10 @@ export const NODE_DEFS = {
   probe: { title:'probe', cat:'readout', color:'hsl(175,60%,48%)', inputs:2, side:1, params:[
       { k:'label', label:'label', t:'str', def:'' },
       { k:'tag', label:'population', t:'tag', def:'' },
-      { k:'record', label:'record for analysis', t:'select', def:0, options:['off','on'] },
+      { k:'record', label:'record', t:'select', def:0, options:['off','on'] },
       // view: display settings, left live by the run lock
-      { k:'view', label:'view', t:'select', def:0, options:['rate','image (map)'], view:true },
-      { k:'audio', label:'audio', t:'select', def:0, options:['off','spikes (crackle)','bands (tones)'], view:true },
+      { k:'view', label:'view', t:'select', def:0, options:['rate','image'], tips:['', 'A map.'], view:true },
+      { k:'audio', label:'audio', t:'select', def:0, options:['off','spikes','bands'], tips:['', 'A crackle.', 'Tones.'], view:true },
       { k:'axis', label:'axis', t:'select', def:1, options:['x','y','z'], view:true,
         cond:q => (q.view|0) === 1 || (q.audio|0) === 2 },
       { k:'cols', label:'cells across / bands', t:'int', def:24, min:2, s:[2,64], view:true,
@@ -3072,7 +3198,7 @@ export const NODE_DEFS = {
       { k:'axisFrom', label:'source axis', t:'select', def:1, options:['x','y','z'] },
       { k:'axisTo', label:'target axis', t:'select', def:1, options:['x','y','z'] },
       { k:'dispersed', label:'mapping', t:'select', def:0,
-        options:['topographic','dispersed (convergent)','proximity','matched (by order)'] },
+        options:['topographic','dispersed','proximity','matched'], tips:['', 'Convergent.', '', 'By order.'] },
       { k:'flipU', label:'mirror u', t:'select', def:0, options:['no','yes'], cond:q => !(q.dispersed|0) },
       { k:'flipV', label:'mirror v', t:'select', def:0, options:['no','yes'], cond:q => !(q.dispersed|0) },
       { k:'sigma', label:'spread µm (target)', t:'float', def:60, min:1, s:[10,400],
@@ -3084,13 +3210,15 @@ export const NODE_DEFS = {
         cond:q => (q.dispersed|0) === 1 },
       // Inside a repeat: a projection from copy k to copy k plus this offset (bulb below to bulb above is offset 1 across the tier repeat).
       // The repeat named by across applies it; blank, the first numbered repeat the projection passes through does.
-      { k:'offset', label:'to copy k plus', t:'int', def:0, min:-63, s:[-3,3] },
+      { k:'offset', label:'copy offset', t:'int', def:0, min:-63, s:[-3,3] },
       { k:'across', label:'across repeat (tag)', t:'str', def:'', cond:q => (q.offset|0) !== 0 },
       { k:'weight', label:'weight', t:'float', def:0.5, min:0, s:[0,20] },
       { k:'velocity', label:'axon vel µm/ms', t:'float', def:5000, min:1, s:[100,20000] },
       { k:'tract', label:'tract length µm (0=straight)', t:'float', def:0, min:0, s:[0,20000] },
       { k:'frozen', label:'plasticity', t:'select', def:0, options:['plastic','frozen'] },
-      { k:'rule', label:'learns by rule', t:'str', def:'',
+      // the receptor channel the pathway's synapses use (a line of the receptors node); blank follows the sign, E or I
+      { k:'channel', label:'receptor channel (blank: by sign)', t:'str', def:'' },
+      { k:'rule', label:'rule', t:'str', def:'',
         cond:q => (q.frozen|0) === 0 },
       { k:'seed', label:'seed', t:'int', def:1, s:[1,99] } ],
     // topographic tract between tagged populations, consumed by connect in the same wiring; place between merge and connect
@@ -3123,6 +3251,7 @@ export const NODE_DEFS = {
         sigma:p.sigma, prob:p.prob, fanout:Math.max(1, p.fanout|0), weight:p.weight,
         velocity:p.velocity, tract:p.tract, frozen:(p.frozen|0) === 1,
         rule:String(p.rule || '').trim(),
+        channel:String(p.channel || '').trim(),
         seed:p.seed|0 }] }; } },
   // A named plasticity rule.
   // The checkpoint's learning parameters are global, one rule for every synapse in the network, while the per-synapse gate can only say plastic or frozen per pathway, which is half a mechanism.
@@ -3158,7 +3287,7 @@ export const NODE_DEFS = {
       { k:'aM', g:'stdp', label:'stdp A-', t:'float', def:0.001, min:0, s:[0,0.05] },
       { k:'wmax', g:'stdp', label:'weight limit', t:'float', def:30, min:0.1, s:[1,60] },
       { k:'wdep', g:'stdp', label:'weight bounds', t:'select', def:1,
-        options:['hard (additive)','soft (weight dependent)'] },
+        options:['hard','soft'], tips:['Additive.', 'Weight dependent.'] },
       { k:'trip', g:'stdp', label:'triplet A3+', t:'float', def:0, min:0, s:[0,0.02] },
       { k:'iEta', g:'homeostasis', label:'homeo rate eta', t:'float', def:0.002, min:0, s:[0,0.02] },
       { k:'het', g:'more', label:'heterosynaptic beta', t:'float', def:0, min:0, s:[0,0.05] },
@@ -3173,7 +3302,7 @@ export const NODE_DEFS = {
       { k:'stp', g:'short-term', label:'short-term plasticity', t:'select', def:0,
         options:['as the checkpoint', 'off', 'own settings'] },
       { k:'stpPreset', g:'short-term', label:'synapse class', t:'select', def:0,
-        options:['custom', 'depressing (Markram 1998)', 'facilitating (Markram 1998)'],
+        options:['custom', 'depressing', 'facilitating'], tips:['', 'Markram 1998: U 0.5, recovery 800 ms.', 'Markram 1998: U 0.03, recovery 130 ms, facilitation 530 ms.'],
         apply:(q, i) => {
           if(i === 1) Object.assign(q, { stpU:0.5, stpTauD:800, stpTauF:1 });
           else if(i === 2) Object.assign(q, { stpU:0.03, stpTauD:130, stpTauF:530 });
@@ -3214,6 +3343,27 @@ export const NODE_DEFS = {
       return { ...pts, pools:[...(pts.pools || []), {
         tag:String(p.tag || '').trim(), gain:Math.min(0, +p.gain || 0),
         node:node ? node.id : -1 }] }; } },
+  // A modulator (MODEL.md 4): a level per cell of the target population, raised by a time course the engines evaluate per step (as a stimulus is) or by the spikes of a releasing population, and read by the checkpoint's modulation settings.
+  // Pass-through like the pool; the wiring resolves it (wireMods) and every engine steps the field the same way.
+  modulator: { title:'modulator', cat:'wiring', color:'hsl(140,55%,48%)', inputs:1, params:[
+      { k:'tag', label:'onto population', t:'tag', def:'' },
+      { k:'source', label:'raised by', t:'select', def:0, options:['time course', 'population spikes'],
+        tips:['A level the engine holds or pulses.', 'Every spike of the releasing population raises the level.'] },
+      { k:'level', label:'level', t:'float', def:1, s:[0,5],
+        info:'A time course holds this level; a releasing population gives it per Hz of its mean rate.' },
+      { k:'from', label:'released by', t:'tag', def:'', cond:q => (q.source|0) === 1 },
+      { k:'mode', label:'time course', t:'select', def:0, options:['constant', 'pulse train', 'ramp', 'presentations'],
+        tips:['', '', 'Rises to the level over the period.', 'The level while a presentation is on.'], cond:q => (q.source|0) === 0 },
+      { k:'period', label:'period / ramp ms', t:'float', def:1000, min:1, s:[10,10000], cond:q => (q.source|0) === 0 && ((q.mode|0) === 1 || (q.mode|0) === 2) },
+      { k:'width', label:'pulse width ms', t:'float', def:50, min:1, s:[1,1000], cond:q => (q.source|0) === 0 && (q.mode|0) === 1 },
+      { k:'t0', label:'onset ms', t:'float', def:0, min:0, s:[0,10000], cond:q => (q.source|0) === 0 && (q.mode|0) > 0 && (q.mode|0) < 3 },
+      { k:'duration', label:'duration ms (0=on)', t:'float', def:0, min:0, s:[0,60000], cond:q => (q.source|0) === 0 && (q.mode|0) > 0 && (q.mode|0) < 3 } ],
+    compute:(ins, p, node) => { const pts = need(ins[0], 'points',
+        'a modulator needs points (place before connect)');
+      return { ...pts, mods:[...(pts.mods || []), {
+        tag:String(p.tag || '').trim(), source:p.source|0, level:+p.level || 0, from:String(p.from || '').trim(),
+        mode:p.mode|0, period:+p.period || 1000, width:+p.width || 50, t0:+p.t0 || 0, duration:+p.duration || 0,
+        node:node ? node.id : -1 }] }; } },
   // Explicit synapses from a connections table, on top of the pair-hash wiring: the fly connectome's shape.
   // Pass-through like the plasticity node; connect appends what the table names among the cells that carry ids from a points file.
   connectionsfile: { title:'connections file', cat:'wiring', color:'hsl(140,65%,50%)', inputs:1, params:[
@@ -3224,17 +3374,17 @@ export const NODE_DEFS = {
       { k:'signCol', g:'columns', label:'transmitter (blank: auto)', t:'str', def:'' },
       { k:'weight', g:'synapse', label:'weight per synapse', t:'float', def:0.5, min:0, s:[0,20] },
       { k:'wInh', g:'synapse', label:'inhibitory weight factor', t:'float', def:1, min:0, s:[0,3] },
-      { k:'mode', g:'synapse', label:'a row with count c is', t:'select', def:0,
-        options:['one synapse of weight × c', 'c synapses of the weight'] },
+      { k:'mode', g:'synapse', label:'count c', t:'select', def:0,
+        options:['one synapse', 'c synapses'], tips:['One synapse of weight × c.', 'c synapses of the weight.'] },
       // a pair table's counts run from one to thousands; what the weight multiplies is a choice, and the strongest pairs decide the dynamics
-      { k:'compress', g:'synapse', label:'count taken as', t:'select', def:0,
-        options:['c', 'square root of c', 'log2 of 1 + c', 'one (every pair alike)'] },
+      { k:'compress', g:'synapse', label:'count scale', t:'select', def:0,
+        options:['c', 'square root', 'log2(1 + c)', 'one'], tips:['', 'The square root of c.', '', 'Every pair alike.'] },
       { k:'cap', g:'synapse', label:'count ceiling (0: none)', t:'float', def:0, min:0, s:[0,200] },
       { k:'signMode', g:'synapse', label:'sign', t:'select', def:0,
-        options:['by the presynaptic cell type', 'by the transmitter column (GABA, glutamate, histamine inhibit)'] },
+        options:['cell type', 'transmitter'], tips:['By the presynaptic cell type.', 'By the transmitter column: GABA, glutamate and histamine inhibit.'] },
       { k:'velocity', g:'synapse', label:'axon vel µm/ms', t:'float', def:200, min:1, s:[50,5000] },
       { k:'rule', g:'synapse', label:'plasticity rule (blank: default)', t:'str', def:'' },
-      { k:'reload', g:'synapse', label:'reload the table', t:'action', action:'connectionsReload' } ],
+      { k:'reload', g:'synapse', label:'reload', t:'action', action:'connectionsReload' } ],
     compute: async (ins, p, node) => {
       const pts = need(ins[0], 'points', 'connections file needs points (place before connect)');
       const path = String(p.file || '').trim().replace(/^\/+/, '');
@@ -3267,7 +3417,8 @@ export const NODE_DEFS = {
       { k:'prob', label:'probability', t:'float', def:0.15, min:0, max:1 },
       { k:'wExc', label:'weight exc', t:'float', def:0.5, s:[0,20] },
       { k:'wInh', label:'weight inh', t:'float', def:-1.5, s:[-30,0] },
-      { k:'wdist', label:'weight dist', t:'select', def:1, options:['uniform ±50%','lognormal'] },
+      // equal: every synapse the weight as given, the published networks' choice (Zenke et al. 2015 set one weight per pathway)
+      { k:'wdist', label:'weight dist', t:'select', def:1, options:['uniform ±50%','lognormal','equal'] },
       { k:'wsigma', label:'lognorm sigma', t:'float', def:1, min:0.1, s:[0.1,2], cond:q => (q.wdist|0) === 1 },
       { k:'cluster', label:'cluster boost', t:'float', def:0, min:0, max:1 },
       { k:'table', label:'pair table', t:'pairs', def:'' },
@@ -3307,20 +3458,23 @@ export const NODE_DEFS = {
   // term: the hello term (TERMS in protocol.js) a setting belongs to; the panel grays the row when the running engine does not list it.
   checkpoint: { title:'checkpoint', cat:'run', color:'hsl(0,75%,55%)', inputs:1, params:[
       { k:'steps', g:'engine', label:'steps / frame', t:'int', def:2, min:1, max:20 },
+      // the membrane step (MODEL.md 1): exponential is exact for a cell whose conductances hold over the step, where Euler overshoots when the conductances shorten the membrane's time constant
+      { k:'integ', g:'engine', term:'integ', label:'membrane step', t:'select', def:0, options:['Euler','exponential','exact'],
+        tips:['Two Euler half steps.', 'Two exponential half steps on linear rows.', 'The equations, solved exactly over each half step.'] },
       { k:'engine', g:'engine', label:'engine', t:'select', def:0,
-        options:['auto','cpu (reference)','gpu (experimental)','remote (engine address)'] },
+        options:['auto','cpu','gpu','remote'], tips:['', 'The reference engine.', 'Experimental.', 'The engine at the address below.'] },
       // where the remote engine listens: host/host.mjs, or an engine of one's own that speaks the protocol (ENGINE.md, writing an engine)
       { k:'liveHost', g:'engine', label:'engine address', t:'str', def:'ws://localhost:8801',
         cond:q => (q.engine|0) === 3 },
       // conductance: the exp decay with a reversal potential per channel, so a synapse drives g (E - v): excitation saturates as the cell depolarizes and inhibition near rest shunts (divides) rather than subtracts (MODEL.md 2)
-      { k:'syn', g:'engine', label:'synapse', t:'select', def:0, options:['kick (instant)','exp decay','conductance (exp with reversal)'] },
+      { k:'syn', g:'engine', label:'synapse', t:'select', def:0, options:['kick','exp decay','conductance'], tips:['The charge arrives in one step.', 'An exponentially decaying current.', 'An exponentially decaying conductance toward the reversal potential.'] },
       { k:'tauE', g:'engine', term:['syn:1','syn:2'], label:'tau exc ms', t:'float', def:3, min:0.5, s:[0.5,20], cond:q => (q.syn|0) >= 1 },
       { k:'tauI', g:'engine', term:['syn:1','syn:2'], label:'tau inh ms', t:'float', def:8, min:0.5, s:[0.5,30], cond:q => (q.syn|0) >= 1 },
       { k:'eRevE', g:'engine', term:'syn:2', label:'E reversal mV', t:'float', def:0, s:[-20,20], cond:q => (q.syn|0) === 2 },
       { k:'eRevI', g:'engine', term:'syn:2', label:'I reversal mV', t:'float', def:-70, s:[-90,-40], cond:q => (q.syn|0) === 2 },
       // What w means in exp mode. peak: the current jumps by w and decays, so the charge per spike is w tau (NEST iaf_psc_exp, Brian). charge: the jump is scaled by (1 - e^(-1/tau)) so the discrete sum over steps is exactly w, the same charge kick mode delivers. exact: w is the peak, and the current over a step is the integral of the exponential across it, so the charge is w tau exactly at 1 ms.
       { k:'psc', g:'engine', term:['psc:1','psc:2'], label:'exp current scale', t:'select', def:0,
-        options:['peak: w is the peak current (NEST, Brian)', 'charge: w is the total charge per spike', 'exact: w is the peak, integrated exactly over each step'],
+        options:['peak', 'charge', 'exact'], tips:['w is the peak current (NEST, Brian).', 'w is the total charge per spike.', 'w is the peak, integrated exactly over each step.'],
         cond:q => (q.syn|0) === 1 },
       { k:'refrac', g:'engine', term:'refrac', label:'refractory ms', t:'int', def:2, min:0, s:[0,5] },
       // The potassium reversal potential as a floor on the membrane: no hyperpolarizing current takes v below it.
@@ -3329,6 +3483,10 @@ export const NODE_DEFS = {
       { k:'vmin', g:'engine', term:'vmin', label:'membrane floor mV', t:'float', def:-90, s:[-120,-60] },
       // Training settings live on the checkpoint because a training run is this checkpoint left running with plasticity on: same network, same rule, longer clock, and a saved scene records how it is trained.
       { k:'plast', g:'timing', term:'plast', label:'plasticity', t:'select', def:0, options:['off','STDP + homeostasis'] },
+      // The third factor (MODEL.md 4): a training run can hold the Hebbian terms at zero between presentations, the gate a neuromodulatory signal puts on learning (Fremaux and Gerstner 2016); the homeostatic terms run throughout.
+      { k:'plastGate', g:'timing', term:'plastGain', label:'learning gate', t:'select', def:0,
+        options:['always', 'presentations', 'both senses', 'presentations, no probes'],
+        tips:['', 'While a presentation is on.', 'While both senses are on.', 'While a presentation is on, except probes.'], cond:q => (q.plast|0) === 1 },
       // A+ and A- set where the excitatory population relaxes to, not just how fast it learns.
       // Under the weight-dependent bound below the fixed point is A+/A-, so these default to 0.008 / 0.001, which is a mean weight of 8: the default excitatory weight on the connect node.
       // A depression stronger than potentiation under hard bounds has no fixed point and walks every excitatory weight to zero on any uncorrelated network.
@@ -3340,8 +3498,8 @@ export const NODE_DEFS = {
       { k:'tauM', g:'timing', term:'plast', label:'stdp tau- ms', t:'float', def:33.7, min:1, s:[5,100], cond:q => (q.plast|0) === 1 },
       // Where the pair rule reads its traces (MODEL.md 4): at the synapse a presynaptic spike counts when it arrives, so a pairing is timed from the arrival (Izhikevich 2006, dt = t_post - (t_pre + d)); at the soma both traces are read when the cell fires.
       // Scenes tuned on the soma reading declare it (scene format 14).
-      { k:'stdpAt', g:'timing', term:'stdpAt', label:'stdp timed at', t:'select', def:1,
-        options:['the soma: traces read when the cell fires', 'the synapse: a pre spike counts when it arrives'],
+      { k:'stdpAt', g:'timing', term:'stdpAt', label:'stdp timing', t:'select', def:1,
+        options:['soma', 'synapse'], tips:['Traces are read when the cell fires.', 'A presynaptic spike counts when it arrives.'],
         cond:q => (q.plast|0) === 1 },
       // The clamp rewrites anything above this on its first plasticity event, so it has to clear the largest wired weight, not the mean.
       // Default 30 rather than 10: the default inhibitory weight is -7 and a lognormal draw carries it several times higher.
@@ -3359,17 +3517,35 @@ export const NODE_DEFS = {
       // Additive spike-timing plasticity has no interior fixed point: with hard bounds every excitatory weight walks to one end and the recurrent structure dissolves.
       // The weight-dependent form (van Rossum, Bi and Turrigiano 2000) settles at A+/A- instead.
       { k:'wdep', g:'timing', term:'plast', label:'weight bounds', t:'select', def:1,
-        options:['hard (clamped)', 'soft (weight-dependent)'],
+        options:['hard', 'soft'], tips:['Clamped.', 'Weight dependent.'],
         cond:q => (q.plast|0) === 1 },
+      // Soft depression scales with w to this power (MODEL.md 4): 1 is proportional (van Rossum, Bi and Turrigiano 2000), 0 additive, between is Gutig, Aharonov, Rotter and Sompolinsky 2003, where strong synapses are depressed less than in proportion and the weight distribution is both stable and competitive.
+      { k:'wmu', g:'timing', term:'wmu', label:'depression weight exponent', t:'float', def:1, min:0, max:1, s:[0,1],
+        cond:q => (q.plast|0) === 1 && (q.wdep|0) === 1 },
       { k:'iEta', g:'homeostasis', term:'plast', label:'homeo rate eta', t:'float', def:0.002, min:0, s:[0,0.02], cond:q => (q.plast|0) === 1 },
-      { k:'rhoMode', g:'homeostasis', term:'rhoMode', label:'rate set points', t:'select', def:0,
-        options:['fixed target','measured baseline (per neuron)'], cond:q => (q.plast|0) === 1 },
+      { k:'rhoMode', g:'homeostasis', term:'rhoMode', label:'rate target', t:'select', def:0,
+        options:['fixed','measured'], tips:['A fixed target rate.', 'Each neuron\'s measured baseline.'], cond:q => (q.plast|0) === 1 },
       { k:'calS', g:'homeostasis', term:'rhoMode', label:'calibration s', t:'float', def:10, min:2, s:[5,60],
         cond:q => (q.plast|0) === 1 && (q.rhoMode|0) === 1 },
       { k:'iRho', g:'homeostasis', term:'plast', label:'homeo target Hz', t:'float', def:5, min:0.1, s:[0.5,30],
         cond:q => (q.plast|0) === 1 && (q.rhoMode|0) === 0 },
+      // The sliding threshold of Zenke, Agnes and Gerstner 2015 (their P11Connection, MODEL.md 4): every cell keeps a slow estimate of its own rate, and the depression of its incoming excitatory synapses is scaled by the square of that estimate over a target rate, so a quiet cell depresses less and a busy one more.
+      // The estimate is not kept in a saved brain, so a resumed run starts it where slideInit says.
+      { k:'slide', g:'homeostasis', term:'slide', label:'sliding threshold', t:'select', def:0,
+        options:['off', 'on'], tips:['', 'Depression scales with (rate over target) squared.'], cond:q => (q.plast|0) === 1 },
+      { k:'slideRate', g:'homeostasis', term:'slide', label:'threshold target Hz', t:'float', def:10, min:0.1, s:[1,30],
+        cond:q => (q.plast|0) === 1 && (q.slide|0) === 1 },
+      { k:'slideTau', g:'homeostasis', term:'slide', label:'rate estimate tau s', t:'float', def:600, min:1, s:[10,1800],
+        cond:q => (q.plast|0) === 1 && (q.slide|0) === 1 },
+      { k:'slideInit', g:'homeostasis', term:'slide', label:'rate estimate starts at Hz', t:'float', def:1, min:0, s:[0,20],
+        cond:q => (q.plast|0) === 1 && (q.slide|0) === 1 },
+      // the inhibitory rule's target: each cell's own rate (Vogels et al. 2011), or one factor from the population's rate (Zenke et al. 2015, their global secreted factor)
+      { k:'iGlobal', g:'homeostasis', term:'iGlobal', label:'inhibitory rule target', t:'select', def:0, options:['per cell', 'global'], tips:['Vogels et al. 2011.', 'A global factor (Zenke et al. 2015).'],
+        cond:q => (q.plast|0) === 1 },
+      { k:'iTauG', g:'homeostasis', term:'iGlobal', label:'population rate window (s)', t:'float', def:10, min:0.1, s:[1,60],
+        cond:q => (q.plast|0) === 1 && (q.iGlobal|0) === 1 },
       { k:'scale', g:'homeostasis', term:'scale', label:'synaptic scaling', t:'select', def:0,
-        options:['off','toward target rate'], cond:q => (q.plast|0) === 1 },
+        options:['off','on'], tips:['', 'Toward the target rate.'], cond:q => (q.plast|0) === 1 },
       { k:'sEta', g:'homeostasis', term:'scale', label:'scaling rate /s', t:'float', def:0.001, min:0, s:[0,0.01],
         cond:q => (q.plast|0) === 1 && (q.scale|0) === 1 },
       { k:'het', g:'competition', term:'het', label:'heterosynaptic beta', t:'float', def:0, min:0, s:[0,0.05],
@@ -3381,12 +3557,16 @@ export const NODE_DEFS = {
         cond:q => (q.plast|0) === 1 && q.cons > 0 },
       { k:'consP', g:'competition', term:'cons', label:'well depth', t:'float', def:10, min:0, s:[0,50],
         cond:q => (q.plast|0) === 1 && q.cons > 0 },
+      { k:'refInit', g:'competition', term:'cons', label:'reference starts at', t:'select', def:0,
+        options:['wired', 'zero', 'consolidated'], tips:['The wired weight.', '', 'The consolidated weight.'],
+        cond:(q, n, nodes) => (q.plast|0) === 1 && (q.cons > 0 ||
+          (nodes || []).some(x => x.type === 'plasticity' && x.params.cons > 0)) },
       // These three govern consolidation network-wide, and a plasticity node can switch it on for one pathway while this node's own control reads zero, so they follow consolidation anywhere in the graph rather than this node's copy of it.
-      { k:'tauCons', g:'competition', term:'cons', label:'commit after (sim-min)', t:'float', def:20,
+      { k:'tauCons', g:'competition', term:'cons', label:'commit after min', t:'float', def:20,
         min:0.5, s:[1, 120],
         cond:(q, n, nodes) => (q.plast|0) === 1 && (q.cons > 0 ||
           (nodes || []).some(x => x.type === 'plasticity' && x.params.cons > 0)) },
-      { k:'consStep', g:'competition', term:'cons', label:'commit check every (sim-s)', t:'float', def:1.2,
+      { k:'consStep', g:'competition', term:'cons', label:'commit check s', t:'float', def:1.2,
         min:0.05, s:[0.1, 10],
         cond:(q, n, nodes) => (q.plast|0) === 1 && (q.cons > 0 ||
           (nodes || []).some(x => x.type === 'plasticity' && x.params.cons > 0)) },
@@ -3394,10 +3574,23 @@ export const NODE_DEFS = {
         options:['off', 'on'],
         cond:(q, n, nodes) => (q.plast|0) === 1 && (q.cons > 0 ||
           (nodes || []).some(x => x.type === 'plasticity' && x.params.cons > 0)) },
+      // Neuromodulation (MODEL.md 4): what the modulator field does, where the field itself comes from the modulator nodes before connect.
+      { k:'modPlast', g:'modulation', term:'mod', label:'learning', t:'select', def:0, options:['unmodulated', 'gain', 'eligibility'],
+        tips:['', 'The Hebbian terms scale with base + level at the cell.', 'The terms accumulate on a trace per synapse, paid into the weight by base + level at every sweep.'],
+        cond:q => (q.plast|0) === 1 },
+      { k:'modBase', g:'modulation', term:'mod', label:'learning base', t:'float', def:1, min:0, s:[0,2],
+        cond:q => (q.plast|0) === 1 && (q.modPlast|0) > 0 },
+      { k:'eligTau', g:'modulation', term:'elig', label:'trace tau ms', t:'float', def:1000, min:1, s:[100,10000],
+        cond:q => (q.plast|0) === 1 && (q.modPlast|0) === 2 },
+      { k:'modStep', g:'modulation', term:'elig', label:'sweep every ms', t:'int', def:10, min:1, s:[1,1000],
+        cond:q => (q.plast|0) === 1 && (q.modPlast|0) === 2 },
+      { k:'modTau', g:'modulation', term:'mod', label:'level tau ms', t:'float', def:200, min:1, s:[10,5000] },
+      { k:'modDrive', g:'modulation', term:'mod', label:'synaptic gain per level', t:'float', def:0, s:[-1,2] },
+      { k:'modCur', g:'modulation', term:'mod', label:'current per level', t:'float', def:0, s:[-50,50] },
       // The two published synapse classes of Markram, Wang and Tsodyks (1998, PNAS 95:5323): depressing (pyramid to pyramid, U 0.5, recovery 800 ms, no facilitation) and facilitating (pyramid to bitufted interneuron, U 0.03, recovery 130 ms, facilitation 530 ms).
       // The defaults are the depressing class; the term is off until the amount above zero.
       { k:'stpPreset', g:'short-term', term:'stp', label:'synapse class', t:'select', def:0,
-        options:['custom', 'depressing (Markram 1998)', 'facilitating (Markram 1998)'],
+        options:['custom', 'depressing', 'facilitating'], tips:['', 'Markram 1998: U 0.5, recovery 800 ms.', 'Markram 1998: U 0.03, recovery 130 ms, facilitation 530 ms.'],
         apply:(q, i) => {
           if(i === 1) Object.assign(q, { stpU:0.5, stpTauD:800, stpTauF:1 });
           else if(i === 2) Object.assign(q, { stpU:0.03, stpTauD:130, stpTauF:530 });
@@ -3409,16 +3602,16 @@ export const NODE_DEFS = {
       // As published, a rested synapse releases u x = U of its weight on the first spike, so switching the term on rescales transmission and the weights are tuned with it in mind.
       // The scaled option multiplies every release by the inverse of the rested release so a rested synapse delivers exactly w and only the dynamics change.
       { k:'stpNorm', g:'short-term', term:'stpNorm', label:'stp delivery', t:'select', def:0,
-        options:['as published: a rested synapse releases U', 'scaled: a rested synapse delivers w'],
+        options:['published', 'scaled'], tips:['A rested synapse releases U.', 'A rested synapse delivers w.'],
         cond:p => p.stp > 0 },
       // Release before the facilitation jump is the published order (Tsodyks, Pawelzik and Markram 1998; Zenke et al. 2015 and Auryn).
       // Facilitation first releases U(2 - U) from rest; scenes tuned on it declare it (scene format 9).
       { k:'stpOrder', g:'short-term', term:'stpOrder', label:'stp order', t:'select', def:0,
-        options:['release, then facilitation (published)', 'facilitation, then release'],
+        options:['release first', 'facilitation first'], tips:['Release, then facilitation: the published order.', 'Facilitation, then release.'],
         cond:p => p.stp > 0 },
       // Which synapses the release applies to, by the sign of the weight: Mongillo, Barak and Tsodyks 2008 carry the working-memory trace on excitatory synapses only.
-      { k:'stpScope', g:'short-term', term:'stpScope', label:'stp applies to', t:'select', def:0,
-        options:['every synapse', 'excitatory synapses only', 'inhibitory synapses only'],
+      { k:'stpScope', g:'short-term', term:'stpScope', label:'stp scope', t:'select', def:0,
+        options:['every synapse', 'excitatory only', 'inhibitory only'],
         cond:p => p.stp > 0 },
       { k:'stpTauD', g:'short-term', term:'stp', label:'depression tau (ms)', t:'float', def:800, min:1, s:[10,1000],
         cond:p => p.stp > 0 },
@@ -3428,38 +3621,45 @@ export const NODE_DEFS = {
       // A tab here rather than a node, because a node may only reach what is above it and every node is above the checkpoint.
       { k:'variants', g:'sweep', label:'variants', t:'sweeps', def:[] },
       { k:'trHours', g:'run', label:'train sim-hours', t:'float', def:16, min:0.05, s:[0.25,48] },
-      { k:'trCkptMin', g:'run', label:'metrics every (sim-min)', t:'float', def:2, min:0.2, s:[0.2,30] },
-      { k:'trBrainMin', g:'run', label:'brain file every (sim-min)', t:'float', def:5, min:1, s:[1,60] },
+      { k:'trCkptMin', g:'run', label:'metrics every min', t:'float', def:2, min:0.2, s:[0.2,30] },
+      { k:'trBrainMin', g:'run', label:'brain file every min', t:'float', def:5, min:1, s:[1,60] },
       { k:'trKeep', g:'run', label:'brain files kept', t:'int', def:4, min:1, s:[1,20] },
       { k:'trReps', g:'run', label:'replicates', t:'int', def:1, min:1, s:[1,10] },
       { k:'trSweep', g:'run', label:'conditions', t:'select', def:0,
         options:['as configured', 'paired and scrambled'] },
       // one variant per line, each a list of edits applied to a copy of the graph before its run: selector.param=value; ... A selector is a node name, a name prefix ending in *, #type for every node of a type, or @tag for the scatter carrying that population tag.
       { k:'trEngine', g:'run', label:'train on', t:'select', def:0,
-        options:['gpu', 'cpu (reference)', 'cuda (remote host)'] },
+        options:['gpu', 'cpu', 'cuda'], tips:['', 'The reference engine.', 'A remote host.'] },
       // A host is a long-lived process that keeps the code it loaded, so a second one on another port is how a run gets current code while an older host is still busy
       { k:'trHost', g:'run', label:'engine host', t:'str', def:'ws://localhost:8801',
         cond:q => (q.trEngine | 0) === 2 },
+      // an evaluation run starts from a trained brain with plasticity off; naming it here keeps the whole run on the node rather than in the dialog
+      { k:'trBrain', g:'run', label:'start from brain', t:'str', def:'' },
       { k:'train', g:'run', label:'START TRAINING', t:'action', action:'train' },
       { k:'runs', g:'run', label:'BROWSE RUNS', t:'action', action:'runs' },
       // A brain is this checkpoint's weights, so saving and loading one are actions of this node.
       { k:'brainSave', g:'run', label:'SAVE BRAIN', t:'action', action:'brainSave' },
       { k:'brainLoad', g:'run', label:'LOAD BRAIN', t:'action', action:'brainLoad' },
       // the network leaves the app: as tables, and as a case Brian 2 runs with the engine's second implementation (tools/brian_ref.py)
-      { k:'exportNet', g:'export', label:'save network (CSV)', t:'action', action:'exportNet' },
-      { k:'exportSecs', g:'export', label:'Brian 2 run length (s)', t:'float', def:2, min:0.01, s:[0.1,60] },
-      { k:'exportBrian', g:'export', label:'save for Brian 2', t:'action', action:'exportBrian' } ] ,
+      { k:'exportNet', g:'export', label:'save network', t:'action', action:'exportNet' },
+      { k:'exportSecs', g:'export', label:'Brian 2 run s', t:'float', def:2, min:0.01, s:[0.1,60] },
+      { k:'exportBrian', g:'export', label:'save for Brian', t:'action', action:'exportBrian' } ] ,
     compute:(ins,p)=>{ const net = need(ins[0],'net','output needs a connected network');
       return { ...net, bias:compensationBias(net, p), steps:p.steps, engine:p.engine|0, liveHost:String(p.liveHost || '').trim(),
         syn:p.syn|0, tauE:p.tauE, tauI:p.tauI,
-        psc:p.psc|0,
-        plast:p.plast|0, aP:p.aP, aM:p.aM, tauS:p.tauS, tauM:p.tauM, wmax:p.wmax, wdep:p.wdep|0, stdpAt:p.stdpAt|0,
+        psc:p.psc|0, integ:p.integ|0,
+        plast:p.plast|0, plastGate:p.plastGate|0, aP:p.aP, aM:p.aM, tauS:p.tauS, tauM:p.tauM, wmax:p.wmax, wdep:p.wdep|0, wmu:p.wmu === undefined ? 1 : +p.wmu, stdpAt:p.stdpAt|0,
         iEta:p.iEta, iRho:p.iRho, rhoMode:p.rhoMode|0, calS:p.calS,
         scale:p.scale|0, sEta:p.sEta,
         trip:p.trip || 0, tauY:p.tauY || 114, het:p.het || 0, tin:p.tin || 0,
-        cons:p.cons || 0, consW:p.consW || 0, consP:p.consP || 10,
+        cons:p.cons || 0, consW:p.consW || 0, consP:p.consP || 10, refInit:p.refInit|0,
+        slide:p.slide|0, slideRate:+p.slideRate || 10, slideTau:+p.slideTau || 600, slideInit:p.slideInit === undefined ? 1 : +p.slideInit,
+        iGlobal:p.iGlobal|0, iTauG:+p.iTauG || 10,
         // the commit switch and its two timings reach the engine through engineConfig, which reads them off the network
         commit:p.commit|0, tauCons:+p.tauCons || 20, consStep:+p.consStep || 1.2,
+        // neuromodulation: the field's time constant and what reads it; the field's sources are the modulator nodes, resolved by the wiring
+        modTau:+p.modTau || 200, modPlast:p.modPlast|0, modBase:p.modBase === undefined ? 1 : +p.modBase,
+        eligTau:+p.eligTau || 1000, modStep:p.modStep|0 || 10, modDrive:+p.modDrive || 0, modCur:+p.modCur || 0,
         // the node's own defaults, the Markram 1998 depressing class
         stp:p.stp || 0, stpU:p.stpU || 0.5, stpNorm:p.stpNorm|0, stpOrder:p.stpOrder|0, stpScope:p.stpScope|0,
         stpTauD:p.stpTauD || 800, stpTauF:p.stpTauF || 1,
@@ -3531,6 +3731,7 @@ export function registerNode(key, def, from = { module:'(registered directly)', 
       if(typeof p.label !== 'string') bad.push('a label on setting ' + k);
       if(!PARAM_TYPES.includes(p.t)) bad.push('setting ' + k + ' of a known kind (t: ' + PARAM_TYPES.join(', ') + ')');
       else if(p.t === 'select' && !Array.isArray(p.options)) bad.push('options on the select setting ' + k);
+      else if(p.t === 'select' && p.tips !== undefined && !(Array.isArray(p.tips) && p.tips.length === p.options.length)) bad.push('one tip per option on the select setting ' + k);
       else if(p.t !== 'action' && p.def === undefined) bad.push('a def on setting ' + k);
     }
   }

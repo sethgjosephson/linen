@@ -109,6 +109,22 @@ def noise_draw(i, t, seed):
     return (a + b) - 1.0
 
 
+# rand.js poissonDraw: the uniform a Poisson row fires on, under its own salt
+def poisson_draw(i, t, seed):
+    i = np.asarray(i, dtype=np.uint64)
+    t = np.asarray(t, dtype=np.uint64)
+    h = (i ^ ((t*np.uint64(2654435761)) & MASK) ^ np.uint64(seed) ^ np.uint64(0x7f4a7c15)) & MASK
+    return pcg(h).astype(np.float64)/4294967295.0
+
+
+def poisson_function(seed):
+    def draw(i, tms):
+        steps = np.floor(np.asarray(tms, dtype=np.float64) + 1e-6).astype(np.uint64)
+        return poisson_draw(i, steps, seed)
+    return Function(draw, arg_units=[1, 1], return_unit=1,
+                    arg_types=['integer', 'float'], return_type='float')
+
+
 def noise_function(seed):
     def draw(i, tms):
         # the millisecond a step falls in: the engine draws once per millisecond, and a substep holds the draw of the millisecond it is in
@@ -169,16 +185,137 @@ def fold(prefix, count):
     return L, '%sa%d' % (prefix, count)
 
 
-def step_code(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, stp=False, dt=1.0, chan_mg=(), colored=False):
+# The equations' membrane step (integ 2, MODEL.md 1), the reference engine's quadTime, quadAt and quadMs without branches.
+# Every case is computed and the one that holds is picked by its mask, so each case's arguments are kept finite where it does not hold (a NaN would survive the mask).
+def quad_time(p, A, q, w0, wp):
+    """The time from w0 to wp on w' = A w^2 + q, 1e30 if never, as p_t."""
+    return ['%s_y = %s - %s' % (p, wp, w0),
+            '%s_ys = %s_y*int(%s_y > 0) + int(%s_y <= 0)' % (p, p, p, p),
+            '%s_x = %s + %s*%s*%s' % (p, q, A, w0, wp),
+            '%s_xp = int(%s_x > 0)' % (p, p),
+            '%s_xs = %s_x*%s_xp + 1 - %s_xp' % (p, p, p, p),
+            '%s_z = %s*%s' % (p, A, q),
+            '%s_zp = int(%s_z > 0)' % (p, p),
+            '%s_s = sqrt(abs(%s_z)) + 1e-300' % (p, p),
+            '%s_R = clip(%s_ys/%s_xs, 0, 1e30)' % (p, p, p),
+            '%s_e = %s_z*%s_R*%s_R' % (p, p, p, p),
+            '%s_sm = int(abs(%s_e) < 1e-4)' % (p, p),
+            '%s_ser = %s_R*(1 - %s_e/3 + %s_e*%s_e/5)' % (p, p, p, p, p),
+            '%s_ta = arctan(%s_s*%s_R)/%s_s' % (p, p, p, p),
+            '%s_r = clip(%s_s*%s_R, 0, 1 - 1e-15)' % (p, p, p),
+            '%s_th = 0.5*log((1 + %s_r)/(1 - %s_r))/%s_s' % (p, p, p, p),
+            '%s_thv = %s_th*int(%s_s*%s_R < 1) + 1e30*int(%s_s*%s_R >= 1)' % (p, p, p, p, p, p),
+            '%s_nb = (1.5707963267948966 + arctan(-%s_x/(%s_s*%s_ys)))/%s_s' % (p, p, p, p, p),
+            '%s_tp = %s_sm*%s_ser + (1 - %s_sm)*(%s_zp*%s_ta + (1 - %s_zp)*%s_thv)' % (p, p, p, p, p, p, p, p),
+            '%s_tn = %s_zp*%s_nb + (1 - %s_zp)*1e30' % (p, p, p, p),
+            '%s_t = int(%s < %s)*(%s_xp*%s_tp + (1 - %s_xp)*%s_tn)' % (p, w0, wp, p, p, p, p)]
+
+
+def quad_at(p, A, q, w0, h):
+    """w after h (h within [0, 0.5 dt]) as p_w, and the integral of w over the span as p_iw."""
+    return ['%s_z = %s*%s' % (p, A, q),
+            '%s_e = %s_z*%s*%s' % (p, p, h, h),
+            '%s_sm = int(abs(%s_e) < 1e-4)' % (p, p),
+            '%s_zp = int(%s_z > 0)' % (p, p),
+            '%s_s = sqrt(abs(%s_z)) + 1e-300' % (p, p),
+            '%s_c1 = 1 - %s_e/2 + %s_e*%s_e/24' % (p, p, p, p),
+            '%s_s1 = %s*(1 - %s_e/6 + %s_e*%s_e/120)' % (p, h, p, p, p),
+            '%s_c2 = cos(%s_s*%s)' % (p, p, h),
+            '%s_s2 = sin(%s_s*%s)/%s_s' % (p, p, h, p),
+            '%s_E = exp(-2*%s_s*%s)' % (p, p, h),
+            '%s_c3 = 0.5*(1 + %s_E)' % (p, p),
+            '%s_s3 = 0.5*(1 - %s_E)/%s_s' % (p, p, p),
+            '%s_Cs = %s_sm*%s_c1 + (1 - %s_sm)*(%s_zp*%s_c2 + (1 - %s_zp)*%s_c3)' % (p, p, p, p, p, p, p, p),
+            '%s_Sn = %s_sm*%s_s1 + (1 - %s_sm)*(%s_zp*%s_s2 + (1 - %s_zp)*%s_s3)' % (p, p, p, p, p, p, p, p),
+            '%s_ls = (1 - %s_sm)*(1 - %s_zp)*%s_s*%s' % (p, p, p, p, h),
+            '%s_phi = %s_Cs - %s*%s*%s_Sn' % (p, p, A, w0, p),
+            '%s_ph = %s_phi + int(%s_phi == 0)*1e-300' % (p, p, p),
+            '%s_w = (%s*%s_Cs + %s*%s_Sn)/%s_ph' % (p, w0, p, q, p, p),
+            '%s_iw = -(%s_ls + log(abs(%s_ph)))/%s' % (p, p, p, A)]
+
+
+def quad_coef(p, u, I, Gs):
+    """The vertex p_m and the offset p_q of the parabola with u held, the adaptation conductance and the synaptic conductance folded into the slope."""
+    return ['%s_g = adC*%s + %s' % (p, u, Gs),
+            '%s_m = 0.5*(vr + vt) + %s_g/(2*kk)' % (p, p),
+            '%s_q = (-kk*(0.5*(vt - vr))*(0.5*(vt - vr)) + %s + adC*%s*eRevAd - (1 - adC)*%s + %s*v - 0.5*%s_g*(vr + vt) - %s_g*%s_g/(4*kk))/Cm' % (p, I, u, u, Gs, p, p, p)]
+
+
+def quad_ms(I, Gs, dt):
+    """One millisecond on a quadratic row from v and u: vqe, uqe, whether it fired (spq), the threshold after (thq)."""
+    h = repr(0.5*dt)
+    L = ['qA = kk/Cm', 'qea = exp(-%s*aa)' % h, 'qv0 = vpeak + thr']
+    vin, uin, vth, thin, fired = 'v', 'u', 'qv0', 'thr', None
+    for hs in (1, 2):
+        P = 'h%d' % hs
+        L += quad_coef(P, uin, I, Gs)
+        L += quad_time(P + 'a', 'qA', P + '_q', '(%s - %s_m)' % (vin, P), '(%s - %s_m)' % (vth, P))
+        L += ['%s_c = int(%sa_t <= %s)' % (P, P, h)]
+        # no crossing: the whole half step
+        L += quad_at(P + 'b', 'qA', P + '_q', '(%s - %s_m)' % (vin, P), h)
+        L += ['%s_vA = %s_m + %sb_w' % (P, P, P), '%s_iA = %sb_iw + %s*%s_m' % (P, P, h, P)]
+        # up to the crossing
+        L += ['%s_tc = clip(%sa_t, 0, %s)' % (P, P, h), '%s_lf = %s - %s_tc' % (P, h, P)]
+        L += quad_at(P + 'c', 'qA', P + '_q', '(%s - %s_m)' % (vin, P), P + '_tc')
+        L += ['%s_iB = %sc_iw + %s_tc*%s_m' % (P, P, P, P)]
+        # the reset at the crossing and the rest of the half step from c, held at the threshold if it crosses again
+        L += ['%s_uR = %s + dd' % (P, uin), '%s_vth = vpeak + thrJ' % P,
+              '%s_thn = thrJ*thrDec**((%s*%d + %s_lf)/%s)' % (P, h, 2 - hs, P, repr(float(dt)))]
+        L += quad_coef(P + 'r', P + '_uR', I, Gs)
+        L += quad_time(P + 'd', 'qA', P + 'r_q', '(cc - %sr_m)' % P, '(%s_vth - %sr_m)' % (P, P))
+        L += ['%s_cr = int(%sd_t <= %s_lf)' % (P, P, P), '%s_t2 = clip(%sd_t, 0, %s_lf)' % (P, P, P)]
+        L += quad_at(P + 'e', 'qA', P + 'r_q', '(cc - %sr_m)' % P, P + '_t2')
+        L += quad_at(P + 'f', 'qA', P + 'r_q', '(cc - %sr_m)' % P, P + '_lf')
+        L += ['%s_vR = %s_cr*%s_vth + (1 - %s_cr)*(%sr_m + %sf_w)' % (P, P, P, P, P, P),
+              '%s_iR = %s_iB + %s_cr*(%se_iw + %s_t2*%sr_m + (%s_lf - %s_t2)*%s_vth) + (1 - %s_cr)*(%sf_iw + %s_lf*%sr_m)' % ((P,)*13)]
+        # a crossing after the cell has already fired this millisecond holds it at the threshold
+        L += ['%s_iH = %s_iB + %s_lf*%s' % (P, P, P, vth)]
+        if fired is None:
+            L += ['%s_v1 = %s_c*%s_vR + (1 - %s_c)*%s_vA' % (P, P, P, P, P),
+                  '%s_iv = %s_c*%s_iR + (1 - %s_c)*%s_iA' % (P, P, P, P, P),
+                  '%s_u1 = %s_c*%s_uR + (1 - %s_c)*%s' % (P, P, P, P, uin),
+                  '%s_vt1 = %s_c*%s_vth + (1 - %s_c)*%s' % (P, P, P, P, vth),
+                  '%s_th1 = %s_c*%s_thn + (1 - %s_c)*%s' % (P, P, P, P, thin),
+                  '%s_f = %s_c' % (P, P)]
+        else:
+            # cr: a first crossing (reset), hd: a second one (held)
+            L += ['%s_k1 = %s_c*(1 - %s)' % (P, P, fired), '%s_k2 = %s_c*%s' % (P, P, fired),
+                  '%s_v1 = %s_k1*%s_vR + %s_k2*%s + (1 - %s_c)*%s_vA' % (P, P, P, P, vth, P, P),
+                  '%s_iv = %s_k1*%s_iR + %s_k2*%s_iH + (1 - %s_c)*%s_iA' % (P, P, P, P, P, P, P),
+                  '%s_u1 = %s_k1*%s_uR + (1 - %s_k1)*%s' % (P, P, P, P, uin),
+                  '%s_vt1 = %s_k1*%s_vth + (1 - %s_k1)*%s' % (P, P, P, P, vth),
+                  '%s_th1 = %s_k1*%s_thn + (1 - %s_k1)*%s' % (P, P, P, P, thin),
+                  '%s_f = %s + %s_k1' % (P, fired, P)]
+        L += ['%s_vf = clip(%s_v1, vmin, 1e300)' % (P, P),
+              '%s_tg = bb*(%s_iv/%s - vr)' % (P, P, h),
+              '%s_uf = %s_tg + (%s_u1 - %s_tg)*qea' % (P, P, P, P)]
+        vin, uin, vth, thin, fired = P + '_vf', P + '_uf', P + '_vt1', P + '_th1', P + '_f'
+    L += ['vqe = h2_vf', 'uqe = h2_uf', 'spq = h2_f', 'thq = h2_th1']
+    return L
+
+
+
+def step_code(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, stp=False, dt=1.0, chan_mg=(), colored=False, integ=0, mod=False):
     """The engine's step, one assignment per quantity, sums two terms at a time.
     `graded` is the longest delay of a graded synapse, or 0. `dt` is the step in
     milliseconds: at 1 every line below is the engine's own, and under it the
-    membrane, the recovery and the refractory count follow the smaller step."""
+    membrane, the recovery and the refractory count follow the smaller step.
+    `mod`: a modulator field runs, so the synaptic sum (the channels included) is
+    formed before the drive and scaled by 1 + modDrive M with modCur M added, as
+    the engine forms it under a field (MODEL.md 4)."""
     L = []
     half = '0.5' if dt == 1.0 else repr(0.5*dt)
+    # the dynamic threshold (MODEL.md 1) relaxes before anything else this step, in float32 as the engines store it
+    L.append('thr = fround(thr*thrDec)')
     per = '' if dt == 1.0 else repr(dt) + '*'
+    if mod:
+        L += ['mf = 1 + modDrive*mlev', 'mc = modCur*mlev']
+    syn_name = 'Isyn'
     if syn == 0:
         L.append('Isyn = ring + Igr' if graded else 'Isyn = ring')
+        if mod and pool:
+            L.append('Isyp = Isyn + pin')
+            syn_name = 'Isyp'
     else:
         L.append('ge = gE*decE + ringE')
         L.append('gi0 = gI*decI + ringI')
@@ -188,8 +325,29 @@ def step_code(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, stp=Fa
         else:
             L += ['s1 = ge*itauE', 's2 = gi*itauI']
         L.append('Isyn = s1 + s2')
-    # the engine's order: synaptic, bias, stimulus, external, noise, pool
-    L.append('Ib = Isyn + bias')
+    def channel_lines(prev, name):
+        # the receptor channels' currents, each through its magnesium block where it has one (Jahr and Stevens 1990), added to prev one at a time as name0, name1, ...
+        out = []
+        for k in range(K):
+            out.append('gx%d = gX%d*chanDec%d + ringX%d' % (k, k, k, k))
+            if syn == 2:
+                out.append('c%d = abs(gx%d)*(chanErev%d - v)' % (k, k, k))
+            else:
+                out.append('c%d = gx%d*chanItau%d' % (k, k, k))
+            if k < len(chan_mg) and float(chan_mg[k]) > 0:
+                out.append('b%d = 1/(1 + (chanMg%d/3.57)*exp(-0.062*v))' % (k, k))
+                out.append('cb%d = b%d*c%d' % (k, k, k))
+                out.append('%s%d = %s + cb%d' % (name, k + 1, prev, k))
+            else:
+                out.append('%s%d = %s + c%d' % (name, k + 1, prev, k))
+            prev = '%s%d' % (name, k + 1)
+        return out, prev
+    if mod:
+        lines, synK = channel_lines(syn_name, 'Ic')
+        L += lines + ['Ism0 = %s*mf' % synK, 'Ism = Ism0 + mc', 'Ib = Ism + bias']
+    else:
+        # the engine's order: synaptic, bias, stimulus, external, noise, pool
+        L.append('Ib = Isyn + bias')
     cur = 'Ib'
     if nstim:
         lines, stim = fold('prq', nstim)
@@ -213,28 +371,60 @@ def step_code(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, stp=Fa
         else:
             L += lines + ['nz = %s*noise(i, t/ms)' % amp, 'In = %s + nz' % cur]
         cur = 'In'
-    if pool and syn == 0:
+    if pool and syn == 0 and not mod:
         L.append('Ip = %s + pin' % cur)
         cur = 'Ip'
     L.append('I0 = %s' % cur)
-    for k in range(K):
-        L.append('gx%d = gX%d*chanDec%d + ringX%d' % (k, k, k, k))
+    if mod:
+        I = 'I0'
+    else:
+        lines, I = channel_lines('I0', 'I')
+        L += lines
+    L.append('act = int(refc <= 0)' if dt == 1.0 else 'act = int(refc <= 1e-9)')
+    if integ:
+        # the exponential membrane step (MODEL.md 1): each half step is h F(v)/C times (e^x - 1)/x at x = h F'(v)/C, F carrying the synaptic conductance G through G (v - v1)
         if syn == 2:
-            L.append('c%d = abs(gx%d)*(chanErev%d - v)' % (k, k, k))
+            g = ['abs(ge)', 'abs(gi)'] + ['%sabs(gx%d)' % ('b%d*' % k if k < len(chan_mg) and float(chan_mg[k]) > 0 else '', k) for k in range(K)]
+            L.append('Gs0 = ' + g[0])
+            for q in range(1, len(g)):
+                L.append('Gs%d = Gs%d + %s' % (q, q - 1, g[q]))
+            Gs = 'Gs%d' % (len(g) - 1)
         else:
-            L.append('c%d = gx%d*chanItau%d' % (k, k, k))
-        # the magnesium block (Jahr and Stevens 1990), on a channel with a concentration; the equations of a channel without one are unchanged
-        if k < len(chan_mg) and float(chan_mg[k]) > 0:
-            L.append('b%d = 1/(1 + (chanMg%d/3.57)*exp(-0.062*v))' % (k, k))
-            L.append('cb%d = b%d*c%d' % (k, k, k))
-            L.append('I%d = I%d + cb%d' % (k + 1, k, k))
-        else:
-            L.append('I%d = I%d + c%d' % (k + 1, k, k))
-    I = 'I%d' % K
+            L.append('Gs0 = 0'); Gs = 'Gs0'
+        if mod:
+            # the field scales the synaptic conductance with the current
+            L.append('Gsm = %s*mf' % Gs); Gs = 'Gsm'
+        for a, b0, n in (('v', 'v', 1), ('v1', 'v', 2)):
+            L += ['uq%d = adC*u*(%s - eRevAd) + (1 - adC)*u' % (n - 1, a),
+                  'F%d = kk*(%s - vr)*(%s - vt) - uq%d + %s + %s*(v - %s)' % (n, a, a, n - 1, I, Gs, a),
+                  'x%d = %s*(kk*(2*%s - vr - vt) - adC*u - %s)/Cm' % (n, half, a, Gs),
+                  'xs%d = x%d + int(abs(x%d) < 1e-9)*1e-9' % (n, n, n),
+                  'ph%d = (exp(xs%d) - 1)/xs%d' % (n, n, n),
+                  'v%s = clip(%s + %s*F%d/Cm*ph%d, vmin, 1e300)' % ('1' if n == 1 else '2x', a, half, n, n)]
+    eul = [
+        # with the row's adaptation a conductance (adC), u in nanosiemens draws current toward the inhibitory reversal
+        'uq0 = adC*u*(v - eRevAd) + (1 - adC)*u',
+        'v1 = clip(v + %s*(kk*(v - vr)*(v - vt) - uq0 + %s)/Cm, vmin, 1e300)' % (half, I),
+        'uq1 = adC*u*(v1 - eRevAd) + (1 - adC)*u',
+        'v2 = clip(v1 + %s*(kk*(v1 - vr)*(v1 - vt) - uq1 + %s)/Cm, vmin, 1e300)' % (half, I)]
+    if integ == 2:
+        # the exponential step on a row linear over the spiking range, the equations' step on the others
+        L += quad_ms(I, Gs, dt)
+        L += ['lin = int(vt - vpeak > 100)', 'v2 = lin*v2x + (1 - lin)*vqe']
+        # qm: the cells the equations' step ran (quadratic, not Poisson, not graded), whose reset it has already made
+        L.append('qm = (1 - lin)*(1 - poi)' + ('*(1 - gd)' if graded else ''))
+    elif integ:
+        # the exponential step on a row linear over the spiking range (vt more than 100 mV above vpeak), the Euler half steps on the others
+        L += [x.replace('v1', 've1').replace('v2', 've2').replace('uq0', 'ue0').replace('uq1', 'ue1') for x in eul]
+        L += ['lin = int(vt - vpeak > 100)', 'v2 = lin*v2x + (1 - lin)*ve2']
+    else:
+        L += eul
     L += [
-        'act = int(refc <= 0)' if dt == 1.0 else 'act = int(refc <= 1e-9)',
-        'v1 = clip(v + %s*(kk*(v - vr)*(v - vt) - u + %s)/Cm, vmin, 1e300)' % (half, I),
-        'v2 = clip(v1 + %s*(kk*(v1 - vr)*(v1 - vt) - u + %s)/Cm, vmin, 1e300)' % (half, I),
+        # a Poisson cell (MODEL.md 1): no membrane; it fires this step with probability I over 1000, the current read as a rate in hertz, by being put at its peak
+        'pdr = poidraw(i, t/ms)',
+        'psp = poi*int(%s > 0)*int(pdr < %s*0.001)' % (I, I),
+        'vpo = psp*(vpeak + thr) + (1 - psp)*v',
+        'vq2 = poi*vpo + (1 - poi)*v2',
     ]
     if graded:
         # a graded cell's membrane is passive, capped at vpeak, and never spikes
@@ -242,16 +432,43 @@ def step_code(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, stp=Fa
               'gw1 = clip(v + %s*(-gl*(v - vr) - u + %s)/Cm, vmin, 1e300)' % (half, I),
               'gw2 = clip(gw1 + %s*(-gl*(gw1 - vr) - u + %s)/Cm, vmin, 1e300)' % (half, I),
               'gw3 = clip(gw2, -1e300, vpeak)',
-              'vq = act*v2 + (1 - act)*v',
+              'vq = act*vq2 + (1 - act)*v',
               'vn = gd*gw3 + (1 - gd)*vq',
               'un = u + %saa*(bb*(vn - vr) - u)' % per,
-              'sp = act*int(vn >= vpeak)*(1 - gd)']
+              'sp = act*int(vn >= vpeak + thr)*(1 - gd)']
     else:
-        L += ['vn = act*v2 + (1 - act)*v',
+        L += ['vn = act*vq2 + (1 - act)*v',
               'un = u + %saa*(bb*(vn - vr) - u)' % per,
-              'sp = act*int(vn >= vpeak)']
-    L += ['v = fround(sp*cc + (1 - sp)*vn)',
-          'u = fround(un + sp*dd)',
+              'sp = act*int(vn >= vpeak + thr)']
+    if integ == 2:
+        # the equations' step has stepped u and decided the spike itself
+        L += ['qa = qm*act', 'un = qa*uqe + (1 - qa)*un', 'sp = qa*spq + (1 - qm)*sp']
+    if integ:
+        # the exponential step's reset inside the step: the distance to the threshold interpolated between the opening and the end (the threshold at both ends), the rest of the step integrated from the reset with the jump in u applied, the threshold relaxing over it
+        L += ['thS = thr/thrDec*int(thrDec > 0) + thr*int(thrDec <= 0)',
+              'dS = v - vpeak - thS', 'dE = vn - vpeak - thr',
+              'fq = dS/(dS - dE + int(dE <= dS))',
+              'fr = clip(fq, 0, 1)*int(dS < 0)*int(dE > dS) + 1 - int(dS < 0)*int(dE > dS)',
+              'rst = %s*(1 - fr)' % repr(float(dt)),
+              'ur = un + dd',
+              'uqr = adC*ur*(cc - eRevAd) + (1 - adC)*ur',
+              'Fr = kk*(cc - vr)*(cc - vt) - uqr + %s + %s*(v - cc)' % (I, Gs),
+              'xr = rst*(kk*(2*cc - vr - vt) - adC*ur - %s)/Cm' % Gs,
+              'xrs = xr + int(abs(xr) < 1e-9)*1e-9',
+              'phr = (exp(xrs) - 1)/xrs',
+              'vre = clip(cc + rst*Fr/Cm*phr, vmin, 1e300)',
+              'pl = (1 - poi)*lin',
+              'vrs = (1 - pl)*cc + pl*vre',
+              'thr = sp*((1 - pl)*thrJ + pl*thrJ*thrDec**(rst/%s)) + (1 - sp)*thr' % repr(float(dt))]
+        if integ == 2:
+            L[-1] = 'thr = sp*(qm*thq + (1 - qm)*((1 - pl)*thrJ + pl*thrJ*thrDec**(rst/%s))) + (1 - sp)*thr' % repr(float(dt))
+            L += ['vrs = qm*vn + (1 - qm)*vrs']
+        L += ['v = fround(sp*vrs + (1 - sp)*vn)']
+    else:
+        # the threshold jumps at the spike (the row's thrJ), as Auryn sets it rather than adds to it
+        L.append('thr = sp*thrJ + (1 - sp)*thr')
+        L += ['v = fround(sp*cc + (1 - sp)*vn)']
+    L += ['u = fround(un + sp*dd*(1 - qm))' if integ == 2 else 'u = fround(un + sp*dd)',
           'refc = sp*refrac + (1 - sp)*(refc - %sint(refc > 0))' % per,
           'spiked = sp']
     if graded:
@@ -294,7 +511,7 @@ def step_code(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, stp=Fa
 
 
 def neuron_model(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, dynamic=False, colored=False, stdp_at=False, stp_classes=0):
-    names = ['v', 'u', 'refc', 'spiked']
+    names = ['v', 'u', 'refc', 'spiked', 'thr', 'gratio', 'mlev']
     if colored:
         names += ['nfou', 'nfous']
     names += ['ring'] if syn == 0 else ['gE', 'gI', 'ringE', 'ringI']
@@ -307,13 +524,13 @@ def neuron_model(syn, K, nstim=0, nnoise=0, ext=False, pool=False, graded=0, dyn
     if graded:
         names += ['Igr'] + ['rh%d' % d for d in range(1, graded + 1)]
     if dynamic:
-        names += ['Kpre', 'Kpost', 'Kslow', 'spkAcc', 'rhoI', 'alphaI', 'stpX', 'stpR', 'sfv']
+        names += ['Kpre', 'Kpost', 'Kslow', 'Khom', 'spkAcc', 'rhoI', 'alphaI', 'stpX', 'stpR', 'sfv']
         for c in range(stp_classes):
             names += ['stpX%d' % c, 'stpR%d' % c, 'sfv%d' % c]
     if stdp_at:
         # the cell's spikes of the last 16 steps, h1 for the step before this one (simworker.js spkHist, bit k)
         names += ['h%d' % k for k in range(1, 17)]
-    const = ['bias', 'Cm', 'kk', 'vr', 'vt', 'vpeak', 'aa', 'bb', 'cc', 'dd']
+    const = ['bias', 'Cm', 'kk', 'vr', 'vt', 'vpeak', 'aa', 'bb', 'cc', 'dd', 'thrJ', 'thrDec', 'adC', 'poi', 'minc']
     # prq and prz: short prefixes such as zs2 are Brian unit names
     const += ['prqf%d' % k for k in range(nstim)] + ['przf%d' % k for k in range(nnoise)]
     if graded:
@@ -340,30 +557,40 @@ def softbound(W, D, OUT, p):
 
 
 def potentiate(W, KP, Z, OUT, p):
-    # at a postsynaptic spike: excitatory (aP + trip z) Kpre, the heterosynaptic pull toward wRef gated by the cubed slow trace; inhibitory -iEta Kpre
+    # at a postsynaptic spike: excitatory (aP + trip z) Kpre, the heterosynaptic pull toward wRef by beta times the cubed fast postsynaptic trace (Zenke et al. 2015); inhibitory -iEta Kpre
+    # pgn is the third factor (pgain, times modBase + the postsynaptic level under the gain form, MODEL.md 4); under the eligibility form (meOn) the Hebbian term goes to the trace (p + 'eli', added by the caller under its own mask) and the weight keeps its value here
     L = ['%sex = int(%s > 0)' % (p, W),
-         '%st1 = rtrip*%s' % (p, Z), '%st2 = raP + %st1' % (p, p), '%st3 = %st2*%s' % (p, p, KP),
-         '%snw = %s + %st3' % (p, W, p),
-         '%skr = rhoMode*clip(alphaI_post*kRefA, 1e-6, 1e300) + (1 - rhoMode)*kRef' % p,
-         '%sg = %s/%skr' % (p, Z, p), '%sgg = %sg*%sg' % (p, p, p), '%sgate = %sgg*%sg' % (p, p, p),
-         '%shg = rhet*%sgate' % (p, p), '%shm = clip(%shg, -1e300, 1)' % (p, p),
+         '%st1 = rtrip*%s' % (p, Z), '%st2 = raP + %st1' % (p, p), '%st2g = pgn*%st2' % (p, p), '%st3 = %st2g*%s' % (p, p, KP),
+         '%seli = meOn*%st3' % (p, p),
+         '%snw = %s + %st3*(1 - meOn)' % (p, W, p),
+         '%sgg = Kpost_post*Kpost_post' % p, '%sgate = %sgg*Kpost_post' % (p, p),
+         '%shm = rhet*%sgate' % (p, p),
          '%sdw = %s - wRef' % (p, W), '%shh = %shm*%sdw' % (p, p, p), '%snw2 = %snw - %shh' % (p, p, p),
          '%swe = clip(%snw2, 0.0001, rwmax)' % (p, p),
-         '%sd0 = -rieta*%s' % (p, KP)]
+         # under the global factor (iGlobalOn) the amplitude is eta times the population ratio, the step before's, held on every cell
+         '%skg = gratio_post*%s' % (p, KP), '%skq = iGlobalOn*%skg + (1 - iGlobalOn)*%s' % (p, p, KP),
+         '%sd0 = -rieta*%skq' % (p, p)]
     L += softbound(W, '%sd0' % p, '%sd1' % p, p + 's')
     L += ['%swi = clip(%s + %sd1, -rwmax, 1e300)' % (p, W, p),
           '%s = fround(%sex*%swe + (1 - %sex)*%swi)' % (OUT, p, p, p, p)]
     return L
 
 
-def depress(W, KQ, OUT, p):
-    # at a presynaptic spike: excitatory w - aM Kpost (w under wdep, else 1) + tin; inhibitory -iEta (Kpost - alpha)
+def depress(W, KQ, KH, OUT, p):
+    # at a presynaptic spike: excitatory w - aM sl Kpost (w under wdep, else 1) + tin, with sl the sliding threshold's (Khom slideK)^2 when it is on and 1 when off; inhibitory -iEta (Kpost - alpha)
     L = ['%sex = int(%s > 0)' % (p, W),
-         '%sx = rwdep*%s + (1 - rwdep)' % (p, W),
-         '%st1 = raM*%s' % (p, KQ), '%st2 = %st1*%sx' % (p, p, p), '%st3 = %s - %st2' % (p, W, p),
-         '%st4 = %st3 + rtin' % (p, p),
+         '%sxp = abs(%s)**pmu' % (p, W),   # the excitatory branch alone reads this; abs keeps the unused inhibitory evaluation finite
+         '%sx = rwdep*%sxp + (1 - rwdep)' % (p, p),
+         '%skh = %s*slideK' % (p, KH), '%ssl = slideOn*%skh*%skh + (1 - slideOn)' % (p, p, p),
+         '%st0 = pgn*raM' % p, '%st1 = %st0*%s*%ssl' % (p, p, KQ, p), '%st2 = %st1*%sx' % (p, p, p),
+         # the trace's increment under the eligibility form, tin - depression as the engine adds it; the weight then keeps its value
+         '%stg = pgn*rtin' % p, '%sedl = %stg - %st2' % (p, p, p), '%seli = meOn*%sedl' % (p, p),
+         '%st3 = %s - %st2*(1 - meOn)' % (p, W, p), '%st4 = %st3 + %stg*(1 - meOn)' % (p, p, p),
          '%swe = clip(%st4, 0.0001, rwmax)' % (p, p),
-         '%sq = %s - alq' % (p, KQ), '%sd0 = -rieta*%sq' % (p, p)]
+         '%sq = %s - alq' % (p, KQ),
+         # under the global factor the presynaptic term is the trace plus one, the authors' xi, times the ratio
+         '%sq1 = %s + 1' % (p, KQ), '%sqg = gratio_post*%sq1' % (p, p), '%sqq = iGlobalOn*%sqg + (1 - iGlobalOn)*%sq' % (p, p, p),
+         '%sd0 = -rieta*%sqq' % (p, p)]
     L += softbound(W, '%sd0' % p, '%sd1' % p, p + 's')
     L += ['%swi = clip(%s + %sd1, -rwmax, -0.0001)' % (p, W, p),
           '%s = fround(%sex*%swe + (1 - %sex)*%swi)' % (OUT, p, p, p, p)]
@@ -373,7 +600,9 @@ def depress(W, KQ, OUT, p):
 # a synapse changes only if its rule is not frozen, the rules are not calibrating, and it has not committed
 MASKS = ['clb = rhoMode*upto(t/ms, calMs)',
          'cmt = commitOn*int(rconsw > 0)*int(wRef >= rconsw*0.9)',
-         'ple = pl*(1 - clb)*(1 - cmt)']
+         'ple = pl*(1 - clb)*(1 - cmt)',
+         # the third factor: the gain, times modBase + the postsynaptic cell's modulator level under the gain form (mgOn), the gain alone otherwise (simworker.js plastOutSyn, plastOnSpike)
+         'pgm = modBase + mlev_post', 'pgn = pgain*(1 - mgOn) + pgain*pgm*mgOn']
 
 # At a presynaptic spike.
 # When the post spiked in the same millisecond with the lower index, the engine potentiated first (old Kpre), so this delivers the potentiated weight and depresses with Kpost + 1.
@@ -384,9 +613,13 @@ PRE_PLAST = (MASKS + ['cp = ple*spiked_post*int(i > j)']
                 'wsent = wa*sfs',
                 'kqa = fround(Kpost_post + 1)',
                 'kq = cp*kqa + (1 - cp)*Kpost_post',
+                'kha = fround(Khom_post + 1)',
+                'kh = cp*kha + (1 - cp)*Khom_post',
                 'alq = rhoMode*alphaI_post + (1 - rhoMode)*iAlpha']
-             + depress('wa', 'kq', 'wdn', 'dz')
-             + ['w = ple*wdn + (1 - ple)*wa'])
+             + depress('wa', 'kq', 'kh', 'wdn', 'dz')
+             + ['w = ple*wdn + (1 - ple)*wa',
+                # the eligibility trace takes what the weight did not, under the same masks: the same-millisecond potentiation first, then the depression, two float32 stores as the engine makes them
+                'elig = fround(fround(elig + cp*pzeli) + ple*dzeli)'])
 
 # At a postsynaptic spike.
 # A same-millisecond pre with the lower index went first, so Kpre already holds its spike; one with the higher index was handled in the presynaptic pathway.
@@ -395,7 +628,7 @@ POST_PLAST = (MASKS + ['cq = spiked_pre*int(i > j)',
                        'kpa = fround(Kpre_pre + 1)',
                        'kpv = lower*kpa + (1 - lower)*Kpre_pre']
               + potentiate('w', 'kpv', 'Kslow_post', 'wpt', 'pq')
-              + ['ap = ple*(1 - cq)', 'w = ap*wpt + (1 - ap)*w'])
+              + ['ap = ple*(1 - cq)', 'w = ap*wpt + (1 - ap)*w', 'elig = fround(elig + ap*pqeli)'])
 
 # The pair rule timed at the synapse (stdpAt 1, simworker.js kpreAtSynapse and plastArrivals).
 # A presynaptic spike counts when it arrives, d steps after it was fired.
@@ -410,19 +643,30 @@ PRE_PLAST_SYN = (MASKS + ['cp = ple*spiked_post*int(i > j)'] + KPS
                  + ['wa = cp*wpot + (1 - cp)*w',
                     'sfs = 1 + (sfv_pre - 1)*(1 - stpScopeE*int(wa < 0))*(1 - stpScopeI*int(wa > 0))',
                     'wsent = wa*sfs',
-                    'w = wa'])
+                    'w = wa', 'elig = fround(elig + cp*pzeli)'])
 POST_PLAST_SYN = (MASKS + ['cq = spiked_pre*int(i > j)'] + KPS
                   + potentiate('w', 'kps', 'Kslow_post', 'wpt', 'pq')
-                  + ['ap = ple*(1 - cq)', 'w = ap*wpt + (1 - ap)*w'])
+                  + ['ap = ple*(1 - cq)', 'w = ap*wpt + (1 - ap)*w', 'elig = fround(elig + ap*pqeli)'])
 ARRIVE_PLAST = (MASKS + ['alq = rhoMode*alphaI_post + (1 - rhoMode)*iAlpha']
-                + depress('w', 'Kpost_post', 'wdn', 'dz')
-                + ['w = ple*wdn + (1 - ple)*w'])
+                + depress('w', 'Kpost_post', 'Khom_post', 'wdn', 'dz')
+                + ['w = ple*wdn + (1 - ple)*w', 'elig = fround(elig + ple*dzeli)'])
+# The eligibility sweep (simworker.js eligSweep, MODEL.md 4): every modStep ms, at the end of the step after the field update, each excitatory plastic synapse's trace pays (1 - e^(-modStep/eligTau)) of itself times modBase + the postsynaptic level into the weight and decays; a committed synapse keeps its weight.
+ELIG_SWEEP = '\n'.join([
+    'gw = every(t/ms, modStep)',
+    'ec = elig',
+    'cmt = commitOn*int(rconsw > 0)*int(wRef >= rconsw*0.9)',
+    'ebm = modBase + mlev_post', 'ep1 = ec*eligPay', 'ep2 = ep1*ebm', 'enw = w + ep2',
+    'ewe = clip(enw, 0.0001, rwmax)',
+    'ego = gw*pl*(1 - cmt)*int(w > 0)*int(ec != 0)',
+    'w = ego*fround(ewe) + (1 - ego)*w',
+    'edc = ec*decElig',
+    'elig = gw*fround(edc) + (1 - gw)*ec'])
 # the history moves on with the trace decay: h1 takes this step's spike
 SHIFT = '\n'.join(['h%d = h%d' % (k, k - 1) for k in range(16, 1, -1)] + ['h1 = spiked'])
 
-RESET_PLAST = '\n'.join(['Kpre = fround(Kpre + 1)', 'Kpost = fround(Kpost + 1)',
+RESET_PLAST = '\n'.join(['Kpre = fround(Kpre + 1)', 'Kpost = fround(Kpost + 1)', 'Khom = fround(Khom + 1)',
                          'Kslow = hasSlow*fround(Kslow + 1)', 'spkAcc = fround(spkAcc + 1)'])
-DECAY = '\n'.join(['Kpre = fround(Kpre*decS)', 'Kpost = fround(Kpost*decM)', 'Kslow = fround(Kslow*decY)'])
+DECAY = '\n'.join(['Kpre = fround(Kpre*decS)', 'Kpost = fround(Kpost*decM)', 'Kslow = fround(Kslow*decY)', 'Khom = fround(Khom*decH)'])
 STP_RECOVER = '\n'.join(['xr1 = 1 - stpX', 'xr2 = xr1*stpDx', 'stpX = fround(1 - xr2)',
                          'rr1 = stpR - stpU', 'rr2 = rr1*stpDr', 'stpR = fround(stpU + rr2)'])
 CONSOLIDATE = '\n'.join([
@@ -431,7 +675,9 @@ CONSOLIDATE = '\n'.join([
     'hlf = rconsw*0.5',
     'q1 = w - wRef', 'q2 = rconsp*wRef', 'q3 = hlf - wRef', 'q4 = q2*q3',
     'q5 = rconsw - wRef', 'q6 = q4*q5', 'q7 = q1 - q6', 'q8 = consRate*q7',
-    'nr = wRef + q8', 'nrc = clip(nr, 0, rconsw)',
+    'nr = wRef + q8',
+    'top1 = wRef + int(w > wRef)*(w - wRef)', 'top2 = top1 + int(rconsw > top1)*(rconsw - top1)',
+    'nrc = clip(nr, 0, top2)',
     'wRef = cmk*fround(nrc) + (1 - cmk)*wRef'])
 SCALE = '\n'.join([
     'gs = scaleOn*every_from(t/ms, 1000.0, rhoMode*calMs)',
@@ -549,12 +795,35 @@ def run_case(case):
             ns['chanMg%d' % k] = float(case['chanMg'][k]) if k < len(case.get('chanMg') or []) else 0.0
     if noise:
         ns['noise'] = noise_function(int(case['seed']))
+    # poidraw, not poisson: Brian has a poisson() of its own
+    ns['poidraw'] = poisson_function(int(case['seed']))
+    # the reversal the conductance adaptation draws toward, the engine's inhibitory reversal (simworker.js S.eRevAd)
+    ns['eRevAd'] = float(case.get('eRevI', -70))
+    # neuromodulation (MODEL.md 4): what reads the field, 0 and the plain rule without a case entry
+    mod = case.get('mod')
+    ns.update({'modDrive': 0.0, 'modCur': 0.0, 'modBase': 1.0, 'mgOn': 0.0, 'meOn': 0.0, 'eligPay': 0.0, 'decElig': 1.0, 'modStep': 10.0})
+    if mod is not None:
+        ns['modDrive'] = float(mod.get('drive', 0.0)); ns['modCur'] = float(mod.get('cur', 0.0))
+        ns['modBase'] = float(mod.get('base', 1.0))
+        ns['mgOn'] = 1.0 if int(mod.get('plast', 0)) == 1 and plast is not None else 0.0
+        ns['meOn'] = 1.0 if int(mod.get('plast', 0)) == 2 and plast is not None else 0.0
+        ns['eligPay'] = float(mod.get('eligPay', 0.0)); ns['decElig'] = float(mod.get('decElig', 1.0))
+        ns['modStep'] = float(mod.get('step', 10))
     if plast is not None:
-        for key in ('kRef', 'kRefA', 'iAlpha', 'decS', 'decM', 'decY', 'hasSlow', 'commitOn', 'sEta', 'iRho',
+        for key in ('iAlpha', 'decS', 'decM', 'decY', 'hasSlow', 'commitOn', 'sEta', 'iRho',
                     'scaleOn', 'rhoMode', 'calMs', 'calSecs', 'tauSum', 'consOn', 'consStep', 'consRate'):
             ns[key] = float(plast[key])
+        # the third factor: the gain on the Hebbian terms, 1 unless the case says (simworker.js S.gain)
+        ns['pgain'] = float(plast.get('gain', 1.0))
+        # the weight exponent of soft depression (simworker.js S.wmu), 1 unless the case says
+        ns['pmu'] = float(plast.get('wmu', 1.0))
+        # the sliding threshold (simworker.js S.slideK, S.decH): off in a case that does not name it
+        ns['slideOn'] = float(plast.get('slideOn', 0.0))
+        ns['slideK'] = float(plast.get('slideK', 0.0))
+        ns['decH'] = float(plast.get('decH', 1.0))
+        ns['iGlobalOn'] = float(plast.get('iGlobalOn', 0.0))
     else:
-        for key in ('rhoMode', 'commitOn'):
+        for key in ('rhoMode', 'commitOn', 'iGlobalOn'):
             ns[key] = 0.0
     # the scope: 1 keeps inhibitory synapses out of the release, 2 excitatory ones; named in every case, since the plastic delivery path reads them whether or not the term is on
     ns['stpScopeE'] = 0.0
@@ -574,7 +843,7 @@ def run_case(case):
     if plast is not None:
         group_args['reset'] = RESET_PLAST
     G = NeuronGroup(n, neuron_model(syn, K, len(stim), len(noise), ext, pool, graded, dynamic, bool(case.get('noise')), stdp_at, len(stp_classes)), **group_args)
-    G.run_regularly(step_code(syn, K, len(stim), len(noise), ext, pool, graded, stp, dt, case.get('chanMg') or [], bool(case.get('noise'))), when='groups')
+    G.run_regularly(step_code(syn, K, len(stim), len(noise), ext, pool, graded, stp, dt, case.get('chanMg') or [], bool(case.get('noise')), int(case.get('integ', 0)), mod is not None), when='groups')
     objects = [G]
     # after the step, in the engine's order: trace decay, consolidation, short-term recovery, then (at the clock tick) scaling and calibration
     if plast is not None:
@@ -591,10 +860,16 @@ def run_case(case):
     elif stp is not None:
         objects.append(G.run_regularly(STP_RECOVER, when='end', order=2))
     rows = np.asarray(case['rows'], dtype=np.float64)
-    for name, col in zip(['Cm', 'kk', 'vr', 'vt', 'vpeak', 'aa', 'bb', 'cc', 'dd'], rows.T):
+    for name, col in zip(['Cm', 'kk', 'vr', 'vt', 'vpeak', 'aa', 'bb', 'cc', 'dd', 'thrJ', 'thrDec', 'adC', 'poi'], rows.T):
         setattr(G, name, col)
+    G.thr = 0.0
+    G.gratio = 0.0
+    G.mlev = 0.0
+    G.minc = np.asarray(mod['inc'], dtype=np.float64) if mod is not None else 0.0
     G.bias = case['bias']
     G.v = case['v0']
+    if plast is not None:
+        G.Khom = float(plast.get('khomInit', 0.0))
     G.u = case['u0']
     if case.get('noise'):
         # a noise stimulus's memory and shared part per cell, folded by the case builder; the shared draw is keyed on NOISE_SHARED plus the stimulus's index
@@ -621,6 +896,45 @@ def run_case(case):
             setattr(G, 'stpR%d' % c, float(cl['R0']))
             setattr(G, 'sfv%d' % c, 1.0)
 
+    if plast is not None and len(post):
+        # The global factor on the inhibitory rule (simworker.js globalFactor): the population is every cell with an inhibitory synapse under a rule; its spike count this step is folded into the low-passed count, kept in float32 as the engines keep it, and the ratio of the rate it stands for to the target, minus one, is held on every cell for the next step's inhibitory updates.
+        wg = np.asarray(case['w'], dtype=np.float64)
+        rg = np.asarray(case.get('rule') or np.ones(len(post)), dtype=np.int64)
+        gmask = np.zeros(n, dtype=bool)
+        gmask[post[(wg < 0) & (rg != 0)]] = True
+        gN = int(gmask.sum())
+        gstate = {'pf': np.float32(float(plast['iRho'])*gN)}
+        gInv = float(np.float32(1.0/(gN*float(plast['iRho'])))) if gN else 0.0
+        decG, tauGs = float(plast.get('decG', 1.0)), float(plast.get('tauGs', 1.0))
+        if gN:
+            @network_operation(when='end', order=6)
+            def global_factor():
+                cnt = float(np.count_nonzero(np.asarray(G.spiked[:])[gmask] > 0.5))
+                pf = np.float32(float(gstate['pf'])*decG + cnt/tauGs)
+                gstate['pf'] = pf
+                G.gratio[:] = float(np.float32(float(pf)*gInv - 1.0))
+            objects.append(global_factor)
+    if mod is not None:
+        # The modulator field at the end of the step (simworker.js modUpdate): M(t) = M(t-1) dec + the sources' increment + the group's release per spike times the group's spikes of the step before, stored in float32.
+        # Everything in the step read M(t-1); the sweep (order 8) reads the new level.
+        decMod = float(mod['decMod'])
+        mgrp = np.asarray(mod['grp'], dtype=np.int64) if mod.get('grp') else None
+        mtgt = np.asarray(mod['tgt'], dtype=np.int64) if mod.get('tgt') else None
+        mKf = np.asarray(mod['Kf'], dtype=np.float64)
+        mstate = {'cnt': np.zeros(len(mKf))}
+        minc = np.asarray(mod['inc'], dtype=np.float64)
+
+        @network_operation(when='end', order=7)
+        def mod_update():
+            m = np.asarray(G.mlev[:], dtype=np.float64)
+            v = m*decMod + minc
+            if mtgt is not None:
+                v = v + mKf[mtgt]*mstate['cnt'][mtgt]
+            G.mlev[:] = v.astype(np.float32).astype(np.float64)
+            if mgrp is not None:
+                fired = np.asarray(G.spiked[:]) > 0.5
+                mstate['cnt'] = np.bincount(mgrp[fired], minlength=len(mKf)).astype(np.float64)
+        objects.append(mod_update)
     if pool:
         # the pool drive for the next step: poolK times this step's spike count per pool
         pool_idx = np.asarray(case['pool'], dtype=np.int64)
@@ -670,7 +984,7 @@ def run_case(case):
             if not dynamic:
                 S = Synapses(G, G, 'w : 1 (constant)', on_pre=deliver, namespace=ns)
             else:
-                model = '\n'.join(['w : 1', 'wsent : 1', 'wRef : 1', 'pl : 1 (constant)'] + (['stc : 1 (constant)'] if stp_classes else [])
+                model = '\n'.join(['w : 1', 'wsent : 1', 'wRef : 1', 'elig : 1', 'pl : 1 (constant)'] + (['stc : 1 (constant)'] if stp_classes else [])
                                   + ['%s : 1 (constant)' % r for r in RULE_VARS]
                                   + (['exd : 1 (constant)'] + ['ekd%d : 1 (constant)' % k for k in range(1, 17)] if stdp_at else []))
                 # the release factor in scope (stpScope): 1 on a synapse the scope leaves out
@@ -706,6 +1020,18 @@ def run_case(case):
                     table = safe[rule[idx]]
                     for x, r in enumerate(RULE_VARS):
                         setattr(S, r, table[:, x])
+                    # the reference starts inside its well: above consW under a consolidating rule it is consW (refIntoWell in simworker.js)
+                    wr = np.array(w[idx], dtype=np.float64)
+                    cons_rule = (table[:, 8] > 0) & (table[:, 9] > 0) & (wr > 0)
+                    ref_init = int(plast.get('refInit', 0) or 0)
+                    if ref_init == 1:
+                        wr[cons_rule] = 0.0
+                    elif ref_init == 2:
+                        wr[cons_rule] = table[cons_rule, 9]
+                    else:
+                        into = cons_rule & (wr > table[:, 9])
+                        wr[into] = table[into, 9]
+                    S.wRef = wr
                 S.pre.delay = 0*ms
                 S.deliver.delay = (delay[idx] - 1)*ms
                 S.pre.order = -2
@@ -725,6 +1051,8 @@ def run_case(case):
                         objects.append(S.run_regularly(CONSOLIDATE, when='end', order=1))
                     if plast['scaleOn']:
                         objects.append(S.run_regularly(SCALE, when='end', order=3))
+                    if ns['meOn'] > 0.5:
+                        objects.append(S.run_regularly(ELIG_SWEEP, when='end', order=8))
             objects.append(S)
             groups.append((idx, S))
         if graded:

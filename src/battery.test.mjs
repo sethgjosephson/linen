@@ -1,6 +1,8 @@
 // The statistics battery loads.
 // It runs only in a browser, so nothing else in the quick suite reads it, and a syntax error in it (an apostrophe inside a quoted label) can pass node --check and every suite while validate.html cannot start.
 // A real import parses it.
+// The groups a checkout keeps to itself (src/validate.local.js) load the same way when the file is present, and the battery must carry them; a checkout without the file is checked without them.
+import fs from 'node:fs';
 import { ok, report } from '../tools/harness.mjs';
 
 let V = null, err = null;
@@ -11,4 +13,12 @@ ok('every group has a name, a source and a run',
   V ? V.TESTS.length + ' groups' : 'not loaded');
 const names = V ? V.TESTS.map(t => t.name) : [];
 ok('group names are unique, so ?only= finds one', new Set(names).size === names.length);
+if(fs.existsSync(new URL('./validate.local.js', import.meta.url))){
+  let L = null, lerr = null;
+  try { L = await import('./validate.local.js'); } catch(e){ lerr = e; }
+  ok('validate.local.js imports', !!L, lerr ? lerr.name + ': ' + lerr.message : '');
+  ok('the battery carries every local group',
+    !!L && !!V && L.TESTS.length > 0 && L.TESTS.every(t => V.TESTS.includes(t)),
+    L ? L.TESTS.length + ' local groups' : 'not loaded');
+}
 report('battery');

@@ -45,6 +45,10 @@ __device__ inline float noiseDraw(unsigned int i, unsigned int t, unsigned int s
   unsigned int h = i ^ (t*2654435761u) ^ seed;
   return unifH(h) + unifH(h ^ 0x9e3779b9u) - 1.0f;
 }
+// the uniform draw a Poisson row fires on (rand.js poissonDraw): its own salt, so a Poisson cell under a noise stimulus is not correlated with its noise
+__device__ inline float poissonDraw(unsigned int i, unsigned int t, unsigned int seed){
+  return unifH(i ^ (t*2654435761u) ^ seed ^ 0x7f4a7c15u);
+}
 // The cell's draw with its stimulus's memory and shared part (MODEL.md 2): an Ornstein-Uhlenbeck filter per cell when the decay nA is above zero, and a fraction nC of a draw keyed on the stimulus (NOISE_SHARED + its id), filtered the same way; nz and nzs are the two states.
 #define NOISE_SHARED 0x40000000u
 __device__ inline float noiseAt(int i, unsigned int t, unsigned int seed,
@@ -62,6 +66,84 @@ __device__ inline float noiseAt(int i, unsigned int t, unsigned int seed,
   return d;
 }
 
+// One exponential half step of 0.5 ms (MODEL.md 1), as the reference engine's expHalf: 0.5 F(v)/C times (e^x - 1)/x at x = 0.5 F'(v)/C, with F(v) = k (v - vr)(v - vt) - adaptation + I + G (v0 - v), exact when F is linear in v over the step.
+__device__ __forceinline__ float expSpanD(float vi, float ui, float I, float G, float v0, float ki, float vri, float vti, float Ci, bool ac, float eI, float vmin, float h){
+  const float F = ki*(vi - vri)*(vi - vti) - (ac ? ui*(vi - eI) : ui) + I + G*(v0 - vi);
+  const float x = h*(ki*(2.0f*vi - vri - vti) - (ac ? ui : 0.0f) - G)/Ci;
+  const float phi = fabsf(x) < 1e-4f ? 1.0f + 0.5f*x : expm1f(x)/x;
+  vi += h*F/Ci*phi;
+  return vi < vmin ? vmin : vi;
+}
+__device__ __forceinline__ float expHalfD(float vi, float ui, float I, float G, float v0, float ki, float vri, float vti, float Ci, bool ac, float eI, float vmin){
+  return expSpanD(vi, ui, I, G, v0, ki, vri, vti, Ci, ac, eI, vmin, 0.5f);
+}
+// The exponential step's spike, as the reference engine's spanReset: the distance to the threshold interpolated inside the millisecond (the threshold at both ends of the step), the reset there, the rest of the step integrated from it with the jump in u applied and the threshold relaxing.
+__device__ __forceinline__ float spanResetD(int i, float vs, float vi, float vth, float ui, float I, float G, float v0, float c, float ki, float vri, float vti, float Ci, bool ac, float eI, float vmin,
+    const float* thrJ, const float* thrDec, float* thr){
+  const float th = thr ? thr[i] : 0.0f, thS = th > 0.0f && thrDec[i] > 0.0f ? th/thrDec[i] : th;
+  const float dS = vs - (vth - th + thS), dE = vi - vth, fr = dS < 0.0f && dE > dS ? fminf(1.0f, fmaxf(0.0f, dS/(dS - dE))) : 1.0f, rest = 1.0f - fr;
+  if(thr) thr[i] = thrJ[i]*powf(thrDec[i], rest);
+  return expSpanD(c, ui, I, G, v0, ki, vri, vti, Ci, ac, eI, vmin, rest);
+}
+
+// The equations' membrane step (integ 2, MODEL.md 1), as the reference engine's quadTime, quadAt and quadMs.
+__device__ __forceinline__ float quadTimeD(float A, float q, float w0, float wp){
+  if(w0 >= wp) return 0.0f;
+  const float y = wp - w0, x = q + A*w0*wp, z = A*q;
+  if(x > 0.0f){
+    const float R = y/x, e = z*R*R;
+    if(fabsf(e) < 1e-4f) return R*(1.0f - e/3.0f + e*e/5.0f);
+    if(z > 0.0f){ const float s = sqrtf(z); return atanf(s*R)/s; }
+    const float s = sqrtf(-z), r = s*R;
+    return r < 1.0f ? 0.5f*logf((1.0f + r)/(1.0f - r))/s : 1e30f;
+  }
+  if(z > 0.0f){ const float s = sqrtf(z); return (1.5707964f + atanf(-x/(s*y)))/s; }
+  return 1e30f;
+}
+// w after h, with the integral of w over the span in iw
+__device__ __forceinline__ float quadAtD(float A, float q, float w0, float h, float& iw){
+  const float z = A*q, e = z*h*h;
+  float Cs, Sn, ls = 0.0f;
+  if(fabsf(e) < 1e-4f){ Cs = 1.0f - e/2.0f + e*e/24.0f; Sn = h*(1.0f - e/6.0f + e*e/120.0f); }
+  else if(z > 0.0f){ const float s = sqrtf(z); Cs = cosf(s*h); Sn = sinf(s*h)/s; }
+  else { const float s = sqrtf(-z), E = expf(-2.0f*s*h); Cs = 0.5f*(1.0f + E); Sn = 0.5f*(1.0f - E)/s; ls = s*h; }
+  const float phi = Cs - A*w0*Sn;
+  iw = -(ls + logf(fabsf(phi)))/A;
+  return (w0*Cs + q*Sn)/phi;
+}
+// One millisecond on a quadratic row; u is updated in place, sp says whether the cell fired, and the threshold state is written at the reset.
+__device__ float quadMsD(int i, float v, float& u, float I, float G, float v0, float k, float vr, float vt, float C, float ra, float rb, float rc, float rd, bool ac, float eA, float vmin, float vpk, float th,
+    const float* thrJ, const float* thrDec, float* thr, bool& sp){
+  float vth = vpk + th, iw;
+  const float A = k/C, hd = 0.5f*(vt - vr), sm = vr + vt, ea = expf(-0.5f*ra);
+  sp = false;
+  for(int hs = 0; hs < 2; hs++){
+    float gs = (ac ? u : 0.0f) + G, m = 0.5f*sm + gs/(2.0f*k);
+    float q = (-k*hd*hd + I + (ac ? u*eA : -u) + G*v0 - 0.5f*gs*sm - gs*gs/(4.0f*k))/C;
+    float iv;
+    const float tc = quadTimeD(A, q, v - m, vth - m);
+    if(tc > 0.5f){ v = m + quadAtD(A, q, v - m, 0.5f, iw); iv = iw + 0.5f*m; }
+    else {
+      quadAtD(A, q, v - m, tc, iw); iv = iw + tc*m;
+      const float left = 0.5f - tc;
+      if(sp){ v = vth; iv += left*vth; }
+      else {
+        sp = true; v = rc; u += rd;
+        if(thr){ thr[i] = thrJ[i]*powf(thrDec[i], 0.5f*(float)(1 - hs) + left); vth = vpk + thrJ[i]; }
+        gs = (ac ? u : 0.0f) + G; m = 0.5f*sm + gs/(2.0f*k);
+        q = (-k*hd*hd + I + (ac ? u*eA : -u) + G*v0 - 0.5f*gs*sm - gs*gs/(4.0f*k))/C;
+        const float t2 = quadTimeD(A, q, v - m, vth - m);
+        if(t2 <= left){ quadAtD(A, q, v - m, t2, iw); iv += iw + t2*m + (left - t2)*vth; v = vth; }
+        else { v = m + quadAtD(A, q, v - m, left, iw); iv += iw + left*m; }
+      }
+    }
+    if(v < vmin) v = vmin;
+    const float tg = rb*(2.0f*iv - vr);
+    u = tg + (u - tg)*ea;
+  }
+  return v;
+}
+
 __global__ void stepKick(int n, int cur,
     const float* a, const float* b, const float* c, const float* d,
     const float* bias, const float* ext, const float* namp,
@@ -74,27 +156,51 @@ __global__ void stepKick(int n, int cur,
     float* stpX, float* stpR, float stpU, float stpScale, int stpOrder,
     unsigned char* firstMs, int stepIdx,
     const unsigned short* pool, const float* poolK, unsigned int* poolCnt,
-    unsigned int poolG, unsigned int par, float vmin,
+    unsigned int poolG, unsigned int par, float vmin, int integ,
     const float* C7, const float* k7, const float* vr7, const float* vt7, const float* vp7,
     const unsigned char* grd, const float* gthr, const float* gslp,
+    const float* thrJ, const float* thrDec, float* thr, const float* adC, const float* poi, float eI,
+    const unsigned char* gMask, unsigned int* gCnt,
     unsigned int* spk, unsigned int* nSpk,
-    unsigned int* dlv, float* dlvAmp, unsigned int* nDlv, float* dlvAmpC){
+    unsigned int* dlv, float* dlvAmp, unsigned int* nDlv, float* dlvAmpC,
+    const float* modPrev, float* modNew, const float* modStim, const unsigned short* modTgt, const float* modKf,
+    const unsigned int* modCntR, unsigned int* modCntW, const unsigned char* modGrp, float decMod, float modDrive, float modCur, int modOn){
   int i = blockIdx.x*blockDim.x + threadIdx.x;
   if(i >= n) return;
+  // The modulator field (MODEL.md 4), as modUpdate() in simworker.js: the level as the step before left it (modPrev) is what this step reads, for the synaptic gain and the current here and for the learning passes; the new level, decayed plus the sources' increment plus the group's release per spike times the group's spikes of the step before, is written for the next step.
+  float mpv = 0.0f, mf = 1.0f, mc = 0.0f;
+  if(modOn){
+    mpv = modPrev[i]; mf = 1.0f + modDrive*mpv; mc = modCur*mpv;
+    float mn = mpv*decMod + (modStim ? modStim[i] : 0.0f);
+    if(modTgt){ unsigned short g = modTgt[i]; if(g) mn += modKf[g]*(float)modCntR[g]; }
+    modNew[i] = mn;
+  }
   // Izhikevich 2007 (MODEL.md 1): u is measured from the rest, the membrane is k (v - vr)(v - vt) over C, the spike at the row's vpeak
   const float uRef = vr7[i];
+  // the dynamic threshold (MODEL.md 1) relaxes before anything else this step, Auryn's order
+  float th = 0.0f; if(thr){ th = thr[i]*thrDec[i]; thr[i] = th; }
   if(refrac > 0 && refCnt[i] > 0){
     refCnt[i]--;
     float ui2 = u[i] + a[i]*(b[i]*(v[i] - uRef) - u[i]);
     u[i] = ui2; fired[i] = 0;
     return;
   }
-  float I = ring[cur*n + i] + bias[i] + (ext ? ext[i] : 0.0f);
-  // feedback inhibition: the pool's kick per spike times the spikes it fired last millisecond, from the half of the table the last step wrote
-  if(pool){ unsigned short g = pool[i];
-    if(g) I += poolK[g]*(float)poolCnt[(par ^ 1u)*poolG + g]; }
+  float I;
+  if(modOn){
+    // the field scales the synaptic current (the ring and the pool) by 1 + modDrive M and adds modCur M
+    float Is = ring[cur*n + i];
+    if(pool){ unsigned short g = pool[i];
+      if(g) Is += poolK[g]*(float)poolCnt[(par ^ 1u)*poolG + g]; }
+    I = Is*mf + mc + bias[i] + (ext ? ext[i] : 0.0f);
+  } else {
+    I = ring[cur*n + i] + bias[i] + (ext ? ext[i] : 0.0f);
+    // feedback inhibition: the pool's kick per spike times the spikes it fired last millisecond, from the half of the table the last step wrote
+    if(pool){ unsigned short g = pool[i];
+      if(g) I += poolK[g]*(float)poolCnt[(par ^ 1u)*poolG + g]; }
+  }
   if(namp && namp[i] != 0.0f) I += namp[i]*noiseAt(i, t, seed, nA, nK, nC, nId, nz, nzs);
   float vi = v[i], ui = u[i];
+  bool qc = false, qsp = false;
     const float Ci = C7[i], ki = k7[i], vri = vr7[i], vti = vt7[i];
     if(grd && grd[i]){
       // a graded cell's membrane is passive: the leak is the row's slope at rest, k (vt - vr), and the potential is capped at vpeak
@@ -102,13 +208,25 @@ __global__ void stepKick(int n, int cur,
       vi += 0.5f*(-gl*(vi - vri) - ui + I)/Ci; if(vi < vmin) vi = vmin;
       vi += 0.5f*(-gl*(vi - vri) - ui + I)/Ci; if(vi < vmin) vi = vmin;
       if(vi > vp7[i]) vi = vp7[i];
+    } else if(poi && poi[i] > 0.5f){
+      // a Poisson cell (MODEL.md 1): no membrane; it fires this step with probability I over 1000, the current read as a rate in hertz, by being put at its peak
+      if(I > 0.0f && poissonDraw((unsigned int)i, t, seed) < I*0.001f) vi = vp7[i] + th;
+    } else if(integ && vti - vp7[i] > 100.0f){
+    // the exponential membrane step (integ 1), on a row linear over the spiking range as the reference's linRow: current synapses add no conductance to the slope
+    const bool ac = adC && adC[i] > 0.5f; const float vs = vi;
+    vi = expHalfD(vi, ui, I, 0.0f, vs, ki, vri, vti, Ci, ac, eI, vmin); vi = expHalfD(vi, ui, I, 0.0f, vs, ki, vri, vti, Ci, ac, eI, vmin);
+    } else if(integ == 2){
+    // the equations' step (integ 2) on a quadratic row, as the reference's quadMs
+    vi = quadMsD(i, vi, ui, I, 0.0f, vi, ki, vri, vti, Ci, a[i], b[i], c[i], d[i], adC && adC[i] > 0.5f, eI, vmin, vp7[i], th, thrJ, thrDec, thr, qsp); qc = true;
     } else {
-    vi += 0.5f*(ki*(vi - vri)*(vi - vti) - ui + I)/Ci;
+    // with the row's adaptation a conductance (adC), u in nanosiemens draws current toward the inhibitory reversal
+    const bool ac = adC && adC[i] > 0.5f;
+    vi += 0.5f*(ki*(vi - vri)*(vi - vti) - (ac ? ui*(vi - eI) : ui) + I)/Ci;
     if(vi < vmin) vi = vmin;
-    vi += 0.5f*(ki*(vi - vri)*(vi - vti) - ui + I)/Ci;
+    vi += 0.5f*(ki*(vi - vri)*(vi - vti) - (ac ? ui*(vi - eI) : ui) + I)/Ci;
     if(vi < vmin) vi = vmin;
     }
-    ui += a[i]*(b[i]*(vi - vri) - ui);
+    if(!qc) ui += a[i]*(b[i]*(vi - vri) - ui);
     const float vpk = vp7[i];
   // a graded cell (MODEL.md 1): no spike, no reset, no refractory period; each millisecond its synapses carry a spike of amplitude r, delivered by the delivery pass from the list
   if(grd && grd[i]){
@@ -118,11 +236,18 @@ __global__ void stepKick(int n, int cur,
     return;
   }
   unsigned char f = 0;
-  if(vi >= vpk){
-    vi = c[i]; ui += d[i]; f = 1;
+  if(qc ? qsp : vi >= vpk + th){
+    if(qc) f = 1;
+    else if(integ && !(poi && poi[i] > 0.5f) && vti - vpk > 100.0f){ ui += d[i]; vi = spanResetD(i, v[i], vi, vpk + th, ui, I, 0.0f, vi, c[i], ki, vri, vti, Ci, adC && adC[i] > 0.5f, eI, vmin, thrJ, thrDec, thr); f = 1; }
+    else { vi = c[i]; ui += d[i]; f = 1;
+    if(thr) thr[i] = thrJ[i]; }
+    // the global factor's population count for this step (MODEL.md 4)
+    if(gMask && gMask[i]) atomicAdd(gCnt, 1u);
     spk[atomicAdd(nSpk, 1u)] = (unsigned int)i;   // the list of this step's spikes, which the learning passes walk
     if(refrac > 0) refCnt[i] = (unsigned char)refrac;
     if(pool && pool[i]) atomicAdd(&poolCnt[par*poolG + pool[i]], 1u);
+    // a releasing cell's spike, counted for its modulator group, read by the group's targets next step (MODEL.md 4)
+    if(modGrp && modGrp[i]) atomicAdd(&modCntW[modGrp[i]], 1u);
     counts[i]++;
     // the step in the tick this cell first fired, 255 if it did not: the readout bins at the tick, so without this the finest grain any measurement has is the whole tick, coarser at 50 steps than the STDP window.
     if(firstMs && firstMs[i] == 255)
@@ -189,27 +314,42 @@ __global__ void stepExp(int n, int cur, float decE, float decI,
     float* stpX, float* stpR, float stpU, float stpScale, int stpOrder,
     unsigned char* firstMs, int stepIdx,
     const unsigned short* pool, const float* poolK, unsigned int* poolCnt,
-    unsigned int poolG, unsigned int par, float vmin,
+    unsigned int poolG, unsigned int par, float vmin, int integ,
     const float* C7, const float* k7, const float* vr7, const float* vt7, const float* vp7,
     const unsigned char* grd, const float* gthr, const float* gslp,
     int KX, float* gX, float* ringX, const float* decX, const float* itauX, const unsigned char* pmask,
     int cond, float eE, float eI, const float* erevX, const float* mgX,
+    const float* thrJ, const float* thrDec, float* thr, const float* adC, const float* poi,
+    const unsigned char* gMask, unsigned int* gCnt,
     unsigned int* spk, unsigned int* nSpk,
-    unsigned int* dlv, float* dlvAmp, unsigned int* nDlv, float* dlvAmpC){
+    unsigned int* dlv, float* dlvAmp, unsigned int* nDlv, float* dlvAmpC,
+    const float* modPrev, float* modNew, const float* modStim, const unsigned short* modTgt, const float* modKf,
+    const unsigned int* modCntR, unsigned int* modCntW, const unsigned char* modGrp, float decMod, float modDrive, float modCur, int modOn){
   int i = blockIdx.x*blockDim.x + threadIdx.x;
   if(i >= n) return;
+  // The modulator field (MODEL.md 4), as modUpdate() in simworker.js: the level as the step before left it (modPrev) is what this step reads, for the synaptic gain and the current here and for the learning passes; the new level, decayed plus the sources' increment plus the group's release per spike times the group's spikes of the step before, is written for the next step.
+  float mpv = 0.0f, mf = 1.0f, mc = 0.0f;
+  if(modOn){
+    mpv = modPrev[i]; mf = 1.0f + modDrive*mpv; mc = modCur*mpv;
+    float mn = mpv*decMod + (modStim ? modStim[i] : 0.0f);
+    if(modTgt){ unsigned short g = modTgt[i]; if(g) mn += modKf[g]*(float)modCntR[g]; }
+    modNew[i] = mn;
+  }
+  // the dynamic threshold (MODEL.md 1) relaxes before anything else this step, Auryn's order
+  float th = 0.0f; if(thr){ th = thr[i]*thrDec[i]; thr[i] = th; }
   const float uRef = vr7[i];               // u is measured from the rest (2007)
   const float v0 = v[i];
   float ge = gE[i]*decE + ring[cur*n + i];
   float gi = gI[i]*decI + ring2[cur*n + i];
   // receptor channels 2 and up (MODEL.md 2): their own decay, their own ring;
   // conductance mode drives |g| (E - v) with the step's opening v, and a channel with a magnesium concentration passes the fraction B(v) = 1/(1 + [Mg]/3.57 exp(-0.062 v)) (Jahr and Stevens 1990)
-  float Ix = 0.0f;
+  float Ix = 0.0f, Gx = 0.0f;
   for(int x = 0; x < KX; x++){
     float g = gX[x*n + i]*decX[x] + ringX[((size_t)x*ROWS + cur)*n + i];
     gX[x*n + i] = g;
     float bI = mgX[x] > 0.0f ? 1.0f/(1.0f + (mgX[x]/3.57f)*expf(-0.062f*v0)) : 1.0f;
     Ix += bI*(cond ? fabsf(g)*(erevX[x] - v0) : g*itauX[x]);
+    if(cond) Gx += bI*fabsf(g);
   }
   // feedback inhibition, on the inhibitory conductance like any I delivery
   if(pool){ unsigned short g = pool[i];
@@ -221,9 +361,14 @@ __global__ void stepExp(int n, int cur, float decE, float decI,
     u[i] = ui2; gE[i] = ge; gI[i] = gi; fired[i] = 0;
     return;
   }
-  float I = (cond ? fabsf(ge)*(eE - v0) + fabsf(gi)*(eI - v0) : ge*itauE + gi*itauI) + Ix + bias[i] + (ext ? ext[i] : 0.0f);
+  // the field scales the synaptic current, the channels included, by 1 + modDrive M and adds modCur M; the synaptic conductance the exponential step reads scales with it
+  float I;
+  if(modOn) I = ((cond ? fabsf(ge)*(eE - v0) + fabsf(gi)*(eI - v0) : ge*itauE + gi*itauI) + Ix)*mf + mc + bias[i] + (ext ? ext[i] : 0.0f);
+  else I = (cond ? fabsf(ge)*(eE - v0) + fabsf(gi)*(eI - v0) : ge*itauE + gi*itauI) + Ix + bias[i] + (ext ? ext[i] : 0.0f);
+  const float Gs = (cond ? fabsf(ge) + fabsf(gi) + Gx : 0.0f)*mf;
   if(namp && namp[i] != 0.0f) I += namp[i]*noiseAt(i, t, seed, nA, nK, nC, nId, nz, nzs);
   float vi = v[i], ui = u[i];
+  bool qc = false, qsp = false;
     const float Ci = C7[i], ki = k7[i], vri = vr7[i], vti = vt7[i];
     if(grd && grd[i]){
       // a graded cell's membrane is passive: the leak is the row's slope at rest, k (vt - vr), and the potential is capped at vpeak
@@ -231,13 +376,24 @@ __global__ void stepExp(int n, int cur, float decE, float decI,
       vi += 0.5f*(-gl*(vi - vri) - ui + I)/Ci; if(vi < vmin) vi = vmin;
       vi += 0.5f*(-gl*(vi - vri) - ui + I)/Ci; if(vi < vmin) vi = vmin;
       if(vi > vp7[i]) vi = vp7[i];
+    } else if(poi && poi[i] > 0.5f){
+      // a Poisson cell (MODEL.md 1): no membrane; it fires this step with probability I over 1000, the current read as a rate in hertz, by being put at its peak
+      if(I > 0.0f && poissonDraw((unsigned int)i, t, seed) < I*0.001f) vi = vp7[i] + th;
+    } else if(integ && vti - vp7[i] > 100.0f){
+    // the exponential membrane step (integ 1), on a row linear over the spiking range: the synaptic conductance enters the slope and the current is taken at the voltage it acts on
+    const bool ac = adC && adC[i] > 0.5f; const float G = Gs;
+    vi = expHalfD(vi, ui, I, G, v0, ki, vri, vti, Ci, ac, eI, vmin); vi = expHalfD(vi, ui, I, G, v0, ki, vri, vti, Ci, ac, eI, vmin);
+    } else if(integ == 2){
+    vi = quadMsD(i, vi, ui, I, Gs, v0, ki, vri, vti, Ci, a[i], b[i], c[i], d[i], adC && adC[i] > 0.5f, eI, vmin, vp7[i], th, thrJ, thrDec, thr, qsp); qc = true;
     } else {
-    vi += 0.5f*(ki*(vi - vri)*(vi - vti) - ui + I)/Ci;
+    // with the row's adaptation a conductance (adC), u in nanosiemens draws current toward the inhibitory reversal
+    const bool ac = adC && adC[i] > 0.5f;
+    vi += 0.5f*(ki*(vi - vri)*(vi - vti) - (ac ? ui*(vi - eI) : ui) + I)/Ci;
     if(vi < vmin) vi = vmin;
-    vi += 0.5f*(ki*(vi - vri)*(vi - vti) - ui + I)/Ci;
+    vi += 0.5f*(ki*(vi - vri)*(vi - vti) - (ac ? ui*(vi - eI) : ui) + I)/Ci;
     if(vi < vmin) vi = vmin;
     }
-    ui += a[i]*(b[i]*(vi - vri) - ui);
+    if(!qc) ui += a[i]*(b[i]*(vi - vri) - ui);
     const float vpk = vp7[i];
   if(grd && grd[i]){
     float r = fminf(1.0f, fmaxf(0.0f, (vi - gthr[i])/gslp[i]));
@@ -246,11 +402,17 @@ __global__ void stepExp(int n, int cur, float decE, float decI,
     return;
   }
   unsigned char f = 0;
-  if(vi >= vpk){
-    vi = c[i]; ui += d[i]; f = 1;
+  if(qc ? qsp : vi >= vpk + th){
+    if(qc) f = 1;
+    else if(integ && !(poi && poi[i] > 0.5f) && vti - vpk > 100.0f){ ui += d[i]; vi = spanResetD(i, v0, vi, vpk + th, ui, I, Gs, v0, c[i], ki, vri, vti, Ci, adC && adC[i] > 0.5f, eI, vmin, thrJ, thrDec, thr); f = 1; }
+    else { vi = c[i]; ui += d[i]; f = 1;
+    if(thr) thr[i] = thrJ[i]; }
+    // the global factor's population count for this step (MODEL.md 4)
+    if(gMask && gMask[i]) atomicAdd(gCnt, 1u);
     spk[atomicAdd(nSpk, 1u)] = (unsigned int)i;   // the list of this step's spikes, which the learning passes walk
     if(refrac > 0) refCnt[i] = (unsigned char)refrac;
     if(pool && pool[i]) atomicAdd(&poolCnt[par*poolG + pool[i]], 1u);
+    if(modGrp && modGrp[i]) atomicAdd(&modCntW[modGrp[i]], 1u);
     counts[i]++;
     // the step in the tick this cell first fired, 255 if it did not (see stepKick)
     if(firstMs && firstMs[i] == 255)
@@ -334,9 +496,12 @@ __device__ __forceinline__ bool isCommitted(int commit, const float* wRef,
 // One thread per neuron walking every synapse of a spiking cell alone left the rest of its warp idle, which at a few hertz was most of the card for the whole pass.
 // Each synapse is still updated by exactly one lane with the per-synapse arithmetic below, so the weights come out the same bits as the per-neuron form did.
 #define WARP 32u
+// gain is the third factor on the Hebbian terms (MODEL.md 4), times modBase + the modulator level of the postsynaptic cell under modPlast 1; under modPlast 2 the Hebbian terms accumulate on the eligibility trace instead of moving the weight.
+// The inhibitory rule runs ungated.
 __device__ __forceinline__ void plastOutSyn(int s, const int* post, float* w,
     const unsigned char* pmask, const float* Kpost,
-    float iAlpha, const float* alphaI, const float* wRef, int commit){
+    float iAlpha, const float* alphaI, const float* wRef, int commit, float gain, float mu, const float* Khom, float slideK,
+    const float* gState, int iGlobal, const float* modPrev, int modPlast, float modBase, float* elig){
   unsigned int rid = pmask ? (pmask[s] & 31u) : 1u;   // the rule is the low five bits; the channel the top three
   if(rid == 0u) return;                    // 0 is frozen
   const float* R = cRules + rid*RULE_STRIDE;
@@ -345,12 +510,19 @@ __device__ __forceinline__ void plastOutSyn(int s, const int* post, float* w,
   const int wdep = R[R_wdep] != 0.0f;
   float wj = w[s];
   if(wj > 0){
-    float nw = wj - R[R_aM]*Kpost[post[s]]*(wdep ? wj : 1.0f) + R[R_tin];
+    // the sliding threshold: depression scaled by the square of the cell's slow rate estimate over the target, 1 when off (MODEL.md 4)
+    float sl = 1.0f;
+    if(slideK > 0.0f && Khom){ float kh = Khom[post[s]]*slideK; sl = kh*kh; }
+    const float g = modPlast == 1 ? gain*(modBase + modPrev[post[s]]) : gain;
+    const float dep = g*R[R_aM]*sl*Kpost[post[s]]*(wdep ? (mu == 1.0f ? wj : powf(wj, mu)) : 1.0f);
+    if(modPlast == 2){ elig[s] += -dep + g*R[R_tin]; return; }
+    float nw = wj - dep + g*R[R_tin];
     if(nw > wmax) nw = wmax;
     w[s] = nw > 1e-4f ? nw : 1e-4f;
   } else {
     float al = alphaI ? alphaI[post[s]] : iAlpha;
-    float dd = -R[R_iEta]*(Kpost[post[s]] - al);
+    // under the global factor the amplitude is the rule's eta times the population ratio and the presynaptic term is the trace plus one, the authors' xi (MODEL.md 4)
+    float dd = iGlobal ? -R[R_iEta]*gState[1]*(Kpost[post[s]] + 1.0f) : -R[R_iEta]*(Kpost[post[s]] - al);
     if(wdep) dd = softBound(wj, dd, wmax);
     float nw = wj + dd;
     if(nw > -1e-4f) nw = -1e-4f;
@@ -361,14 +533,15 @@ __device__ __forceinline__ void plastOutSyn(int s, const int* post, float* w,
 __global__ void plastOut(const unsigned int* spk, const unsigned int* nSpk,
     const int* preStart, const int* post, float* w,
     const unsigned char* pmask, const float* Kpost,
-    float iAlpha, const float* alphaI, const float* wRef, int commit){
+    float iAlpha, const float* alphaI, const float* wRef, int commit, float gain, float mu, const float* Khom, float slideK,
+    const float* gState, int iGlobal, const float* modPrev, int modPlast, float modBase, float* elig){
   const unsigned int lane = threadIdx.x & 31u;
   const unsigned int warps = (gridDim.x*blockDim.x) >> 5;
   const unsigned int count = *nSpk;
   for(unsigned int k = (blockIdx.x*blockDim.x + threadIdx.x) >> 5; k < count; k += warps){
     const int i = (int)spk[k];
     for(int s = preStart[i] + (int)lane, e = preStart[i+1]; s < e; s += (int)WARP)
-      plastOutSyn(s, post, w, pmask, Kpost, iAlpha, alphaI, wRef, commit);
+      plastOutSyn(s, post, w, pmask, Kpost, iAlpha, alphaI, wRef, commit, gain, mu, Khom, slideK, gState, iGlobal, modPrev, modPlast, modBase, elig);
   }
 }
 
@@ -377,7 +550,8 @@ __global__ void plastOut(const unsigned int* spk, const unsigned int* nSpk,
 __global__ void plastArrive(const unsigned int* arr, const unsigned int* nArr, const unsigned int* hist,
     const int* preStart, const int* post, float* w, const unsigned char* delay,
     const unsigned char* pmask, const float* Kpost,
-    float iAlpha, const float* alphaI, const float* wRef, int commit){
+    float iAlpha, const float* alphaI, const float* wRef, int commit, float gain, float mu, const float* Khom, float slideK,
+    const float* gState, int iGlobal, const float* modPrev, int modPlast, float modBase, float* elig){
   const unsigned int lane = threadIdx.x & 31u;
   const unsigned int warps = (gridDim.x*blockDim.x) >> 5;
   const unsigned int count = *nArr;
@@ -385,11 +559,11 @@ __global__ void plastArrive(const unsigned int* arr, const unsigned int* nArr, c
     const int i = (int)arr[k];
     const unsigned int h = hist[i];
     for(int s = preStart[i] + (int)lane, e = preStart[i+1]; s < e; s += (int)WARP)
-      if((h >> delay[s]) & 1u) plastOutSyn(s, post, w, pmask, Kpost, iAlpha, alphaI, wRef, commit);
+      if((h >> delay[s]) & 1u) plastOutSyn(s, post, w, pmask, Kpost, iAlpha, alphaI, wRef, commit, gain, mu, Khom, slideK, gState, iGlobal, modPrev, modPlast, modBase, elig);
   }
 }
 
-// The triplet and heterosynaptic terms read the slow postsynaptic trace before this millisecond's spike is added, matching the reference: the triplet potentiates by postsynaptic history (Pfister and Gerstner 2006), and the cubed trace gates heterosynaptic regression toward the reference weight so only bursting engages it (Zenke et al. 2015).
+// The triplet term reads the slow postsynaptic trace and the heterosynaptic term the fast one, both before this millisecond's spike is added, matching the reference: the triplet potentiates by postsynaptic history (Pfister and Gerstner 2006), and beta times the cubed fast trace pulls every incoming weight toward its reference (Zenke, Agnes and Gerstner 2015).
 // The pre trace a post spike sees through a synapse of delay d when the rule is timed at the synapse: the spikes of the last d - 1 steps (the cell's history, bit k for k steps ago) taken out of Kpre and the rest brought forward by e^(d/tau+), as simworker.js kpreAtSynapse.
 __device__ __forceinline__ float kpreAtSynapse(float kpre, unsigned int h, unsigned int d){
   float sub = 0.0f;
@@ -397,9 +571,10 @@ __device__ __forceinline__ float kpreAtSynapse(float kpre, unsigned int h, unsig
   float kp = cExd[d]*(kpre - sub);
   return kp > 0.0f ? kp : 0.0f;
 }
+// gain arrives folded by the caller: the third factor, times modBase + the postsynaptic cell's modulator level under modPlast 1; under modPlast 2 the Hebbian potentiation goes to the eligibility trace and the heterosynaptic pull, homeostatic, moves the weight now.
 __device__ __forceinline__ void plastInSyn(int s, unsigned int preD, unsigned int mask, float* w,
     const float* Kpre, const unsigned int* hist,
-    const float* wRef, float z, float gate, int commit){
+    const float* wRef, float z, float gate, int commit, float gain, const float* gState, int iGlobal, int modPlast, float* elig){
   unsigned int rid = mask & 31u;           // the rule is the low five bits; the channel the top three
   if(rid == 0u) return;
   const float* R = cRules + rid*RULE_STRIDE;
@@ -411,45 +586,70 @@ __device__ __forceinline__ void plastInSyn(int s, unsigned int preD, unsigned in
   float wp = w[s], kp = Kpre[pre];
   if(hist) kp = kpreAtSynapse(kp, hist[pre], preD >> 27);
   if(wp > 0){
-    float nw = wp + (R[R_aP] + R[R_trip]*z)*kp;
-    if(het > 0 && wRef){
-      float hetF = het*gate;
-      if(hetF > 1.0f) hetF = 1.0f;
-      nw -= hetF*(wp - wRef[s]);
-    }
+    float nw = wp;
+    if(modPlast == 2) elig[s] += gain*(R[R_aP] + R[R_trip]*z)*kp;
+    else nw = wp + gain*(R[R_aP] + R[R_trip]*z)*kp;
+    if(het > 0 && wRef) nw -= het*gate*(wp - wRef[s]);
     if(nw > wmax) nw = wmax;
     w[s] = nw > 1e-4f ? nw : 1e-4f;
   } else {
-    float dd = -R[R_iEta]*kp;
+    float dd = iGlobal ? -R[R_iEta]*gState[1]*kp : -R[R_iEta]*kp;
     if(wdep) dd = softBound(wp, dd, wmax);
     float nw = wp + dd;
     w[s] = nw > -wmax ? nw : -wmax;
   }
 }
 // revMask is the rule byte per entry of the reverse list (pmask in that order), read in step with revSyn: one scattered read fewer per weight.
-// Under measured set points (alphaI given) the gate's set point is the cell's own, alphaI[i] times kRefA, which is alphaI's definition inverted; else the fixed kRef. hist is the spike history per cell when the rule is timed at the synapse, else null.
+// Kpost is the fast postsynaptic trace, whose cube the heterosynaptic term multiplies. hist is the spike history per cell when the rule is timed at the synapse, else null.
 __global__ void plastIn(const unsigned int* spk, const unsigned int* nSpk,
     const int* inStart, const int* revSyn, const int* revPre, float* w,
     const unsigned char* revMask, const float* Kpre, const unsigned int* hist,
-    const float* Kslow, const float* wRef, float kRef, const float* alphaI, float kRefA, int commit){
+    const float* Kslow, const float* wRef, const float* Kpost, int commit, float gain, const float* gState, int iGlobal,
+    const float* modPrev, int modPlast, float modBase, float* elig){
   const unsigned int lane = threadIdx.x & 31u;
   const unsigned int warps = (gridDim.x*blockDim.x) >> 5;
   const unsigned int count = *nSpk;
   for(unsigned int k = (blockIdx.x*blockDim.x + threadIdx.x) >> 5; k < count; k += warps){
     const int i = (int)spk[k];
     float z = Kslow ? Kslow[i] : 0.0f;
-    // the gate is this neuron's trace against its set point, so it is shared; only the amplitude multiplying it is per rule
-    float kr = alphaI ? fmaxf(1e-6f, alphaI[i]*kRefA) : kRef;
-    float g = z/kr;
-    float gate = g*g*g;
+    const float kq = Kpost[i];
+    const float gate = kq*kq*kq;
+    // the third factor for this cell's incoming synapses: the gain, times modBase + its modulator level under modPlast 1 (MODEL.md 4)
+    const float g = modPlast == 1 ? gain*(modBase + modPrev[i]) : gain;
     for(int kk = inStart[i] + (int)lane, ke = inStart[i+1]; kk < ke; kk += (int)WARP)
-      plastInSyn(revSyn[kk], (unsigned int)revPre[kk], revMask ? revMask[kk] : 1u, w, Kpre, hist, wRef, z, gate, commit);
+      plastInSyn(revSyn[kk], (unsigned int)revPre[kk], revMask ? revMask[kk] : 1u, w, Kpre, hist, wRef, z, gate, commit, g, gState, iGlobal, modPlast, elig);
   }
 }
 
+// The eligibility sweep (modPlast 2, MODEL.md 4), as eligSweep() in simworker.js: every modStep ms each excitatory plastic synapse's trace pays (1 - e^(-modStep/eligTau)) of itself into its weight times modBase + the modulator level of its postsynaptic cell (the step's own, after the field update), then decays; a committed synapse keeps its weight and its trace still decays.
+__global__ void eligSweepK(unsigned int m, float* w, float* elig, const int* post, const unsigned char* pmask,
+    const float* mod, float modBase, float eligPay, float decElig, const float* wRef, int commit){
+  unsigned int s = blockIdx.x*blockDim.x + threadIdx.x;
+  if(s >= m) return;
+  unsigned int rid = pmask ? (pmask[s] & 31u) : 1u;
+  if(rid == 0u) return;
+  float c = elig[s];
+  if(c == 0.0f) return;
+  const float* R = cRules + rid*RULE_STRIDE;
+  if(!isCommitted(commit, wRef, R, s)){
+    float wj = w[s];
+    if(wj > 0){
+      float nw = wj + c*eligPay*(modBase + mod[post[s]]);
+      if(nw > R[R_wmax]) nw = R[R_wmax];
+      w[s] = nw > 1e-4f ? nw : 1e-4f;
+    }
+  }
+  elig[s] = c*decElig;
+}
+
 // hist and dmask are each cell's spike history (bit k for a spike k steps ago) and the delays its synapses carry (bit d); the history moves on here, and under the rule at the synapse (atSyn) a cell whose history meets its mask has a spike arriving next step and is listed for the arrival pass.
+// The global factor (MODEL.md 4): the count of the inhibited population's spikes since the last fold, low-passed into the count that stands for its rate, and the ratio of that rate to the target minus one, which the next step's inhibitory updates read; the same float32 stores as the other engines.
+__global__ void gfacK(unsigned int* gCnt, float* gState, float decG, float tauGs, float gInv){
+  float pf = gState[0]*decG + (float)(*gCnt)/tauGs;
+  gState[0] = pf; gState[1] = pf*gInv - 1.0f; *gCnt = 0u;
+}
 __global__ void traceStep(int n, const unsigned char* fired,
-    float* Kpre, float* Kpost, float decS, float decM, float* Kslow, float decY,
+    float* Kpre, float* Kpost, float decS, float decM, float* Kslow, float decY, float* Khom, float decH,
     unsigned int* spkAcc, unsigned int* hist, const unsigned int* dmask, int atSyn,
     unsigned int* arr, unsigned int* nArr){
   int i = blockIdx.x*blockDim.x + threadIdx.x;
@@ -468,9 +668,31 @@ __global__ void traceStep(int n, const unsigned char* fired,
     float kz = Kslow[i] + (fired[i] ? 1.0f : 0.0f);
     Kslow[i] = kz*decY;
   }
+  // the sliding threshold's slow rate trace, the same two float32 stores the reference engine makes
+  if(Khom){
+    float kh = Khom[i] + (fired[i] ? 1.0f : 0.0f);
+    Khom[i] = kh*decH;
+  }
+}
+// One value into every entry: the slow rate trace starts where slideInit says.
+__global__ void fillK(int n, float* a, float v){
+  int i = blockIdx.x*blockDim.x + threadIdx.x;
+  if(i < n) a[i] = v;
 }
 
 // Zenke, Agnes and Gerstner 2015 equation 16: the heterosynaptic reference weight follows the synaptic weight through a double well, lower fixed point at zero and upper at consW with the midpoint unstable.
+// The reference starts inside its well: a weight above consW under a consolidating rule takes consW, matching refIntoWell() in src/simworker.js.
+__global__ void initRefK(unsigned int m, float* wRef, const float* w, const unsigned char* pmask, int mode){
+  unsigned int s = blockIdx.x*blockDim.x + threadIdx.x;
+  if(s >= m) return;
+  unsigned int rid = pmask ? (pmask[s] & 31u) : 1u;
+  if(rid == 0u || !(w[s] > 0.0f)) return;
+  const float* R = cRules + rid*RULE_STRIDE;
+  if(R[R_cons] <= 0.0f || R[R_consW] <= 0.0f) return;
+  if(mode == 1) wRef[s] = 0.0f;
+  else if(mode == 2) wRef[s] = R[R_consW];
+  else if(wRef[s] > R[R_consW]) wRef[s] = R[R_consW];
+}
 // Excitatory plastic synapses only, matching src/simworker.js consolidate().
 __global__ void consolidateK(unsigned int m, const float* w, float* wRef,
     const unsigned char* pmask, float rate){
@@ -484,9 +706,11 @@ __global__ void consolidateK(unsigned int m, const float* w, float* wRef,
   if(wj <= 0) return;
   const float consW = R[R_consW];
   float r = wRef[s];
-  // clamped to the two fixed points, as in the reference: the step is forward Euler over a cubic and a short timescale otherwise diverges
+  // held in [0, max(r, w, consW)], which the exact equation cannot leave, as in the reference: the step is forward Euler over a cubic and a short timescale otherwise diverges
   float nr = r + rate*(wj - r - R[R_consP]*r*(consW*0.5f - r)*(consW - r));
-  wRef[s] = nr < 0.0f ? 0.0f : (nr > consW ? consW : nr);
+  float top = r > wj ? r : wj;
+  if(consW > top) top = consW;
+  wRef[s] = nr < 0.0f ? 0.0f : (nr > top ? top : nr);
 }
 
 // Multiplicative synaptic scaling (Turrigiano 2008; van Rossum, Bi and Turrigiano 2000), matching applyScaling() in src/simworker.js: once per simulated second each neuron scales its incoming excitatory weights by its rate error against the target, and the accumulator resets.

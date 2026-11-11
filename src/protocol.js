@@ -27,7 +27,44 @@
 //       the 16 rule rows) on init and tune; the CUDA tune frame carries
 //       them after the rule table
 
-export const PROTOCOL = 7;
+//   8   plastGain on init and tune, a gain on the Hebbian terms (the CUDA
+//       tune frame carries it at 180)
+
+//   9   wmu on init and tune, the exponent of the weight in soft
+//       depression (the CUDA tune frame carries it at 208; its rule
+//       table moves to 212, rows from 216)
+
+//   10  refInit on init and tune, where the consolidation reference
+//       starts (the CUDA tune frame carries it at 212; its rule table
+//       moves to 216, rows from 220)
+
+//   11  slide, slideRate, slideTau and slideInit on init and tune, the
+//       sliding threshold on depression (the CUDA tune frame carries
+//       slideK, decH and khomInit at 216, 220 and 224; its rule table
+//       moves to 228, rows from 232)
+//   12  rows carry thrJump, thrTau, adaptCond and poisson (the dynamic
+//       threshold, the conductance adaptation, the Poisson output;
+//       the CUDA init frame carries four more f32[n] arrays after
+//       vpeak); iGlobal and iTauG on init and tune, the global factor
+//       on the inhibitory rule (the CUDA tune frame carries them at
+//       228 and 232; its rule table moves to 236, rows from 240)
+//   13  the consolidation reference is held in [0, max(r, w, consW)]
+//       and no longer at consW, so a strong synapse settles above it
+//   14  integ on init and tune, the exponential membrane step (bit 32
+//       of the switches at byte 100 of the CUDA tune frame)
+//   15  the weights reply carries the consolidation reference (ref; the
+//       CUDA child sends it as reply 104 just before reply 101), and
+//       setRef allocates the reference when plasticity has not yet
+//   16  integ 2, the equations' membrane step (bit 64 of the switches at
+//       byte 100 of the CUDA tune frame)
+//   17  neuromodulation (MODEL.md 4): a modulator field per cell on
+//       init and tune (modTau, modPlast, modBase, eligTau, modStep,
+//       modDrive, modCur, the time-course sources mods, the release
+//       arrays modGrp, modTgt and modK); the CUDA tune frame carries
+//       the scalars in a block after the short-term classes and the
+//       arrays in a MODS frame (13)
+
+export const PROTOCOL = 17;
 
 // The refusal, shared by every engine: null when the init matches, else the message to fail with.
 // An init without the field is from before the number existed, and is refused for the same reason.
@@ -78,6 +115,16 @@ function graded(m){
   for(const r of rows) if(m.types[r] && m.types[r].graded) return true;
   return false;
 }
+// A row feature in use (the dynamic threshold, the conductance adaptation, the Poisson output), on an init only, as graded rows are.
+function rowHas(key){
+  return m => {
+    if(!m.types || !m.ntype) return false;
+    const rows = new Set();
+    for(let i = 0; i < m.ntype.length; i++) rows.add(m.ntype[i]);
+    for(const r of rows){ const f = m.types[r] && m.types[r].f7; if(f && f[key] > 0) return true; }
+    return false;
+  };
+}
 
 // The terms beyond the baseline, each named by the tune field (and value) that switches it on: [name, what it is, whether a message uses it].
 // The baseline every engine runs is not listed: the init's network (cell count, type table, bias, CSR synapses with delays of 1 to 16 ms, seed, v0 and u0), kick delivery, tune of bias, tick and the state reply.
@@ -88,6 +135,8 @@ export const TERMS = [
   ['psc:2', 'the exact convention of exponential synapses (psc 2)', m => (m.syn|0) === 1 && (m.psc|0) === 2],
   ['refrac', 'the absolute refractory period', m => m.refrac > 0],
   ['vmin', 'the membrane floor', m => m.vmin !== undefined && +m.vmin < 0],
+  ['integ', 'the exponential membrane step (integ 1)', m => (m.integ|0) === 1],
+  ['integ:2', "the equations' membrane step (integ 2)", m => (m.integ|0) === 2],
   ['protocols:0', 'constant stimulus', m => modes(m).has(0)],
   ['protocols:1', 'pulse train stimulus', m => modes(m).has(1)],
   ['protocols:2', 'ramp stimulus', m => modes(m).has(2)],
@@ -95,8 +144,16 @@ export const TERMS = [
   ['noiseTau', 'a noise stimulus with a time constant or a shared fraction', m => (m.protocols || []).some(p => p.mode === 3 && (p.tau > 0 || p.common > 0))],
   ['inputs', 'input maps (inputFrame)', m => Array.isArray(m.inputs) && m.inputs.length > 0],
   ['graded', 'graded (non-spiking) rows', graded],
+  ['thr', 'rows with the dynamic threshold (thrJump)', rowHas('thrJump')],
+  ['adaptCond', 'rows whose adaptation is a conductance', rowHas('adaptCond')],
+  ['poisson', 'Poisson rows', rowHas('poisson')],
+  ['iGlobal', 'the global factor on the inhibitory rule (iGlobal 1)', m => plastic(m) && (m.iGlobal|0) === 1],
   ['plast', 'plasticity (pair STDP and the inhibitory rule)', plastic],
   ['stdpAt', 'the pair rule timed at the synapse (stdpAt 1)', m => plastic(m) && (m.stdpAt|0) === 1],
+  ['plastGain', 'a gain on the Hebbian terms (plastGain)', m => plastic(m) && m.plastGain !== undefined && +m.plastGain !== 1],
+  ['wmu', 'the exponent of the weight in soft depression (wmu below 1)', m => plastic(m) && m.wmu !== undefined && +m.wmu !== 1],
+  ['refInit', 'the consolidation reference starting at zero or at the consolidated weight (refInit)', m => plastic(m) && (m.refInit|0) !== 0],
+  ['slide', 'the sliding threshold on depression (slide 1)', m => plastic(m) && (m.slide|0) === 1],
   ['rhoMode', 'measured rate set points', m => plastic(m) && (m.rhoMode|0) === 1],
   ['scale', 'synaptic scaling', m => plastic(m) && (m.scale|0) === 1],
   ['trip', 'the triplet term', m => plastic(m) && anyRule(m, 4, 'trip')],
@@ -113,6 +170,9 @@ export const TERMS = [
   ['chanTau', 'receptor channels', m => (Array.isArray(m.chanTau) || ArrayBuffer.isView(m.chanTau)) && m.chanTau.length > 0],
   ['chanMg', 'the magnesium block on a receptor channel', m => (Array.isArray(m.chanMg) || ArrayBuffer.isView(m.chanMg)) && Array.from(m.chanMg).some(x => x > 0)],
   ['pool', 'feedback inhibition', m => !!(m.pool && m.pool.length && m.poolK && m.poolK.length > 1)],
+  // the modulator field (MODEL.md 4): a network uses it when anything writes it (a time-course source or a releasing population) or reads it (a gain on learning, on the synaptic current, or a current)
+  ['mod', 'neuromodulation (a modulator field)', m => (Array.isArray(m.mods) && m.mods.length > 0) || !!(m.modK && m.modK.length > 1) || (plastic(m) && (m.modPlast|0) > 0) || (+m.modDrive || 0) !== 0 || (+m.modCur || 0) !== 0],
+  ['elig', 'eligibility traces (modPlast 2)', m => plastic(m) && (m.modPlast|0) === 2],
 ];
 export const TERM_NAMES = TERMS.map(t => t[0]);
 // 'custom' is named by an engine that reads the custom block; an engine that does not name it ignores the block, which the sender says.

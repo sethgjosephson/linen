@@ -161,7 +161,7 @@ if(opt.engine === 'cpu'){
   const exe = path.join(ROOT, 'cuda', 'engine.exe');
   if(!fs.existsSync(exe)){
     console.error('linen: cuda/engine.exe is not built. Build it with\n'
-      + '  nvcc -O3 -arch=sm_89 -o cuda/engine.exe cuda/engine.cu');
+      + '  nvcc -O3 -arch=native -o cuda/engine.exe cuda/engine.cu (the name is the same on Linux)');
     process.exit(1);
   }
   const { CudaEngine } = await import('../host/cudaengine.mjs');

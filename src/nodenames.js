@@ -93,6 +93,7 @@ export function nameNodes(nodes, groups){
       case 'receptor': return 'receptor channels';
       case 'plasticity': return 'rule ' + (String(P.name || '').trim() || 'stdp');
       case 'pool': return 'pool on ' + (String(P.tag || '').trim() || 'all cells');
+      case 'modulator': return ((P.source | 0) === 1 ? (String(P.from || '').trim() || 'all cells') + ' releases' : ['constant', 'pulsed', 'ramped', 'gated'][P.mode | 0] || 'modulator') + ' onto ' + (String(P.tag || '').trim() || 'all cells');
       case 'repeat': return (String(P.tag || '').trim() || what || 'copies') + ' x' + (P.copies | 0);
       case 'stimulus': {
         const mode = ['bias', 'pulse', 'ramp', 'noise'][P.mode | 0] || 'drive';

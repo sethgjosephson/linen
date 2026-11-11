@@ -128,5 +128,25 @@ const at = (sig, k) => scheduleAt(sig, k*PERIOD + 10);
       return [...s].sort().join('') === '12'; })());
 }
 
+{
+  // Blocks with their own timing, set and intensity (a three-phase protocol as one network): the second block presents for 200 ms with 5 s gaps, the third draws spots at twice the drive.
+  const list = parsePhases('30 ab on=1000 off=2000; 30 ab on=200 off=5000; 30 ab on=200 off=5000 set=8 gain=2');
+  ok('a block parses its own timing, set and gain', list.length === 3 && list[1].onMs === 200 && list[1].offMs === 5000 && list[1].set === undefined &&
+    list[2].set === 8 && list[2].gain === 2 && list[0].cond === 0, JSON.stringify(list));
+  const M = 60000;
+  ok('a block knows where it starts', phaseAt(list, 31*M).start === 30*M && phaseAt(list, 61*M).i === 2);
+  const sig = { set:2, order:1, onMs:1000, offMs:2000, timing:0, seed:1, calCycles:0, phases:list };
+  const a = scheduleAt(sig, 10*M + 10), b = scheduleAt(sig, 31*M + 10), c = scheduleAt(sig, 61*M + 10);
+  ok('the first block keeps the base timing and set', a.onMs === 1000 && a.offMs === 2000 && a.count === 5 && a.gain === 1, JSON.stringify([a.onMs, a.offMs, a.count, a.gain]));
+  ok('the second block presents for 200 ms with 5 s gaps', b.onMs === 200 && b.offMs === 5000 && b.count === 5, JSON.stringify([b.onMs, b.offMs, b.count]));
+  ok('the third block draws a spot at twice the drive', c.count === 12 && c.gain === 2 && c.kind === 'spot', JSON.stringify([c.count, c.gain, c.kind]));
+  ok('the presentation index is unique across blocks', a.k !== b.k && b.k !== c.k && Math.floor(b.k/1000000) === 2 && Math.floor(c.k/1000000) === 3, [a.k, b.k, c.k].join(' '));
+  const d = scheduleAt(sig, 31*M + 10 + 5200);
+  ok('the second block steps by its own period', d.k === b.k + 1, d.k + ' after ' + b.k);
+  const r1 = scheduleAt({ ...sig, timing:1 }, 31*M + 10), r2 = scheduleAt({ ...sig, timing:1 }, 61*M + 10);
+  ok('random timing inside a block draws around the own durations of the block', r1.onMs > 0 && r1.onMs < 600 && r1.offMs > 0 && r2.onMs < 600 && r2.count === 12,
+    JSON.stringify([r1.onMs, r1.offMs, r2.onMs, r2.count]));
+}
+
 console.log(fail ? `\n${fail} FAILED` : '\nall passed');
 process.exit(fail ? 1 : 0);

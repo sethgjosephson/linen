@@ -71,6 +71,8 @@ When you outgrow the built-in nodes, you can write your own. A node is a single 
 
 Your results can leave linen too. Charts save as images or spreadsheets, networks export as tables or as a Brian 2 script, and `tools/linen.mjs` runs any scene from the command line and writes spike trains that Python tools like pandas and Neo can read.
 
+`node tools/test.mjs --quick` runs the test suites that need nothing but Node, and the same set runs on every pull request. The engine, server and Brian 2 suites, the CUDA parity check and the statistics battery (`validate.html`) are run before a release; [EXTENDING.md](EXTENDING.md) lists them and what each needs. Their output on each release, and the measurements made on it, are in [validation/](validation/).
+
 ## Where it's headed
 
 The long-term goal is a full cubic millimeter of mouse cortex, around a hundred thousand neurons and a billion synapses, running on a GPU. Along the way, tools for stimulating and lesioning regions and for recording local field potentials are next on the list. Ideas and feedback are always welcome.
@@ -81,7 +83,9 @@ If linen helps your work, `CITATION.cff` has the citation details (GitHub shows 
 
 linen is licensed under AGPL-3.0-or-later; see [LICENSE](LICENSE) and [COPYRIGHT.md](COPYRIGHT.md). Contributions are welcome and need the [CLA](CLA.md).
 
-## Sources & inspirations
+## Sources
+
+The papers the code implements. Background reading on columns, dendrites and the biology point neurons leave out is listed in [references/INDEX.md](references/INDEX.md).
 
 Simulation methods:
 
@@ -93,16 +97,6 @@ Simulation methods:
 - Song, Miller & Abbott (2000), Bi & Poo (1998), Vogels et al. (2011), Pfister & Gerstner (2006), Zenke, Agnes & Gerstner (2015), Tsodyks & Markram (1997), van Rossum, Bi & Turrigiano (2000) (plasticity rules)
 - Markram, Wang & Tsodyks (1998), Reyes et al. (1998), Silberberg & Markram (2007), Ali & Thomson (2008) (short-term plasticity per synapse class, the column's PV and SST cells)
 - Pokorny, Ison, Rao, Legenstein, Papadimitriou & Maass (2019), *STDP Forms Associations between Memory Traces in Networks of Spiking Neurons*, Cerebral Cortex 29(8): 3577-3589. https://pmc.ncbi.nlm.nih.gov/articles/PMC7132978/ (association between assemblies)
-
-Columns and dendrites (background; `references/INDEX.md`):
-
-- Harris, K. D. & Shepherd, G. M. G. (2015), *The neocortical circuit: themes and variations*, Nature Neuroscience 18(2): 170-181. https://pmc.ncbi.nlm.nih.gov/articles/PMC4889215/
-- Hawkins & Ahmad (2016), *Why Neurons Have Thousands of Synapses, a Theory of Sequence Memory in Neocortex*, Front. Neural Circuits 10:23. https://www.frontiersin.org/journals/neural-circuits/articles/10.3389/fncir.2016.00023/full
-- Hawkins, Ahmad & Cui (2017), *A Theory of How Columns in the Neocortex Enable Learning the Structure of the World*, Front. Neural Circuits 11:81. https://pmc.ncbi.nlm.nih.gov/articles/PMC5661005/
-- Hawkins, Lewis, Klukas, Purdy & Ahmad (2019), *A Framework for Intelligence and Cortical Function Based on Grid Cells in the Neocortex*, Front. Neural Circuits 12:121. https://www.frontiersin.org/journals/neural-circuits/articles/10.3389/fncir.2018.00121/full
-- Hawkins, Leadholm & Clay (2025), *Hierarchy or Heterarchy? A Theory of Long-Range Connections for the Sensorimotor Brain*, arXiv:2507.05888; Clay, Leadholm & Hawkins (2024), *The Thousand Brains Project*, arXiv:2412.18354; Leadholm, Clay, Knudstrup, Lee & Hawkins (2025), *Thousand-Brains Systems*, arXiv:2507.04494; Hawkins (2021), *A Thousand Brains*, Basic Books
-- Haueis, P. (2016), *The life of the cortical column: opening the domain of functional architecture of the cortex (1955-1981)*, History and Philosophy of the Life Sciences 38:2. https://pmc.ncbi.nlm.nih.gov/articles/PMC4914527/ (the column concept)
-- Wright, Hedrick & Komiyama (2025), *Distinct synaptic plasticity rules operate across dendritic compartments in vivo during learning*, Science 388(6744): 322-328. https://www.science.org/doi/10.1126/science.ads4706 (dendritic plasticity rules)
 
 Tools:
 
@@ -117,8 +111,4 @@ Performance:
 
 - Fidjeland & Shanahan (2010), GPU-accelerated Izhikevich networks: https://www.doc.ic.ac.uk/~mpsha/IJCNN10b.pdf
 - Golosio et al. (2021), NeuronGPU, 1M-neuron GPU simulations: https://www.frontiersin.org/journals/computational-neuroscience/articles/10.3389/fncom.2021.627620/full
-- Sun, Su, ... Akarca (2026), *Algorithm-hardware co-design of neuromorphic networks with dual memory pathways*, Nature Machine Intelligence 8:901-912. https://www.nature.com/articles/s42256-026-01255-3 (a shared slow state in place of dense recurrence and per-connection delays)
 
-Biology:
-
-- Gebicke-Haerter, P. J. (2023), *The computational power of the human brain*, Frontiers in Cellular Neuroscience 17:1220030. https://pmc.ncbi.nlm.nih.gov/articles/PMC10441807/ (what point neurons leave out)

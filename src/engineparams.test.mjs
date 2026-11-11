@@ -8,7 +8,7 @@ import { ok, report, inProcessWorker } from '../tools/harness.mjs';
 inProcessWorker(wireConnect, assembleConnect);
 
 // the checkpoint's tabs whose settings describe the simulation
-const ENGINE_TABS = ['engine', 'timing', 'homeostasis', 'competition', 'short-term'];
+const ENGINE_TABS = ['engine', 'timing', 'homeostasis', 'competition', 'short-term', 'modulation'];
 // read by the page, not the engines
 const PAGE_SIDE = {
   steps:'steps per frame: how much the page asks for per tick message',
@@ -16,7 +16,7 @@ const PAGE_SIDE = {
   stpPreset:'a preset: it writes stpU, stpTauD and stpTauF through its apply hook, which are covered',
 };
 // every term on, so a setting that only matters with its term on is live
-const ALL_ON = { plast:1, stp:0.5, syn:2, cons:1, scale:1, het:0.001, trip:0.001, tin:0.001, commit:1, rhoMode:1 };
+const ALL_ON = { plast:1, stp:0.5, syn:2, cons:1, scale:1, het:0.001, trip:0.001, tin:0.001, commit:1, rhoMode:1, modPlast:2 };
 
 function graph(edit){
   const nodes = [];

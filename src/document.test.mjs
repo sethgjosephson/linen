@@ -83,6 +83,8 @@ ok('it stays attached to that checkpoint and is no longer pending', doc.pendingB
 ok('no gpu, no gpu engine', wantGpu({ ...before, engine:2 }, false) === false);
 ok('asked for by name it is taken, and no term is missing there (the gpu engine carries them all)', wantGpu({ ...before, engine:2 }, true) === true && wantGpu({ ...before, engine:2, stp:1, trip:0.1 }, true) === true && gpuMissing({ stp:1, trip:0.1 }).length === 0);
 ok('auto goes by steps times synapses', wantGpu({ engine:0, synCount:1e6, steps:2 }, true) === false && wantGpu({ engine:0, synCount:1e8, steps:2 }, true) === true);
+// the exact step weighs each cell as synapses on the cpu: the column crosses at 2 steps per frame, CA3 not until 4
+ok('the exact step counts the cells', wantGpu({ engine:0, synCount:9.35e6, count:14031, steps:2 }, true) === false && wantGpu({ engine:0, synCount:9.35e6, count:14031, steps:2, integ:2 }, true) === true && wantGpu({ engine:0, synCount:1.84e6, count:7519, steps:2, integ:2 }, true) === false && wantGpu({ engine:0, synCount:1.84e6, count:7519, steps:4, integ:2 }, true) === true);
 // the remote engine, at the checkpoint's engine address
 const remote = { ...before, engine:3, liveHost:'ws://localhost:8890' };
 ok('remote is its own kind, never the gpu', engineKind(remote, true) === 'remote' && wantGpu({ ...remote, synCount:1e9 }, true) === false);

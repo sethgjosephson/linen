@@ -266,3 +266,16 @@ console.log('migrate: all checks passed');
   assert.equal(d.format, SCENE_FORMAT);
   console.log('ok  13 -> 14: scenes from before declare the soma reading');
 }
+
+// 14 -> 15: a scatter authored by count, before the fill setting existed, keeps its count rather than taking the density default
+{
+  const d = migrateScene({ format:14, nodes:[
+    { id:1, type:'scatter', params:{ count:1200 } },
+    { id:2, type:'scatter', params:{ count:1200, fill:1, density:90000 } },
+    { id:3, type:'box', params:{} } ] });
+  assert.equal(d.nodes[0].params.fill, 0, 'a scatter without the key fills by count');
+  assert.equal(d.nodes[1].params.fill, 1, 'a scatter that chose density keeps it');
+  assert.equal(d.nodes[2].params.fill, undefined, 'other nodes are untouched');
+  assert.equal(d.format, SCENE_FORMAT);
+  console.log('ok  14 -> 15: a scatter from before the fill setting keeps its count');
+}

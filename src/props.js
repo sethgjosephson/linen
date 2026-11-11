@@ -1185,8 +1185,10 @@ export function renderProps(el, node, onEdit, nodes){
       // a hidden option (a type row that a scene reaches through the cell type node) is listed only while it is the value
       p.options.forEach((o,i) => { if(p.hideOption && p.hideOption(i) && i !== +node.params[p.k]) return;
         const op = document.createElement('option');
-        op.value = i; op.textContent = o; sel.appendChild(op); });
+        op.value = i; op.textContent = o; if(p.tips && p.tips[i]) op.title = p.tips[i]; sel.appendChild(op); });
       sel.value = node.params[p.k];
+      // an option's name stays short; what it means is its tooltip, on the option and on the closed select
+      if(p.tips) sel.title = p.tips[+node.params[p.k]] || '';
       // A select can carry the rest of its node with it: p.apply writes the other parameters that go with the choice.
       // That is what makes a preset a preset rather than a label, and the panel re-renders after it so the fields show what was written rather than what was there.
       sel.onchange = () => { node.params[p.k] = +sel.value;

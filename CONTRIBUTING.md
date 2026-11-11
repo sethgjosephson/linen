@@ -1,12 +1,46 @@
 # Contributing
 
-Contributions are welcome. One process requirement comes first, because
-it cannot be applied retroactively.
+Contributions are welcome.
+
+## Making a change
+
+1. Open an issue first for anything beyond a small fix, so the design
+   can be discussed before the work.
+2. Read `EXTENDING.md` for how a node, a mechanism or a measure is added
+   and what is frozen, and `ENGINE.md` for the simulation engine
+   contract. Changes to the engine protocol require updating `ENGINE.md`,
+   all three engines, and the validation battery in the same commit.
+3. Run the tests. `node tools/test.mjs --quick` is the set every pull
+   request runs; `EXTENDING.md` ("The gates") lists the rest: the full
+   suite, the CUDA parity check and the statistics battery
+   (`validate.html`). A change to simulation behavior is justified
+   against the battery, not merely explained.
+4. No build step and no runtime dependencies. The project is served as
+   static files and vendors Three.js. Please keep it that way.
+
+## Scientific claims
+
+Anything that changes simulation behavior needs a source. The
+convention throughout the project is that published models are cited
+where they are implemented, and that limitations are documented rather
+than smoothed over. See the sources section of `README.md` for the
+existing citations and the tone expected.
+
+## Third-party code
+
+Code from elsewhere may come in only under a permissive license (MIT,
+BSD, ISC, Apache-2.0), with its license header kept and its origin named
+in a comment. Code under a copyleft license (GPL, LGPL, AGPL, CeCILL and
+the like) cannot be merged, however small the piece, because a derivative
+of it could not be relicensed. Equations and parameter values from a
+paper or another simulator are fine and are cited where they are used;
+the implementation is written here.
 
 ## Contributor License Agreement
 
 Before a pull request can be merged, contributors must sign the
-[Contributor License Agreement](CLA.md).
+[Contributor License Agreement](CLA.md). It cannot be applied
+retroactively, which is why it is a requirement rather than a request.
 
 **Why this exists.** linen is released under the AGPL, and
 the copyright holder also reserves the ability to offer separate
@@ -29,34 +63,3 @@ broad license alongside it.
 A check on every pull request looks for the signature (the sentence in
 the CLA's signing section, posted as a comment). One signature covers
 every later pull request from the same account.
-
-## Third-party code
-
-Code from elsewhere may come in only under a permissive license (MIT,
-BSD, ISC, Apache-2.0), with its license header kept and its origin named
-in a comment. Code under a copyleft license (GPL, LGPL, AGPL, CeCILL and
-the like) cannot be merged, however small the piece, because a derivative
-of it could not be relicensed. Equations and parameter values from a
-paper or another simulator are fine and are cited where they are used;
-the implementation is written here.
-
-## Making a change
-
-1. Open an issue first for anything beyond a small fix, so the design
-   can be discussed before the work.
-2. Read `EXTENDING.md` for how a node, a mechanism or a measure is added
-   and what is frozen, and `ENGINE.md` for the simulation engine
-   contract. Changes to the engine protocol require updating `ENGINE.md`,
-   all three engines, and the validation battery in the same commit.
-3. Run the validation battery. Statistical changes to network behavior
-   need to be justified against it, not merely explained.
-4. No build step and no runtime dependencies. The project is served as
-   static files and vendors Three.js. Please keep it that way.
-
-## Scientific claims
-
-Anything that changes simulation behavior needs a source. The
-convention throughout the project is that published models are cited
-where they are implemented, and that limitations are documented rather
-than smoothed over. See the sources section of `README.md` for the
-existing citations and the tone expected.

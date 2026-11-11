@@ -19,10 +19,12 @@ import { buildBrainFile, buildPlasticFile, parseBrainFile, applyBrainWeights,
   plasticCount } from './brain.js';
 import { buildExpr } from './expr.js';
 import { scheduleAt, renderItem, renderAudio, SETS } from './curriculum.js';
-import { selectivityProfile, decodeAccuracy, completionScore,
-  responseProfile, ensembleCorrelation, likeToLike, popLinks,
-  decodeShape } from './analysis.js';
 
+// The groups a checkout keeps to itself sit in validate.local.js and run after the groups below; a checkout without that file has none.
+// A missing file is the one error passed over, so a mistake inside the file still fails the import the way a mistake here does.
+let LOCAL_TESTS = [];
+try { LOCAL_TESTS = (await import('./validate.local.js')).TESTS; }
+catch(e){ if(!(e.code === 'ERR_MODULE_NOT_FOUND' || e instanceof TypeError)) throw e; }
 
 // the built-in rows, for the groups that make their own small networks; a run reads the table when it starts (simRun), since a scene's cell type node adds a row at compute time
 const TYPES = engineTypes();
@@ -49,7 +51,9 @@ async function computeScenario(build, mutate){
 function simRun(net, ms, { steps = 2, perNeuron = false, isiK = 0, onFrame = null,
     weights = false, gpu = false, partCap = 0, driver = null, potentials = false, protocolOverride,
     // the engine's noise and initial state, so one computed network can be run as several draws without wiring it again
-    seed } = {}){
+    seed,
+    // a consolidation reference sent with setRef right after init, as a resumed run sends the one its brain file carries
+    wRef } = {}){
   const sd = seed === undefined ? net.seed : seed;
   return new Promise(resolve => {
     const w = new Worker(new URL((gpu ? './gpuworker.js' : './simworker.js') + '?p=' + PROTOCOL,
@@ -71,6 +75,7 @@ function simRun(net, ms, { steps = 2, perNeuron = false, isiK = 0, onFrame = nul
       inputs:net.inputs || [],
       preStart:net.preStart, post:net.post, w:net.w, delay:net.delay, types:net.types || engineTypes(),
       seed:sd, ...initState(sd, net.ntype, net.types || engineTypes()) });
+    if(wRef) w.postMessage({ cmd:'setRef', wRef });
     const counts = perNeuron ? new Uint32Array(net.count) : null;
     const last = isiK ? new Int32Array(isiK).fill(-1) : null;
     const isis = [];
@@ -83,7 +88,7 @@ function simRun(net, ms, { steps = 2, perNeuron = false, isiK = 0, onFrame = nul
       }
       if(e.data.cmd === 'ready'){ parts = e.data.parts || 0; return; }
       if(e.data.cmd === 'weights'){
-        finish({ frames, counts, isis, steps, w:e.data.w, parts }); return;
+        finish({ frames, counts, isis, steps, w:e.data.w, ref:e.data.ref || null, parts }); return;
       }
       if(e.data.cmd !== 'state') return;
       const fired = e.data.fired;
@@ -866,103 +871,6 @@ export const TESTS = [
     ];
   } },
 
-{ name:'shape decoding is a safe alternative decoder', topic:'analysis', source:'internal invariant. decodeAccuracy scores by cosine similarity, which is already scale invariant, so a multiplicative gain cannot move it; and a per-trial additive baseline barely moves it either, because the offset is averaged into the centroids as well and the differences that separate items survive. Measured over synthetic codes on 2026-08-30: with an offset of up to 12 the raw decoder scored 0.91 against 0.94 without one, and in one arm the offset raised the score. So decodeShape is not a rescue for anything, and what is gated is the weaker property: it agrees with the raw decoder on clean trials and it sits at chance when the trials carry no item information, so a reading taken with it cannot be an artifact of the normalization',
-  async run(){
-    const nI = 5, nN = 120, per = 40, N = nI*per;
-    let seed = 5150;
-    const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-      return seed/4294967296; };
-    const mk = (kind) => {
-      const trials = new Float32Array(N*nN), labels = new Int32Array(N);
-      let t = 0;
-      for(let i=0;i<nI;i++) for(let k=0;k<per;k++){
-        labels[t] = i;
-        for(let j=0;j<nN;j++){
-          const pref = (j % nI) === i ? 1 : 0.35;   // broad tuning
-          trials[t*nN + j] = kind === 'noise'
-            ? 0.5 + rnd()
-            : pref*(0.7 + 0.6*rnd());
-        }
-        t++;
-      }
-      return { trials, labels };
-    };
-    const clean = mk('clean'), noise = mk('noise');
-    const cRaw = decodeAccuracy(clean.trials, clean.labels, nI, nN);
-    const cShape = decodeShape(clean.trials, clean.labels, nI, nN);
-    const nShape = decodeShape(noise.trials, noise.labels, nI, nN);
-    const nRaw = decodeAccuracy(noise.trials, noise.labels, nI, nN);
-    return [
-      { label:'agrees with the raw decoder on a clean code', measured:
-          'shape ' + (100*cShape.acc).toFixed(0) + '% vs raw ' +
-          (100*cRaw.acc).toFixed(0) + '%',
-        expected:'within 15 points, so the normalization is not doing work of its own',
-        pass: Math.abs(cShape.acc - cRaw.acc) < 0.15 },
-      { label:'at chance when the trials carry no item information', measured:
-          'shape ' + (100*nShape.acc).toFixed(0) + '%, chance ' +
-          (100/nI).toFixed(0) + '%',
-        expected:'within 12 points of chance',
-        pass: Math.abs(nShape.acc - 1/nI) < 0.12 },
-      { label:'the raw decoder is at chance on the same unstructured trials', measured:
-          'raw ' + (100*nRaw.acc).toFixed(0) + '%',
-        expected:'within 12 points of chance, so the fixture is unstructured',
-        pass: Math.abs(nRaw.acc - 1/nI) < 0.12 },
-    ];
-  } },
-
-{ name:'completion measure separates its failure modes', topic:'analysis', source:'internal invariant. Cross-modal transfer can fail two opposite ways, and a rank or a margin is blind to the difference. Either the two modalities share no representation, in which case the same-item cosine is near zero and there is no relation to learn, or they share one that carries no item identity, in which case the same-item cosine is high and the different-item cosine is just as high. Those call for opposite fixes, so the measure has to tell them apart before it is trusted on the block',
-  async run(){
-    const nI = 5, nN = 200;
-    // three synthetic pairs of centroid sets, each a known failure or success
-    const mk = kind => {
-      let seed = 24680;
-      const rnd = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-        return seed/4294967296; };
-      const full = new Float64Array(nI*nN), part = new Float64Array(nI*nN);
-      for(let i=0;i<nI;i++) for(let j=0;j<nN;j++){
-        const own = (j % nI) === i ? 1 : 0;
-        full[i*nN + j] = own ? 1 + 0.1*rnd() : 0.05*rnd();
-        if(kind === 'bound')
-          part[i*nN + j] = own ? 1 + 0.1*rnd() : 0.05*rnd();
-        else if(kind === 'disjoint')
-          // the partial modality drives a different, non-overlapping set
-          part[i*nN + j] = ((j + 1) % nI) === i ? 1 + 0.1*rnd() : 0.05*rnd();
-        else
-          // Shared but identity-free: every item drives the same cells, and that set has to overlap all items equally.
-          // Keying it to one item's preferred cells instead makes the same-item cosine high for that item and low for the rest, which averages to something that looks like the disjoint case.
-          part[i*nN + j] = 1 + 0.1*rnd();
-      }
-      return completionScore(full, part, nI, nN);
-    };
-    const bound = mk('bound'), disjoint = mk('disjoint'), shared = mk('shared');
-    return [
-      { label:'a bound representation ranks first and has a high own cosine', measured:
-          'rank1 ' + bound.rank1.toFixed(2) + ', own ' + bound.own.toFixed(3) +
-          ', other ' + bound.other.toFixed(3),
-        expected:'rank1 1.0 with own well above other',
-        pass: bound.rank1 > 0.9 && bound.own > 0.7 && bound.own - bound.other > 0.3 },
-      { label:'disjoint representations read as disjoint', measured:
-          'own ' + disjoint.own.toFixed(3) + ', other ' + disjoint.other.toFixed(3),
-        expected:'own low: nothing is shared, so there is no relation to learn',
-        pass: disjoint.own < 0.35 },
-      { label:'a shared but identity-free code is not read as disjoint', measured:
-          'own ' + shared.own.toFixed(3) + ', other ' + shared.other.toFixed(3),
-        expected:'own high and other equally high: the opposite failure, and it must not look like the one above',
-        pass: shared.own > 0.4 && Math.abs(shared.own - shared.other) < 0.05 },
-      { label:'the two failures are distinguishable', measured:
-          'disjoint own ' + disjoint.own.toFixed(3) +
-          ' vs shared own ' + shared.own.toFixed(3),
-        expected:'the same-item cosine separates them, where rank1 alone does not',
-        pass: shared.own - disjoint.own > 0.3 },
-      { label:'centring removes the non-negative floor', measured:
-          'bound ' + bound.ownC.toFixed(3) + ', disjoint ' +
-          disjoint.ownC.toFixed(3) + ', shared ' + shared.ownC.toFixed(3),
-        expected:'spike counts are non-negative so raw cosines sit high for any pair; on the item-specific residual a bound code is near 1, a disjoint one negative, and an identity-free one near zero',
-        pass: bound.ownC > 0.9 && disjoint.ownC < -0.1
-          && Math.abs(shared.ownC) < 0.1 },
-    ];
-  } },
-
 { name:'short-term plasticity', source:'Tsodyks and Markram; Zenke, Agnes and Gerstner 2015 (Nat Commun 6:6922) equations 9 and 10. Release depends on the recent history of the presynaptic cell: resources deplete with each spike and recover with tau_d, release probability facilitates and decays with tau_f. Short-term depression is what gives the effective input-output relation the curvature that puts a stable fixed point at intermediate firing rates, and the source reports that blocking any single component of its plasticity set prevented the network working as a memory',
   async run(){
     // The rule is deterministic given a spike train, so it is checked directly rather than through a network: a network test would confound the rule with the dynamics it is supposed to shape.
@@ -1018,7 +926,7 @@ export const TESTS = [
     ];
   } },
 
-{ name:'reference weight consolidates', source:'Zenke, Agnes and Gerstner 2015 (Nat Commun 6:6922) equation 16: the reference weight that heterosynaptic plasticity regresses toward is not fixed, it follows the synaptic weight through a double well whose lower fixed point is zero and whose upper one is w_P, with the midpoint unstable. The block froze that reference at the moment plasticity began, which made the heterosynaptic term a permanent decay toward the initial state; competition at 0.002, 0.0005 and 0.0002 then lowered rates and hurt decode at every dose without producing structure',
+{ name:'reference weight consolidates', source:'Zenke, Agnes and Gerstner 2015 (Nat Commun 6:6922) equation 16: the reference weight that heterosynaptic plasticity regresses toward is not fixed, it follows the synaptic weight through a double well whose lower fixed point is zero and whose upper one is w_P, with the midpoint unstable. A reference held at its starting value makes the heterosynaptic term a permanent decay toward the initial state, so the check is that the reference moves and that the well it moves in has two stable states',
   async run(){
     // Two synapses on one neuron, driven so the pair rule pushes one up and leaves the other alone, run long enough for the slow reference to move.
     // The question is only whether the reference is bistable and follows, so this drives the weights directly rather than through a network: a network test would confound the rule with its dynamics.
@@ -1062,96 +970,9 @@ export const TESTS = [
     ];
   } },
 
-{ name:'like-to-like wiring is detectable', topic:'analysis', source:'Ding et al. 2025 (Nature), the MICrONS functional connectome: tuning similarity predicts fine-scale connectivity in mouse visual cortex beyond what axon and dendrite proximity explain. The block wires on distance and population pair alone, so before asking whether it has the rule the measure has to be shown to find the rule when it is present and to report nothing when it is absent, including when tuning is spatially clustered and proximity alone could manufacture the effect',
-  async run(){
-    // Three synthetic populations of tuned cells, identical except for how they are wired:
-    //   random: wiring ignores tuning, so the measure must read zero
-    //   like: wiring prefers similar tuning, so it must read positive
-    //   clustered: wiring ignores tuning but tuning is laid out in space,
-    //     so an unmatched measure would read positive from proximity
-    //     alone and the distance-matched one must still read zero
-    const nI = 12, nN = 300, perItem = 30, N = nI*perItem;
-    const build = kind => {
-      let seed = 987654321;
-      const rand = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
-        return seed/4294967296; };
-      const inhib = j => kind === 'mixed' && (j % 5) === 0;
-      const pref = new Int32Array(nN), pos = new Float32Array(nN*3);
-      for(let j=0;j<nN;j++){
-        // clustered: preference follows position, so nearby cells agree
-        pref[j] = kind === 'clustered' ? Math.floor(j/(nN/nI)) % nI : j % nI;
-        // laid out as a grid so distance bins are well populated
-        pos[j*3] = (j % 20)*30; pos[j*3+1] = Math.floor(j/20)*30; pos[j*3+2] = 0;
-      }
-      const trials = new Float32Array(N*nN), labels = new Int32Array(N);
-      let t = 0;
-      for(let i=0;i<nI;i++) for(let k=0;k<perItem;k++){
-        labels[t] = i;
-        for(let j=0;j<nN;j++)
-          trials[t*nN + j] = rand() < (pref[j] === i ? 0.8 : 0.05) ? 1 : 0;
-        t++;
-      }
-      // wiring: distance dependent in every case, tuning dependent only in the 'like' case
-      const out = Array.from({ length:nN }, () => []);
-      for(let a=0;a<nN;a++) for(let b=0;b<nN;b++){
-        if(a === b) continue;
-        const dx = pos[a*3] - pos[b*3], dy = pos[a*3+1] - pos[b*3+1];
-        const d = Math.sqrt(dx*dx + dy*dy);
-        let p = 0.35*Math.exp(-d/120);
-        if(kind === 'like') p *= (pref[a] === pref[b] ? 3 : 0.4);
-        // 'mixed' is tuning-blind between excitatory cells, but a fifth of its cells are inhibitory and avoid similarly tuned targets.
-        // Similarity then tracks the sign of the weight, which reads as a strong rule unless the measure looks at excitatory synapses only.
-        if(inhib(a)) p *= (pref[a] === pref[b] ? 0.2 : 1.6);
-        if(rand() < p) out[a].push(b);
-      }
-      const preStart = new Int32Array(nN + 1);
-      for(let a=0;a<nN;a++) preStart[a+1] = preStart[a] + out[a].length;
-      const post = new Int32Array(preStart[nN]), w = new Float32Array(preStart[nN]);
-      let q = 0;
-      for(let a=0;a<nN;a++) for(const b of out[a]){
-        post[q] = b;
-        // weights carry the same rule in the 'like' case only
-        w[q] = kind === 'like' && pref[a] === pref[b] ? 6 : 2;
-        if(inhib(a)) w[q] = -w[q];
-        q++;
-      }
-      const idx = Int32Array.from({ length:nN }, (_, j) => j);
-      const links = popLinks(idx, preStart, post);
-      return likeToLike(trials, labels, nI, nN, pos, idx, links, { w, w0:w });
-    };
-    const rnd = build('random'), like = build('like'), clu = build('clustered'),
-      mix = build('mixed');
-    return [
-      { label:'tuning-blind wiring reads as tuning-blind', measured:
-          'delta ' + (rnd ? rnd.deltaCorr.toFixed(3) : 'null') +
-          ' (connected ' + (rnd ? rnd.connCorr.toFixed(3) : '-') +
-          ' vs unconnected ' + (rnd ? rnd.unconnCorr.toFixed(3) : '-') + ')',
-        expected:'near zero: wiring ignored tuning',
-        pass: !!rnd && Math.abs(rnd.deltaCorr) < 0.05 },
-      { label:'like-to-like wiring is found', measured:
-          'delta ' + (like ? like.deltaCorr.toFixed(3) : 'null'),
-        expected:'clearly positive, above 0.1',
-        pass: !!like && like.deltaCorr > 0.1 },
-      { label:'spatially clustered tuning does not fake the rule', measured:
-          'delta ' + (clu ? clu.deltaCorr.toFixed(3) : 'null'),
-        expected:'near zero after distance matching, though nearby cells share tuning',
-        pass: !!clu && Math.abs(clu.deltaCorr) < 0.05 },
-      { label:'similarity against weight separates the two', measured:
-          'like ' + (like ? like.deltaW.toFixed(3) : '-') +
-          ' vs random ' + (rnd ? rnd.deltaW.toFixed(3) : '-'),
-        expected:'positive where weights follow tuning, near zero where they do not',
-        pass: !!like && !!rnd && like.deltaW > 0.15 && Math.abs(rnd.deltaW) < 0.05 },
-      { label:'inhibitory synapses do not fake the rule', measured:
-          'mixed delta ' + (mix ? mix.deltaCorr.toFixed(3) : 'null') +
-          ', weight ' + (mix ? mix.deltaW.toFixed(3) : '-'),
-        expected:'near zero on both: excitatory wiring here is tuning-blind, and only the inhibitory partners are anti-tuned',
-        pass: !!mix && Math.abs(mix.deltaCorr) < 0.05 && Math.abs(mix.deltaW) < 0.08 },
-    ];
-  } },
-
 { name:'firing rate distribution is skewed', source:'Buzsaki and Mizuseki 2014 (Nat Rev Neurosci); Mizuseki and Buzsaki 2013 (Cell Rep): principal cell rates are lognormal in every cortical region and brain state examined, most cells firing rarely with a heavy tail carrying the rest',
   async run(){
-    // A network of statistically identical neurons under a uniform drive produces a uniform population: measured 2026-08-28 as a 1.4x spread from median to 99th percentile with no silent cells, where cortex spans orders of magnitude.
+    // A network of statistically identical neurons under a uniform drive produces a uniform population, a spread of about 1.4x from median to 99th percentile with no silent cells, where cortex spans orders of magnitude.
     // This group compares a uniform drive against a lognormal per-neuron drive of the same mean.
     const run = async spread => {
       const pts = mkPts(1200, 320, 11);
@@ -1198,59 +1019,6 @@ export const TESTS = [
           'mean gain ' + skew.meanGain.toFixed(6) + ' at spread 0.9',
         expected:'1 within 1e-4: heterogeneity only, not a drive change',
         pass: Math.abs(skew.meanGain - 1) < 1e-4 },
-    ];
-  } },
-
-{ name:'layer transformation measures', topic:'analysis', source:'Transformation of primary sensory cortical representations from layer 4 to layer 2 (Nat Commun 2022): responsive fraction falls 0.16 to 0.09 from L4 to L2 while response probability among responders rises 0.13 to 0.22 and correlated ensembles multiply. Checked here against synthetic populations with a known answer, since a measure that cannot tell a sparse informative code from a merely quiet one cannot report the transformation',
-  async run(){
-    // Three synthetic populations, 12 items, 40 trials each.
-    //  dense: every cell answers every item, so nothing is tuned
-    //  tuned: each cell prefers one item and answers it reliably
-    //  quiet: each cell prefers one item but answers it rarely
-    // The measures must separate tuned from dense on responsive fraction and tuned from quiet on reliability.
-    const nI = 12, nN = 120, perItem = 40, N = nI*perItem;
-    const build = kind => {
-      const trials = new Float32Array(N*nN), labels = new Int32Array(N);
-      let t = 0;
-      let seed = 12345;
-      const rand = () => { seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0; return seed/4294967296; };
-      for(let i=0;i<nI;i++) for(let k=0;k<perItem;k++){
-        labels[t] = i;
-        for(let j=0;j<nN;j++){
-          const pref = j % nI;
-          let p;
-          if(kind === 'dense') p = 0.6;
-          else if(kind === 'tuned') p = (pref === i) ? 0.85 : 0.05;
-          else p = (pref === i) ? 0.12 : 0.01;      // quiet
-          trials[t*nN + j] = rand() < p ? 1 : 0;
-        }
-        t++;
-      }
-      return { trials, labels };
-    };
-    const dense = build('dense'), tuned = build('tuned'), quiet = build('quiet');
-    const rDense = responseProfile(dense.trials, dense.labels, nI, nN);
-    const rTuned = responseProfile(tuned.trials, tuned.labels, nI, nN);
-    const rQuiet = responseProfile(quiet.trials, quiet.labels, nI, nN);
-    const cDense = ensembleCorrelation(dense.trials, dense.labels, nN);
-    const cTuned = ensembleCorrelation(tuned.trials, tuned.labels, nN);
-    return [
-      { label:'a dense population reads as untuned', measured:
-          'responsive ' + rDense.responsiveFrac.toFixed(2),
-        expected:'near zero: no cell prefers anything',
-        pass: rDense.responsiveFrac < 0.15 },
-      { label:'a tuned population reads as responsive', measured:
-          'responsive ' + rTuned.responsiveFrac.toFixed(2),
-        expected:'high: every cell prefers one item',
-        pass: rTuned.responsiveFrac > 0.8 },
-      { label:'reliability separates tuned from quiet', measured:
-          'tuned ' + rTuned.reliability.toFixed(2) + ' vs quiet ' + rQuiet.reliability.toFixed(2),
-        expected:'both are tuned; only the first answers reliably',
-        pass: rTuned.reliability > 0.6 && rQuiet.reliability < 0.35 },
-      { label:'ensemble correlation rises with structure', measured:
-          'tuned ' + cTuned.toFixed(3) + ' vs dense ' + cDense.toFixed(3),
-        expected:'a tuned population is more correlated than an untuned one',
-        pass: cTuned > cDense + 0.05 },
     ];
   } },
 
@@ -1954,78 +1722,6 @@ export const TESTS = [
     ];
   } },
 
-{ name:'readout measures', topic:'analysis', source:'observer-side analysis (analysis.js): lifetime sparseness (Rolls and Tovee 1995), split-half nearest-centroid decoding, and cross-modal completion. Checked against synthetic activity with a known answer, since a measure that cannot tell structure from noise cannot report learning',
-  async run(){
-    const nI = 8, nN = 64, reps = 6;
-    // a network that has learned: each item drives its own tenth of the population. a network that has not: identical activity every time.
-    const mk = (structured, seed) => {
-      let z = seed;
-      const rnd = () => (z = (z*1664525 + 1013904223) >>> 0) / 4294967296;
-      const trials = new Float32Array(nI*reps*nN), labels = new Int32Array(nI*reps);
-      for(let i=0;i<nI;i++) for(let r=0;r<reps;r++){
-        const t = i*reps + r; labels[t] = i;
-        for(let j=0;j<nN;j++){
-          const own = structured && Math.floor(j*nI/nN) === i;
-          trials[t*nN + j] = (own ? 6 : 0) + rnd()*2;
-        }
-      }
-      return { trials, labels };
-    };
-    const good = mk(true, 7), flat = mk(false, 7);
-    const dGood = decodeAccuracy(good.trials, good.labels, nI, nN);
-    const dFlat = decodeAccuracy(flat.trials, flat.labels, nI, nN);
-    // centroids from the structured set, then a partial version of each item built from a different noise draw of the same tuning
-    const cent = new Float32Array(nI*nN), part = new Float32Array(nI*nN);
-    for(let i=0;i<nI;i++) for(let j=0;j<nN;j++){
-      const own = Math.floor(j*nI/nN) === i;
-      cent[i*nN + j] = own ? 6 : 0.5;
-      part[i*nN + j] = own ? 3 : 0.4;
-    }
-    const comp = completionScore(part, cent, nI, nN);
-    const shuf = new Float32Array(nI*nN);
-    for(let i=0;i<nI;i++) shuf.set(part.subarray(((i+1)%nI)*nN, ((i+1)%nI+1)*nN), i*nN);
-    const compShuf = completionScore(shuf, cent, nI, nN);
-    const selGood = selectivityProfile(cent, nI, nN);
-    const cflat = new Float32Array(nI*nN).fill(3);
-    const selFlat = selectivityProfile(cflat, nI, nN);
-    // a silent population must not read as selective
-    const cdead = new Float32Array(nI*nN);
-    for(let i=0;i<nI;i++) cdead[i*nN + i] = 1;      // 8 neurons alive of 64
-    const selDead = selectivityProfile(cdead, nI, nN);
-    // one trial per item cannot be split in half, so it must decline
-    const thinT = new Float32Array(nI*nN), thinL = new Int32Array(nI);
-    for(let i=0;i<nI;i++){
-      thinT.set(good.trials.subarray(i*reps*nN, (i*reps + 1)*nN), i*nN);
-      thinL[i] = i;
-    }
-    const dThin = decodeAccuracy(thinT, thinL, nI, nN);
-    return [
-      { label:'decoding recovers item identity from structured activity',
-        measured:`${(dGood.acc*100).toFixed(0)}% correct, chance ${(dGood.chance*100).toFixed(0)}%`,
-        expected:'near 100%', pass: dGood.acc > 0.9 },
-      { label:'decoding stays at chance when activity carries no item',
-        measured:`${(dFlat.acc*100).toFixed(0)}% correct, chance ${(dFlat.chance*100).toFixed(0)}%`,
-        expected:'within 15 points of chance', pass: Math.abs(dFlat.acc - dFlat.chance) < 0.15 },
-      { label:'decoding declines rather than fits when trials are too few',
-        measured:`${dThin.n} scored trials from one repeat per item`,
-        expected:'0 scored', pass: dThin.n === 0 && dThin.acc === 0 },
-      { label:'completion ranks the matching item first', measured:
-          `rank1 ${comp.rank1.toFixed(2)}, margin ${comp.margin.toFixed(2)}, chance ${comp.chance.toFixed(2)}`,
-        expected:'rank1 = 1, margin > 0', pass: comp.rank1 > 0.99 && comp.margin > 0 },
-      { label:'completion falls to chance when the pairing is broken', measured:
-          `rank1 ${compShuf.rank1.toFixed(2)} after shuffling partial patterns`,
-        expected:'at or below chance', pass: compShuf.rank1 <= compShuf.chance + 0.01 },
-      { label:'selectivity separates tuned from untuned populations', measured:
-          `tuned ${selGood.mean.toFixed(2)}, uniform ${selFlat.mean.toFixed(2)}`,
-        expected:'tuned 0.80 exactly (one item at 6 against seven at 0.5), uniform 0', pass:
-          selGood.mean > 0.78 && selGood.mean < 0.82 && selFlat.mean < 0.05 },
-      { label:'silent neurons are excluded rather than counted as selective',
-        measured:`${selDead.active} of ${nN} neurons active, mean over active ${selDead.mean.toFixed(2)}`,
-        expected:'active count reports the silence', pass:
-          selDead.active === nI && selDead.mean > 0.9 },
-    ];
-  } },
-
 { name:'plasticity builds input-specific structure', source:'Song, Miller and Abbott 2000 (Nat Neurosci) and Gutig, Aharonov, Rotter and Sompolinsky 2003 (J Neurosci): additive STDP with hard bounds is competitive and splits weights bimodally, weight-dependent depression has a stable interior fixed point and does not. Positive control: two disjoint input groups presented alternately onto a shared target population',
   async run(){
     // Deliberately tiny and hand built, so the only thing under test is the learning rule.
@@ -2463,7 +2159,7 @@ export const TESTS = [
     }
     return out;
   } },
-{ name:'measured set points use each cell\'s own target', source:'MODEL.md 4, the heterosynaptic gate and measured set points: under rhoMode 1 every homeostatic term, the gate included, uses the rate each cell measured for itself, so the global iRho has no say once calibration is over. Gated: two runs that differ only in iRho learn identical weights on each page engine (the WebGPU ring is integer, so its runs repeat exactly), and at rhoMode 0 the same two runs differ, which shows the check can tell',
+{ name:'measured set points use each cell\'s own target', source:'MODEL.md 4, measured set points: under rhoMode 1 every homeostatic term (the Vogels rule, scaling) uses the rate each cell measured for itself, so the global iRho has no say once calibration is over; the heterosynaptic term reads the cell\'s own trace and has no set point. Gated: two runs that differ only in iRho learn identical weights on each page engine (the WebGPU ring is integer, so its runs repeat exactly), and at rhoMode 0 the same two runs differ, which shows the check can tell',
   async run(){
     const all = Uint32Array.from({ length:1200 }, (_, i) => i);
     const mk = (rhoMode, iRho) => {
@@ -2617,7 +2313,8 @@ export const TESTS = [
       .map(([t, def]) => `${t} (cat ${def.cat})`);
     // Scenarios are documented by hand rather than generated from the list, so nothing catches a new one until someone opens the page.
     const scenDoc = mod ? ((mod.PAGES.find(pg => pg.id === 'scenarios') || {}).html || '') : '';
-    const missingScen = SCENARIOS.map(sc => sc.name)
+    // the Tab menu's scenes are the documented ones; a checkout's own scenes carry their notes in the graph (the next check)
+    const missingScen = TISSUE_SCENES.map(sc => sc.name)
       .filter(n => !scenDoc.toLowerCase().includes(n.toLowerCase()));
     // build each scenario into a throwaway editor and count its note nodes
     const noteCounts = SCENARIOS.map(sc => {
@@ -2676,7 +2373,7 @@ export const TESTS = [
         expected:'no node sits in a category the page does not list',
         pass: unrendered.length === 0 },
       { label:'every scenario is documented', measured:
-          missingScen.length ? missingScen.join(', ') : 'all ' + SCENARIOS.length + ' scenarios',
+          missingScen.length ? missingScen.join(', ') : 'all ' + TISSUE_SCENES.length + ' scenarios',
         expected:'no scenario missing from the scenarios page',
         pass: !!mod && missingScen.length === 0 },
       // A loaded scene should explain itself in the graph, not only in the docs page that nobody has open while they are looking at it.
@@ -2882,6 +2579,72 @@ export const TESTS = [
     return rows;
   } },
 
+{ name:'neuromodulation', source:'MODEL.md 4, neuromodulation: a modulator level per cell, raised by a time course or by a releasing population\'s spikes and decaying with its time constant, scales the Hebbian terms (the three-factor form, Fremaux and Gerstner 2016, Front Neural Circuits 9:85) or pays an eligibility trace per synapse into the weight at every sweep (Izhikevich 2007, Cereb Cortex 17:2443), scales the synaptic current (gain modulation) and adds a current. Gated on both page engines: the gain form scales a pairing by the level, the eligibility form moves a weight only once the pairing has happened and only by the modulator, a releasing population raises the level at its target, the synaptic gain and the current move a rate, and the gpu agrees with the reference on each',
+  async run(){
+    // one pre and one post cell through a plastic synapse, pre at 60 and post at 70 once, as the cross-engine group pairs them; the change in the weight
+    const pair = async (extra, gpu, ms = 400) => {
+      const net2 = { count:2, ntype:new Uint8Array([0,0]), bias:new Float32Array(2),
+        pos:new Float32Array(6), src:[1,1], lidx:new Uint32Array([0,1]),
+        preStart:new Int32Array([0,1,1]), post:new Int32Array([1]),
+        w:new Float32Array([1]), delay:new Uint8Array([1]), synCount:1,
+        // a refractory period, so each 3 ms pulse is one spike and the release counts one
+        syn:0, plast:1, aP:0.01, aM:0.012, tauS:16.8, tauM:33.7, wmax:10, iEta:0, iRho:5, stdpAt:0, modTau:200, refrac:2,
+        protocols:[
+          { idx:new Uint32Array([0]), amp:60, mode:1, period:100000, width:3, t0:60, duration:0 },
+          { idx:new Uint32Array([1]), amp:60, mode:1, period:100000, width:3, t0:70, duration:0 },
+        ], ...extra };
+      const r = await simRun(net2, ms, { steps:10, weights:true, gpu });
+      return r.error !== undefined ? NaN : r.w[0] - 1;
+    };
+    const onPost = (level, extra = {}) => ({ idx:new Uint32Array([1]), amp:level, mode:0, period:100, width:10, t0:0, duration:0, ...extra });
+    // the level a constant source of 2 holds at the post spike: 2 (1 - e^(-70/200)), the field read as the step before left it
+    const M69 = 2*(1 - Math.exp(-70/200));
+    const run = async gpu => ({
+      plain: await pair({}, gpu),
+      base0: await pair({ modPlast:1, modBase:0 }, gpu),
+      gain: await pair({ modPlast:1, modBase:0, modSrc:[onPost(2)] }, gpu),
+      eligNone: await pair({ modPlast:2, modBase:0, modStep:10, eligTau:1000 }, gpu),
+      eligLate: await pair({ modPlast:2, modBase:0, modStep:10, eligTau:1000, modSrc:[onPost(2, { mode:1, period:100000, width:50, t0:150 })] }, gpu),
+      // the pre cell releases onto the post: its spike at 60 is counted into the level at 61, half a unit per Hz of its rate times 1000 / 1 cell, read at 70 after nine steps of decay
+      release: await pair({ modPlast:1, modBase:0, modGrp:Uint8Array.from([1, 0]), modTgt:Uint16Array.from([0, 1]), modK:Float32Array.from([0, 0.5*1000]) }, gpu),
+    });
+    const c = await run(false);
+    const relM = 500*(1 - Math.exp(-1/200))*Math.exp(-8/200);
+    const out = [
+      { label:'the gain form with base 0 and no modulator learns nothing', measured:`plain ${c.plain.toFixed(4)}, base 0 ${c.base0.toFixed(5)}`,
+        expected:'no change at base 0', pass: c.plain > 0 && c.base0 === 0 },
+      { label:'a constant level scales the pairing by the level at the post spike', measured:`${c.gain.toFixed(4)} against ${(c.plain*M69).toFixed(4)} expected (level ${M69.toFixed(3)})`,
+        expected:'the plain change times the level, within 3%', pass: Math.abs(c.gain - c.plain*M69) < 0.03*c.plain*M69 },
+      { label:'the eligibility form moves nothing until a modulator arrives', measured:`${c.eligNone.toFixed(5)} with no modulator, ${c.eligLate.toFixed(5)} with a pulse 80 ms after the pairing`,
+        expected:'0 without, above 0 and below the plain change with', pass: c.eligNone === 0 && c.eligLate > 0.01*c.plain && c.eligLate < c.plain },
+      { label:'a releasing population raises the level at its target', measured:`${c.release.toFixed(4)} against ${(c.plain*relM).toFixed(4)} expected (level ${relM.toFixed(3)})`,
+        expected:'the plain change times the level the release leaves, within 3%', pass: Math.abs(c.release - c.plain*relM) < 0.03*c.plain*relM },
+    ];
+    // the synaptic gain and the current on a balanced net under noise, the rate against the unmodulated one
+    const pts = mkPts(1500, 240, 11);
+    const net = wireConnect(pts, { ...CN, wInh:-12 }, null);
+    const allIdx = Uint32Array.from({ length: net.count }, (_, i) => i);
+    const noise = [{ idx:allIdx, amp:8, mode:3, period:100, width:10, t0:0, duration:0 }];
+    const level = [{ idx:allIdx, amp:1, mode:0, period:100, width:10, t0:0, duration:0 }];
+    const MS = 1500;
+    const rate = async (extra, gpu) => { const r = await simRun({ ...net, syn:0, protocols:noise, plast:0, modTau:200, ...extra }, MS, { steps:2, gpu }); return r.error ? NaN : r.frames.reduce((a,b)=>a+b,0)/net.count/(MS/1000); };
+    const r0 = await rate({}, false), rG = await rate({ modDrive:0.5, modSrc:level }, false), rC = await rate({ modCur:4, modSrc:level }, false);
+    out.push({ label:'a synaptic gain per level raises the rate', measured:`${r0.toFixed(2)} Hz unmodulated, ${rG.toFixed(2)} at a gain of 1.5`, expected:'above the unmodulated rate by more than 10%', pass: r0 > 0.5 && rG > 1.1*r0 });
+    out.push({ label:'a current per level raises the rate', measured:`${r0.toFixed(2)} Hz unmodulated, ${rC.toFixed(2)} with 4 pA per unit level`, expected:'above the unmodulated rate by more than 10%', pass: r0 > 0.5 && rC > 1.1*r0 });
+    if(typeof navigator !== 'undefined' && navigator.gpu){
+      const g = await run(true);
+      const within = (a, b, f) => Number.isFinite(a) && Number.isFinite(b) && Math.abs(a - b) <= f*Math.max(Math.abs(a), Math.abs(b), 1e-9);
+      out.push({ label:'gpu: the gain form agrees with the reference', measured:`gain gpu ${g.gain.toFixed(4)} cpu ${c.gain.toFixed(4)}; release gpu ${g.release.toFixed(4)} cpu ${c.release.toFixed(4)}; base 0 gpu ${g.base0.toFixed(5)}`,
+        expected:'within 10% on the pairing and the release, 0 at base 0', pass: within(g.gain, c.gain, 0.1) && within(g.release, c.release, 0.1) && g.base0 === 0 });
+      out.push({ label:'gpu: the eligibility form agrees with the reference', measured:`gpu ${g.eligLate.toFixed(5)} cpu ${c.eligLate.toFixed(5)}; without a modulator gpu ${g.eligNone.toFixed(5)}`,
+        expected:'within 10%, 0 without', pass: within(g.eligLate, c.eligLate, 0.1) && g.eligNone === 0 });
+      const gG = await rate({ modDrive:0.5, modSrc:level }, true), gC = await rate({ modCur:4, modSrc:level }, true);
+      out.push({ label:'gpu: the synaptic gain and the current move the rate as on the reference', measured:`gain gpu ${gG.toFixed(2)} cpu ${rG.toFixed(2)} Hz; current gpu ${gC.toFixed(2)} cpu ${rC.toFixed(2)} Hz`,
+        expected:'within 25%', pass: within(gG, rG, 0.25) && within(gC, rC, 0.25) });
+    } else out.push({ label:'WebGPU availability', measured:'unavailable, gpu checks skipped', expected:'runs where WebGPU exists', pass:false, skipped:true });
+    return out;
+  } },
+
 { name:'cross-engine equivalence (gpu)', source:'ENGINE.md contract: engines are statistically equivalent, never bitwise (independent RNG streams and initial state jitter)',
   async run(){
     if(typeof navigator === 'undefined' || !navigator.gpu)
@@ -2946,14 +2709,19 @@ export const TESTS = [
     // the exact convention (psc 2): parity on both engines, and it has to move the rate against the peak convention on the same weights, since an engine that ignores the mode passes parity with one that does too
     const gx = stats(await simRun({ ...base, syn:1, psc:2, tauE:3, tauI:8 }, MS, { ...opts, gpu:true }));
     const cx = stats(await simRun({ ...base, syn:1, psc:2, tauE:3, tauI:8 }, MS, opts));
+    // the equations' step (integ 2, MODEL.md 1): parity on the kick network and under conductance synapses, and it has to move the kick network's rate against the half steps
+    const gq = stats(await simRun({ ...base, integ:2 }, MS, { ...opts, gpu:true }));
+    const cq = stats(await simRun({ ...base, integ:2 }, MS, opts));
+    const gqc = stats(await simRun({ ...base, integ:2, syn:2, tauE:3, tauI:8, eRevE:0, eRevI:-80 }, MS, { ...opts, gpu:true }));
+    const cqc = stats(await simRun({ ...base, integ:2, syn:2, tauE:3, tauI:8, eRevE:0, eRevI:-80 }, MS, opts));
     const cp = stats(await simRun({ ...base, syn:1, psc:0, tauE:3, tauI:8 }, MS, opts));
     // plasticity parity: the forced-pairing protocol is deterministic (noise free, pulse driven), so the two engines should land near-identical dw d is the synapse's delay and stdpAt where the rule is timed (MODEL.md 4): at the soma (0) the pairing is read from the spikes, at the synapse (1) from the presynaptic spike's arrival, d steps later
-    const dw = async (dt, gpu, d = 1, stdpAt = 0) => {
+    const dw = async (dt, gpu, d = 1, stdpAt = 0, plastGain = 1) => {
       const net2 = { count:2, ntype:new Uint8Array([0,0]), bias:new Float32Array(2),
         pos:new Float32Array(6), src:[1,1], lidx:new Uint32Array([0,1]),
         preStart:new Int32Array([0,1,1]), post:new Int32Array([1]),
         w:new Float32Array([1]), delay:new Uint8Array([d]), synCount:1,
-        syn:0, plast:1, aP:0.01, aM:0.012, tauS:16.8, tauM:33.7, wmax:10, iEta:0, iRho:5, stdpAt,
+        syn:0, plast:1, aP:0.01, aM:0.012, tauS:16.8, tauM:33.7, wmax:10, iEta:0, iRho:5, stdpAt, plastGain,
         protocols:[
           { idx:new Uint32Array([0]), amp:60, mode:1, period:200, width:3, t0:60, duration:0 },
           { idx:new Uint32Array([1]), amp:60, mode:1, period:200, width:3, t0:60+dt, duration:0 },
@@ -2966,6 +2734,9 @@ export const TESTS = [
     // the rule timed at the synapse: pre 5 ms before post through a 12 ms delay arrives 7 ms after the post spike, so the pairing depresses, where the soma reading potentiates it
     const cSyn = await dw(5, false, 12, 1), gSyn = await dw(5, true, 12, 1);
     const cSoma = await dw(5, false, 12, 0), gSoma = await dw(5, true, 12, 0);
+    // the third factor: at half gain the same pairing potentiates by half on both engines, at gain 0 not at all
+    const cHalf = await dw(10, false, 1, 0, 0.5), gHalf = await dw(10, true, 1, 0, 0.5);
+    const cZero = await dw(10, false, 1, 0, 0), gZero = await dw(10, true, 1, 0, 0);
     // Triplet and transmitter terms on the same deterministic two-neuron pairing harness the mechanism group uses.
     // Noise free and pulse driven, so the two engines see identical input and any difference is the engine rather than the network.
     const pairDw = async (periodMs, extra, gpu) => {
@@ -3023,6 +2794,22 @@ export const TESTS = [
     const cCons = await hetRun(0.02, 0.001, false), gCons = await hetRun(0.02, 0.001, true);
     // consW 0 is the default and means a tenth of wmax, here 1.
     const cConsW = await hetRun(0.02, 0.001, false, 1);
+    // A synapse wired far above the consolidated weight (16 against 1) under commitment: its reference starts inside the well, so it is committed from the first step and the pairing leaves it at 16 on both engines.
+    // The same with commitment off moves, which is what makes the first reading mean something.
+    const commitRun = async (gpu, commit = 1) => {
+      const net2 = { count:2, ntype:new Uint8Array([0,0]), bias:new Float32Array(2),
+        preStart:new Int32Array([0,1,1]), post:new Int32Array([1]),
+        w:new Float32Array([16]), delay:new Uint8Array([1]), synCount:1,
+        syn:0, plast:1, aP:0.02, aM:0, tauS:20, wmax:30, iEta:0, iRho:5,
+        trip:0, tauY:114, het:0.02, tin:0, cons:1, consW:1, consP:10, commit,
+        protocols:[
+          { idx:new Uint32Array([0]), amp:60, mode:1, period:50, width:3, t0:60, duration:2000 },
+          { idx:new Uint32Array([1]), amp:60, mode:1, period:50, width:3, t0:70, duration:6000 },
+        ] };
+      const r = await simRun(net2, 6400, { steps:50, weights:true, gpu });
+      return r.error !== undefined ? NaN : r.w[0];
+    };
+    const cCommit = await commitRun(false), gCommit = await commitRun(true), gCommitOff = await commitRun(true, 0);
     // The same competition carried by a declared rule over a checkpoint with het and cons off.
     // An engine that allocates the reference weights only for the checkpoint's own terms pulls toward a zero placeholder here; it has to end where the checkpoint's own het does, on both engines.
     const hetRuleRun = async (field, value, gpu) => {
@@ -3042,6 +2829,23 @@ export const TESTS = [
     };
     const cHetRule = await hetRuleRun('het', 0.02, false), gHetRule = await hetRuleRun('het', 0.02, true);
     const cConsRule = await hetRuleRun('cons', 0.001, false), gConsRule = await hetRuleRun('cons', 0.001, true);
+    // The reference read back with the weights and restored with setRef (engine contract 15), which is what a brain file carries across a resume.
+    // A synapse at 0.5 under commitment: given a reference of 1 (past nine tenths of consW 1) it is committed and the pairing leaves it at 0.5; left to start its own reference at 0.5 it potentiates.
+    const refRun = async (gpu, wRef) => {
+      const net2 = { count:2, ntype:new Uint8Array([0,0]), bias:new Float32Array(2),
+        preStart:new Int32Array([0,1,1]), post:new Int32Array([1]),
+        w:new Float32Array([0.5]), delay:new Uint8Array([1]), synCount:1,
+        syn:0, plast:1, aP:0.02, aM:0, tauS:20, wmax:30, iEta:0, iRho:5,
+        trip:0, tauY:114, het:0, tin:0, cons:1, consW:1, consP:10, commit:1,
+        protocols:[
+          { idx:new Uint32Array([0]), amp:60, mode:1, period:50, width:3, t0:60, duration:2000 },
+          { idx:new Uint32Array([1]), amp:60, mode:1, period:50, width:3, t0:70, duration:2000 },
+        ] };
+      const r = await simRun(net2, 2400, { steps:50, weights:true, gpu, wRef });
+      return r.error !== undefined ? { w:NaN, ref:null } : { w:r.w[0], ref:r.ref };
+    };
+    const cRefKept = await refRun(false, new Float32Array([1])), gRefKept = await refRun(true, new Float32Array([1]));
+    const gRefOwn = await refRun(true);
     const vn = wireConnect(mkPts(1500, 350, 7), { ...CN, radius:250, prob:0.4,
       wExc:4, wInh:-6 }, null);
     Object.assign(vn, { syn:0, plast:1, aP:0, aM:0, tauS:20, wmax:30, iEta:0.005, iRho:5,
@@ -3138,9 +2942,55 @@ export const TESTS = [
           !scC.error && !scG.error && scC.wRatio > 1.001 && scC.wRatio <= 1.1 + 1e-6 && scG.wRatio <= 1.1 + 1e-6 &&
           Math.abs((scG.wRatio - 1) - (scC.wRatio - 1)) < 0.3*(scC.wRatio - 1) },
     ];
+    // The rows' three features (MODEL.md 1) on one cell with a constant bias, no noise and no synapses, so both engines see the same input: a leaky integrate-and-fire row plain, with the dynamic threshold, with the adaptation a conductance, and as a Poisson row.
+    // Counts over a second (five for the Poisson row) per engine; the features have to move the count on each, and the Poisson row's spikes are the same draw on both.
+    const LIF = { C:250, k:12.5/1070, vr:-70, vt:1000, vpeak:-50, a:0.01, b:0, c:-70, d:0 };
+    const oneCell = (f7, bias) => ({ kind:'net', count:1, pos:new Float32Array(3), ntype:new Uint8Array(1),
+      bias:Float32Array.from([bias]), src:new Int32Array([1]), lidx:new Uint32Array([0]),
+      preStart:new Int32Array(2), post:new Int32Array(0), w:new Float32Array(0), delay:new Uint8Array(0), synCount:0,
+      plast:0, refrac:0, vmin:-90, eRevI:-80, seed:5, syn:0, tauE:3, tauI:8, protocols:[], types:[{ f7 }] });
+    const cnt = async (f7, bias, ms, gpu, integ = 0) => { const r = await simRun({ ...oneCell(f7, bias), integ }, ms, { steps:10, perNeuron:true, gpu }); return r.error ? NaN : r.counts[0]; };
+    // the equations' step (integ 2) on three quadratic rows at twice their rheobase, against the 1 microsecond counts (MODEL.md 1)
+    const qRow = key => NEURON_TYPES.find(t => t.key === key).f7;
+    const qCells = [['RS07', 104], ['FS07', 116], ['CH', 5.42]];
+    const qC = [], qG = [];
+    for(const [key, bias] of qCells){ qC.push(await cnt(qRow(key), bias, 2000, false, 2)); qG.push(await cnt(qRow(key), bias, 2000, true, 2)); }
+    const fPlainC = await cnt(LIF, 400, 1000, false), fPlainG = await cnt(LIF, 400, 1000, true);
+    const fThrC = await cnt({ ...LIF, thrJump:100, thrTau:5 }, 400, 1000, false), fThrG = await cnt({ ...LIF, thrJump:100, thrTau:5 }, 400, 1000, true);
+    const fAdC = await cnt({ ...LIF, d:1.25, adaptCond:1 }, 400, 2000, false), fAdG = await cnt({ ...LIF, d:1.25, adaptCond:1 }, 400, 2000, true);
+    const fPoiC = await cnt({ ...LIF, poisson:1 }, 30, 5000, false), fPoiG = await cnt({ ...LIF, poisson:1 }, 30, 5000, true);
+    // The global factor on the inhibitory rule (MODEL.md 4): one inhibitory synapse between two pulsed cells, the inhibited cell's rate against the target setting the factor; the final weight on both engines, and against the per-cell form.
+    const gfac = async (iGlobal, gpu) => {
+      const net2 = { count:2, ntype:new Uint8Array([0,0]), bias:new Float32Array(2),
+        preStart:new Int32Array([0,1,1]), post:new Int32Array([1]),
+        w:new Float32Array([-1]), delay:new Uint8Array([1]), synCount:1,
+        syn:0, plast:1, aP:0, aM:0, tauS:20, tauM:20, wmax:30, wdep:0, iEta:0.02, iRho:5, iGlobal, iTauG:1, refrac:2,
+        protocols:[
+          { idx:new Uint32Array([0]), amp:60, mode:1, period:50, width:3, t0:60, duration:2000 },
+          { idx:new Uint32Array([1]), amp:60, mode:1, period:70, width:3, t0:75, duration:2000 },
+        ] };
+      const r = await simRun(net2, 2400, { steps:50, weights:true, gpu });
+      return r.error !== undefined ? NaN : r.w[0];
+    };
+    const gfC = await gfac(1, false), gfG = await gfac(1, true), gfOff = await gfac(0, false);
+    const rowRows = [
+      { label:'a leaky integrate-and-fire row counts alike on both engines', measured:`cpu ${fPlainC}, gpu ${fPlainG} spikes in a second at 400 pA`,
+        expected:'within one spike, above 20', pass: fPlainC > 20 && Math.abs(fPlainC - fPlainG) <= 1 },
+      { label:'the dynamic threshold parity', measured:`cpu ${fThrC}, gpu ${fThrG} spikes with a 100 mV jump relaxing over 5 ms`,
+        expected:'within one spike, and fewer than the plain row on both', pass: Math.abs(fThrC - fThrG) <= 1 && fThrC < fPlainC && fThrG < fPlainG },
+      { label:'the conductance adaptation parity', measured:`cpu ${fAdC}, gpu ${fAdG} spikes in two seconds with a 1.25 nS jump`,
+        expected:'within one spike, and fewer than twice the plain row on both', pass: Math.abs(fAdC - fAdG) <= 1 && fAdC < 2*fPlainC && fAdG < 2*fPlainG },
+      { label:'integ 2 on quadratic rows counts alike on both engines', measured:qCells.map(([key], k) => `${key} cpu ${qC[k]}, gpu ${qG[k]}`).join('; ') + ' spikes in two seconds',
+        expected:'within one spike each, every count above 10', pass: qC.every((c, k) => c > 10 && Math.abs(c - qG[k]) <= 1) },
+      { label:'a Poisson row fires the same draw on both engines', measured:`cpu ${fPoiC}, gpu ${fPoiG} spikes in five seconds at 30 Hz`,
+        expected:'identical, between 100 and 200', pass: fPoiC === fPoiG && fPoiC > 100 && fPoiC < 200 },
+      { label:'the global inhibitory factor parity', measured:`final inhibitory weight gpu ${gfG.toFixed(4)} vs cpu ${gfC.toFixed(4)} (start -1), per-cell form ${gfOff.toFixed(4)}`,
+        expected:'within 0.002, and differing from the per-cell form', pass: isFinite(gfC) && isFinite(gfG) && Math.abs(gfG - gfC) < 0.002 && Math.abs(gfC - gfOff) > 0.002 },
+    ];
     return [
       ...countRows,
       ...retuneRows,
+      ...rowRows,
       // the three bands live in equivalence.js, where tools/enginecheck.mjs reads them for an engine of one's own
       { label:'population rate parity (kick)', measured:
           `gpu ${gpu.rate.toFixed(1)} vs cpu ${cpu.rate.toFixed(1)} Hz`,
@@ -3163,6 +3013,13 @@ export const TESTS = [
           `gpu ${gx.rate.toFixed(1)} vs cpu ${cx.rate.toFixed(1)} Hz`,
         expected:'within 25%', pass: cx.rate > 0.5 &&
           Math.abs(gx.rate-cx.rate)/cx.rate < 0.25 },
+      { label:'population rate parity (integ 2, kick)', measured:
+          `gpu ${gq.rate.toFixed(1)} vs cpu ${cq.rate.toFixed(1)} Hz, the half steps ${cpu.rate.toFixed(1)} Hz on cpu`,
+        expected:'within ' + EQUIV.rate*100 + '%, and differing from the half steps by more than 3%', pass: rateWithin(gq.rate, cq.rate) &&
+          Math.abs(cq.rate - cpu.rate) > 0.03*cpu.rate },
+      { label:'population rate parity (integ 2, conductance synapses)', measured:
+          `gpu ${gqc.rate.toFixed(1)} vs cpu ${cqc.rate.toFixed(1)} Hz`,
+        expected:'within 25%', pass: cqc.rate > 0.5 && Math.abs(gqc.rate - cqc.rate)/cqc.rate < 0.25 },
       { label:'the exact integral delivers less charge than the held current', measured:
           `exact ${cx.rate.toFixed(1)} vs peak ${cp.rate.toFixed(1)} Hz on the same weights`,
         expected:'exact below peak, by more than 2%', pass: cp.rate > 0.5 && cx.rate < cp.rate*0.98 },
@@ -3173,6 +3030,13 @@ export const TESTS = [
           gLtp > 0 && gLtd < 0 &&
           Math.abs(gLtp-cLtp) < 0.15*Math.abs(cLtp) &&
           Math.abs(gLtd-cLtd) < 0.15*Math.abs(cLtd) },
+      { label:'the gain on the Hebbian terms (plastGain 0.5) halves the pairing on both engines', measured:
+          `gain 1: cpu ${cLtp.toFixed(4)}, gpu ${gLtp.toFixed(4)}; gain 0.5: cpu ${cHalf.toFixed(4)}, gpu ${gHalf.toFixed(4)}`,
+        expected:'half of the gain-1 change within 5%, on each engine', pass:
+          Math.abs(cHalf - 0.5*cLtp) < 0.05*cLtp && Math.abs(gHalf - 0.5*gLtp) < 0.05*gLtp },
+      { label:'at gain 0 the Hebbian terms are off on both engines', measured:
+          `cpu ${cZero.toFixed(5)}, gpu ${gZero.toFixed(5)}`,
+        expected:'no weight change', pass: cZero === 0 && gZero === 0 },
       { label:'the pair rule timed at the synapse (stdpAt 1): parity', measured:
           `pre 5 ms before post through a 12 ms delay: gpu ${gSyn.toFixed(4)} vs cpu ${cSyn.toFixed(4)}`,
         expected:'both depress, within 15%', pass:
@@ -3242,6 +3106,12 @@ export const TESTS = [
           isFinite(cCons) && isFinite(gCons) &&
           Math.abs(gCons-cCons) < 0.1*Math.abs(cCons) &&
           Math.abs(gCons-gHet) > 1e-4 },
+      { label:'a synapse wired above the consolidated weight is committed from the first step on both engines', measured:
+          `cpu ${cCommit} and gpu ${gCommit} final w (start 16, consW 1)`,
+        expected:'exactly 16 on both', pass: cCommit === 16 && gCommit === 16 },
+      { label:'and moves with commitment off', measured:
+          `gpu ${gCommitOff.toFixed(3)} final w with commit 0`,
+        expected:'not 16', pass: isFinite(gCommitOff) && Math.abs(gCommitOff - 16) > 1e-4 },
       { label:'het in a declared rule only', measured:
           `gpu ${gHetRule.toFixed(3)} vs cpu ${cHetRule.toFixed(3)}, checkpoint het ${cHet.toFixed(3)} (start 3)`,
         expected:'both within 10% of each other and of the checkpoint het run', pass:
@@ -3252,6 +3122,11 @@ export const TESTS = [
         expected:'both within 10% of each other and of the checkpoint cons run', pass:
           isFinite(cConsRule) && isFinite(gConsRule) && Math.abs(gConsRule - cConsRule) < 0.1*Math.abs(cConsRule) &&
           Math.abs(cConsRule - cCons) < 0.1*Math.abs(cCons) },
+      { label:'the weights reply carries the consolidation reference, and setRef restores it, on both engines', measured:
+          `final w cpu ${cRefKept.w} gpu ${gRefKept.w} with the reference restored at 1, gpu ${gRefOwn.w.toFixed(3)} without; reference read back cpu ${cRefKept.ref && cRefKept.ref[0].toFixed(4)} gpu ${gRefKept.ref && gRefKept.ref[0].toFixed(4)}`,
+        expected:'exactly 0.5 on both with it, moved without it, the references read back within 1e-4', pass:
+          cRefKept.w === 0.5 && gRefKept.w === 0.5 && isFinite(gRefOwn.w) && gRefOwn.w > 0.5 + 1e-4 &&
+          !!cRefKept.ref && !!gRefKept.ref && Math.abs(cRefKept.ref[0] - gRefKept.ref[0]) < 1e-4 },
       { label:'consolidated weight 0 means a tenth of wmax', measured:
           `final w ${cCons.toFixed(4)} with consW 0, ${cConsW.toFixed(4)} with consW 1 (wmax 10)`,
         expected:'identical', pass:
@@ -3263,6 +3138,8 @@ export const TESTS = [
           vDInh > 0.05 && vc.dInh > 0.05 && Math.abs(vDInh - vc.dInh) <= 0.25*Math.max(vDInh, vc.dInh) },
     ];
   } },
+
+...LOCAL_TESTS,
 ];
 
 // Groups carrying a topic are scenario or measure specific: they check that a scene or an observer-side measure behaves, not that an engine or a computation is correct, so they run when somebody is working on that topic.

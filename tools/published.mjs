@@ -317,27 +317,31 @@ if(stats.program){
   }
   const n = cells.length;
 
-  // the engine, at 1 ms
+  // the engine, at 1 ms, under the half steps (integ 0, the printed program's scheme) and under the exact step (integ 2, MODEL.md 1)
   const v0 = Float32Array.from(cells, cl => cl.v0);
   const u0 = Float32Array.from(cells, (cl, i) => T[cl.type].f7.b*(v0[i] - T[cl.type].f7.vr));
   const protocols = [];
   cells.forEach((cl, i) => cl.steps.forEach(st => protocols.push({ idx:Uint32Array.of(i), amp:st.amp,
     mode:0, period:100, width:10, t0:st.t0, duration:st.t1 - st.t0 })));
-  replies.length = 0;
-  send({ cmd:'init', protocol:PROTOCOL, count:n, ntype:Uint8Array.from(cells, cl => cl.type),
-    bias:Float32Array.from(cells, cl => cl.bias), syn:0, psc:0, tauE:3, tauI:8, protocols, inputs:[],
-    plast:0, refrac:0, vmin:0, seed:1, v0, u0, preStart:new Int32Array(n + 1), post:new Int32Array(0),
-    w:new Float32Array(0), delay:new Uint8Array(0), types:T });
-  const err = replies.find(r => r.cmd === 'error');
-  if(err) throw new Error('engine refused the cell classes: ' + err.message);
-  send({ cmd:'sendV', on:true });
-  const linen = { times:cells.map(() => []), v:cells.map(() => []) };
-  for(let t = 0; t < MS2; t++){
+  const engineRun = integ => {
     replies.length = 0;
-    send({ cmd:'tick', steps:1 });
-    const st = replies.find(r => r.cmd === 'state');
-    for(let i = 0; i < n; i++){ if(st.fired[i]) linen.times[i].push(t); linen.v[i].push(st.v[i]); }
-  }
+    send({ cmd:'init', protocol:PROTOCOL, count:n, ntype:Uint8Array.from(cells, cl => cl.type),
+      bias:Float32Array.from(cells, cl => cl.bias), syn:0, psc:0, tauE:3, tauI:8, protocols, inputs:[],
+      plast:0, refrac:0, vmin:0, integ, seed:1, v0, u0, preStart:new Int32Array(n + 1), post:new Int32Array(0),
+      w:new Float32Array(0), delay:new Uint8Array(0), types:T });
+    const err = replies.find(r => r.cmd === 'error');
+    if(err) throw new Error('engine refused the cell classes: ' + err.message);
+    send({ cmd:'sendV', on:true });
+    const out = { times:cells.map(() => []), v:cells.map(() => []) };
+    for(let t = 0; t < MS2; t++){
+      replies.length = 0;
+      send({ cmd:'tick', steps:1 });
+      const st = replies.find(r => r.cmd === 'state');
+      for(let i = 0; i < n; i++){ if(st.fired[i]) out.times[i].push(t); out.v[i].push(st.v[i]); }
+    }
+    return out;
+  };
+  const linen = engineRun(0), exact = engineRun(2);
 
   // the published equations, at 0.1 ms
   let reference = null;
@@ -349,7 +353,7 @@ if(stats.program){
     reference = JSON.parse(fs.readFileSync(outFile, 'utf8'));
   }
 
-  console.log('published: Izhikevich 2003, Fig. 2, the cell classes (the engine at 1 ms, the published equations at 0.1 ms)');
+  console.log('published: Izhikevich 2003, Fig. 2, the cell classes (the engine at 1 ms under the half steps and under the exact step, the published equations at 0.1 ms)');
   if(!reference){
     console.log('  NumPy not found in .venv-analysis, so the 0.1 ms reference DID NOT RUN and the cell classes were not compared.');
   } else {
@@ -365,13 +369,12 @@ if(stats.program){
       for(let t = ON + 4; t < ON + 304; t++){ const dv = side.v[i][t] - rest; if(Math.abs(dv) < 1e-3) continue;
         const sg = dv > 0 ? 1 : -1; if(sign && sg !== sign) count++; sign = sg; }
       return count; };
-    const sides = { reference, linen };
-
     for(const k of ['RS', 'IB', 'CH', 'FS', 'LTS']){
-      const r = rate(reference, at(k)), l = rate(linen, at(k));
-      const off = Math.abs(l - r)/Math.max(1e-9, r);
-      console.log('  ' + k.padEnd(4) + ' 0.1 ms ' + summary(reference, at(k)).padEnd(44) + ' 1 ms ' + summary(linen, at(k)) +
-        (off > 0.2 ? '   rate differs by ' + (100*off).toFixed(0) + ' percent' : ''));
+      const r = rate(reference, at(k));
+      const off = side => { const d = Math.abs(rate(side, at(k)) - r)/Math.max(1e-9, r); return d > 0.2 ? '   rate differs by ' + (100*d).toFixed(0) + ' percent' : ''; };
+      console.log('  ' + k.padEnd(4) + ' 0.1 ms       ' + summary(reference, at(k)));
+      console.log('       half steps  ' + summary(linen, at(k)) + off(linen));
+      console.log('       exact step  ' + summary(exact, at(k)) + off(exact));
     }
 
     const CRITERIA = [
@@ -419,13 +422,15 @@ if(stats.program){
         return { pass:amps.length > 0, detail:'oscillating without a spike at pulses ' + (amps.length ? amps.join(' ') : 'none') }; }],
     ];
     for(const [label, judge] of CRITERIA){
-      const ref = judge(reference), lin = judge(linen);
-      if(ref.pass)
-        ok(label + ': the engine at 1 ms agrees with the published equations at 0.1 ms', lin.pass,
-          '1 ms: ' + lin.detail + '; 0.1 ms: ' + ref.detail);
-      else
+      const ref = judge(reference), lin = judge(linen), ex = judge(exact);
+      if(ref.pass){
+        ok(label + ': the engine under the half steps agrees with the published equations at 0.1 ms', lin.pass,
+          'half steps: ' + lin.detail + '; 0.1 ms: ' + ref.detail);
+        ok(label + ': the engine under the exact step agrees with the published equations at 0.1 ms', ex.pass,
+          'exact step: ' + ex.detail + '; 0.1 ms: ' + ref.detail);
+      } else
         console.log('  recorded, not gated: ' + label + '. The published equations at 0.1 ms do not show it (' + ref.detail +
-          '); the engine at 1 ms: ' + lin.detail);
+          '); the engine under the half steps: ' + lin.detail + '; under the exact step: ' + ex.detail);
     }
   }
 }

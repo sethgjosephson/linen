@@ -11,6 +11,9 @@ import { h32 as h32s } from './rand.js';
 
 // ---- item sets -------------------------------------------------------
 // kind: how an item is rendered. glyph = a character; shape/object = a drawn silhouette; word = the written word; book = picture above word.
+// pattern = a set of input units lit as they are, which only a checkout's own sets (localsets.js) use.
+import { LOCAL_SETS } from './localsets.js';
+
 export const SETS = [
   { name:'alphabet A-Z', kind:'glyph',
     items:'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('') },
@@ -32,6 +35,8 @@ export const SETS = [
   // A spot and a tone are as separable as a stimulus gets, which makes this the control case: a rule that cannot learn these cannot learn anything.
   { name:'spots and tones (abstract pairs)', kind:'spot',
     items:['0','1','2','3','4','5','6','7','8','9','10','11'] },
+  // a checkout's own sets come last, so the indexes the scenes store stay put
+  ...LOCAL_SETS,
 ];
 
 // A training schedule in blocks: "20 A; 20 B; 60 AB" presents channel A alone for twenty simulated minutes, then channel B alone for twenty, then both together for sixty.
@@ -46,12 +51,20 @@ export function parsePhases(str){
   for(const part of String(str || '').split(';')){
     const t = part.trim();
     if(!t) continue;
-    const m = /^([0-9]*\.?[0-9]+)\s+(.+)$/.exec(t);
+    const m = /^([0-9]*\.?[0-9]+)\s+(\S+)(.*)$/.exec(t);
     if(!m) continue;
     const w = m[2].trim().toLowerCase();
     // named for the channels rather than for a modality: this schedule is read by whatever encoders are wired to the curriculum
     const cond = (w === 'a' || w === '1') ? 1 : (w === 'b' || w === '2') ? 2 : 0;
-    out.push({ min:Math.max(0, +m[1]), cond, name:w });
+    const blk = { min:Math.max(0, +m[1]), cond, name:w };
+    // a block's own presentation and gap (ms), item set (an index into SETS) and intensity (a factor on the pattern): Zenke et al. 2015 learn at 1 s on 2 s off, then test at 0.2 s on 5 s off, then cue with other patterns at twice the drive, one network throughout
+    for(const tok of m[3].trim().split(/\s+/).filter(Boolean)){
+      const kv = /^(on|off|set|gain)=([0-9.]+)$/i.exec(tok);
+      if(!kv) continue;
+      const key = kv[1].toLowerCase();
+      if(key === 'on') blk.onMs = +kv[2]; else if(key === 'off') blk.offMs = +kv[2]; else if(key === 'set') blk.set = kv[2]|0; else blk.gain = +kv[2];
+    }
+    out.push(blk);
   }
   return out;
 }
@@ -60,8 +73,9 @@ export function phaseAt(list, tMs){
   if(!list || !list.length) return null;
   let acc = 0;
   for(let i = 0; i < list.length; i++){
+    const start = acc;
     acc += list[i].min*60000;
-    if(tMs < acc || i === list.length - 1) return { i, ...list[i] };
+    if(tMs < acc || i === list.length - 1) return { i, start, ...list[i] };
   }
   return null;
 }
@@ -69,14 +83,39 @@ export function phaseAt(list, tMs){
 const h32 = x => h32s(x) >>> 0;   // the shared mixer, unsigned for the modulo draws below
 const unit = (k, salt, seed) => h32(k*2654435761 ^ salt*40503 ^ seed*974711) / 4294967296;
 
+// Random presentation timing (Zenke et al. 2015, their StimulusGroup): each presentation lasts a normal draw around onMs with a third of it as the deviation, each gap an exponential draw with mean offMs.
+// The durations are hashed from the presentation index and the seed, so every encoder and every replay agree; the starts are summed once into a table that grows as time does.
+const timingTables = new Map();
+function randomDurations(k, on, off, seed){
+  const u1 = Math.max(1e-9, unit(k, 5, seed)), u2 = unit(k, 6, seed);
+  const gauss = Math.sqrt(-2*Math.log(u1))*Math.cos(2*Math.PI*u2);
+  const onK = Math.max(20, on + gauss*on/3);
+  const offK = -off*Math.log(Math.max(1e-9, 1 - unit(k, 7, seed)));
+  return [onK, offK];
+}
+// the presentation at time t (from the start of random timing) as its index, its phase within it and its two durations
+function randomTimingAt(t, on, off, seed){
+  const key = seed + '|' + on + '|' + off;
+  let tab = timingTables.get(key);
+  if(!tab){ tab = { start:[0], on:[], off:[] }; timingTables.set(key, tab); }
+  while(tab.start[tab.start.length - 1] <= t){
+    const k = tab.on.length, [a, b] = randomDurations(k, on, off, seed);
+    tab.on.push(a); tab.off.push(b); tab.start.push(tab.start[k] + a + b);
+  }
+  let lo = 0, hi = tab.start.length - 2;
+  while(lo < hi){ const mid = (lo + hi + 1) >> 1; if(tab.start[mid] <= t) lo = mid; else hi = mid - 1; }
+  return { k:lo, phase:t - tab.start[lo], onK:tab.on[lo], offK:tab.off[lo] };
+}
+
 // what is being presented at simulated time t, and how it is posed
 export function scheduleAt(sig, tMs){
   const set = SETS[sig.set|0] || SETS[0];
   const N = set.items.length;
   const on = Math.max(20, sig.onMs), off = Math.max(0, sig.offMs);
   const period = on + off;
-  const k = Math.floor(tMs / period);
-  const phase = tMs - k*period;
+  let k = Math.floor(tMs / period);
+  let phase = tMs - k*period;
+  let onK = on, offK = off;
   // The calibration sweep, before anything is allowed to learn.
   // Every item is presented in all three conditions, in order, for calCycles passes: bimodal for a full alphabet, then vision alone for a full alphabet, then sound alone.
   // This is what the conjunctive sets are built from, so it has to cover every item and it has to happen while plasticity is off.
@@ -108,9 +147,28 @@ export function scheduleAt(sig, tMs){
       dx:0, dy:0, scale:1, rot:0,
     };
   }
+  // The block schedule sets what a training trial is; blocks are measured from the end of the calibration sweep.
+  const ph = phaseAt(sig.phases, tMs - calK*period);
+  // A block with its own timing or set counts its presentations from its own start, in a range of its own, so no draw of one block repeats another's; random timing starts where the calibration sweep ends either way, so the sweep keeps the fixed timing its trial windows are sized by.
+  let set2 = set, N2 = N;
+  if(ph && (ph.onMs > 0 || ph.offMs > 0 || ph.set !== undefined)){
+    const tb = tMs - calK*period - ph.start;
+    const onB = ph.onMs > 0 ? Math.max(20, ph.onMs) : on, offB = ph.offMs > 0 ? ph.offMs : off;
+    if((sig.timing|0) === 1){
+      const r = randomTimingAt(tb, onB, offB, (sig.seed|0) + 7919*(ph.i + 1));
+      k = calK + 1000000*(ph.i + 1) + r.k; phase = r.phase; onK = r.onK; offK = r.offK;
+    } else {
+      const per = onB + offB, kb = Math.floor(tb/per);
+      k = calK + 1000000*(ph.i + 1) + kb; phase = tb - kb*per; onK = onB; offK = offB;
+    }
+    if(ph.set !== undefined && SETS[ph.set]){ set2 = SETS[ph.set]; N2 = set2.items.length; }
+  } else if((sig.timing|0) === 1){
+    const r = randomTimingAt(tMs - calK*period, on, off, sig.seed|0);
+    k = calK + r.k; phase = r.phase; onK = r.onK; offK = r.offK;
+  }
   const idx = (sig.order|0) === 1
-    ? h32(k*2246822519 ^ (sig.seed|0)*3266489917) % N   // shuffled draw
-    : k % N;                                            // sequential recital
+    ? h32(k*2246822519 ^ (sig.seed|0)*3266489917) % N2  // shuffled draw
+    : k % N2;                                           // sequential recital
   const j = sig.jitter || 0, sv = sig.scaleVar || 0, rv = sig.rotVar || 0;
   // Unimodal probe trials.
   // Cross-modal completion cannot be measured while both modalities are always present, so a fraction of presentations show one alone.
@@ -118,9 +176,7 @@ export function scheduleAt(sig, tMs){
   // 0 both, 1 visual only, 2 audio only.
   const pe = Math.max(0, sig.probeEvery | 0);
   const isProbe = !!(pe && k % pe === pe - 1);
-  // The block schedule sets what a training trial is.
   // Probe trials are the measurement and are posed identically in every block, so that a change in what a probe reads is a change in the network rather than a change in the question: the same one-channel probes run through the familiarization blocks and through the pairing block that follows them.
-  const ph = phaseAt(sig.phases, tMs - calK*period);
   // A scheduled run probes in all three conditions rather than two.
   // Every measure the trainer computes is gated on having bimodal trials in the window, so a familiarization block that never presents the two channels together measures nothing at all, and the blocks that were supposed to be the control for the pairing block come back empty.
   // Rotating the probe through both, A alone and B alone puts a paired presentation in one trial in fifteen during every block, which is a small amount of pairing in the blocks before the pairing block and exactly the same amount in each of them.
@@ -135,18 +191,20 @@ export function scheduleAt(sig, tMs){
   if(sig.scramble){
     let z = (k*2654435761 + 12345) >>> 0;
     z = (z ^ (z >>> 15)) >>> 0;
-    altIdx = z % N;
-    if(altIdx === idx) altIdx = (altIdx + 1) % N;
+    altIdx = z % N2;
+    if(altIdx === idx) altIdx = (altIdx + 1) % N2;
   }
   return {
-    k, idx, altIdx, item:set.items[idx], altItem:set.items[altIdx],
-    setName:set.name, kind:set.kind, count:N,
+    // a set with labels (the cues) reports its item as the label and the pattern to draw apart; the block's gain scales the pattern
+    k, idx, altIdx, item:set2.labels ? set2.labels[idx] : set2.items[idx], altItem:set2.labels ? set2.labels[altIdx] : set2.items[altIdx],
+    pattern:set2.items[idx], gain:ph && ph.gain > 0 ? ph.gain : 1,
+    setName:set2.name, kind:set2.kind, count:N2,
     cond, voice: sig.voice|0,
     probe:isProbe, phase:ph ? ph.i : -1, phaseName:ph ? ph.name : '',
-    on: phase < on,
-    phase, onMs:on, offMs:off,
+    on: phase < onK,
+    phase, onMs:onK, offMs:offK,
     // fraction of the presentation elapsed: drives the phone sequence in audio and the appearance transient in vision
-    u: Math.min(1, phase/on),
+    u: Math.min(1, phase/onK),
     dx: (unit(k, 1, sig.seed)*2 - 1) * j,
     dy: (unit(k, 2, sig.seed)*2 - 1) * j,
     scale: 1 + (unit(k, 3, sig.seed)*2 - 1) * sv,
@@ -323,6 +381,17 @@ export function buildAtlas(items, kind){
 }
 
 export function renderItem(state, cols, rows, acuity){
+  // A pattern is a set of input units, lit as they are: no pose, no blur, channel r*cols + c is unit r*side + c of the set's own sheet.
+  if(state.kind === 'pattern'){
+    const set = SETS.find(s => s.name === state.setName && s.pattern), p = set && set.pattern(state.pattern || state.item);
+    const g = new Float32Array(cols*rows), gn = state.gain > 0 ? state.gain : 1;
+    if(p){ const S = p.side, m = p.mask;
+      for(let r = 0; r < rows; r++) for(let c = 0; c < cols; c++){
+        const sr = Math.min(S - 1, Math.floor(r*S/rows)), sc = Math.min(S - 1, Math.floor(c*S/cols));
+        g[r*cols + c] = m[sr*S + sc]*gn;
+      } }
+    return g;
+  }
   // Spots never touch the canvas.
   // A spot is a linear-falloff disc, and computing it directly makes the stimulus identical in the browser and in the engine host, which has no canvas; it is also the same box average over the same 96 pixel raster the canvas path uses, evaluated analytically at pixel centers instead of rasterized.
   if((state.kind || 'glyph') === 'spot'){

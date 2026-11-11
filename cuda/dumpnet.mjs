@@ -47,7 +47,7 @@ const ISCALE = +(process.env.ISCALE || 1) || 1;
 const TAUE = 3, TAUI = 8;
 // a rule with every term the engines carry for learning, so plasticity parity covers all of them at once
 const RULE = { aP:0.003, aM:0.001, tauS:20, wmax:60, wdep:1, iEta:0.01, iRho:2,
-  trip:0.002, tauY:114, het:0.01, tin:0.00005 };
+  trip:0.002, tauY:114, het:process.env.HET === undefined ? 0.01 : +process.env.HET, tin:0.00005 };
 
 let z = 1234567;
 const rnd = () => (z = (z*1664525 + 1013904223) >>> 0) / 4294967296;
@@ -160,7 +160,7 @@ send({ cmd:'init', protocol:PROTOCOL, count:N, ntype, bias,
   trip:RULE.trip, tauY:RULE.tauY, het:RULE.het, tin:RULE.tin,
   cons:CONS, consW:0, consP:10,   // 0 = the scaled default, a tenth of wmax
   commit:COMMIT, tauCons:TAUCONS,
-  stp:STP, stpOrder:+(process.env.STPORDER || 0), stpScope:+(process.env.STPSCOPE || 0), stdpAt:+(process.env.STDPAT || 0), stpU:0.2, stpTauD:200, stpTauF:600,
+  stp:STP, stpOrder:+(process.env.STPORDER || 0), iGlobal:+(process.env.IGLOBAL || 0), iTauG:1, stpScope:+(process.env.STPSCOPE || 0), stdpAt:+(process.env.STDPAT || 0), plastGain:process.env.PLASTGAIN === undefined ? 1 : +process.env.PLASTGAIN, wmu:process.env.WMU === undefined ? 1 : +process.env.WMU, slide:+(process.env.SLIDE || 0), slideRate:5, slideTau:1000, slideInit:5, stpU:0.2, stpTauD:200, stpTauF:600,
   seed:ESEED, ...initState(ESEED, ntype, CLASSES),
   pmask:chanBytes(N, ntype, preStart, m), ...(CHAN > 0 ? { chanTau:[CHAN] } : {}),
   ...(POOL < 0 ? { pool:poolA, poolK } : {}),

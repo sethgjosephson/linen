@@ -29,6 +29,10 @@
 //   u32 metaLen, meta JSON, pad to 4, u32 synCount m, u32 plasticCount k,
 //   f32[k] w, in wiring order over the synapses whose pmask bit is set. m is
 //   kept so a load can refuse a wiring of the wrong size before reading on.
+//
+// Any of the three may end with the consolidation reference: u32 count, then f32[count], one per weight the file holds and in the same order, and the meta says ref:true.
+// A reader that predates it stops at the weights.
+// Without it a resumed run starts every reference from refInit and forgets which synapses had consolidated.
 
 const BRAIN_MAGIC = 0x3142504e;   // 'NPB1' pair-keyed
 const WEIGHT_MAGIC = 0x3242504e;  // 'NPB2' weights-only
@@ -64,27 +68,41 @@ export function cellOrder(net){
   hb(net.src instanceof Int32Array ? net.src : Int32Array.from(net.src)); hb(net.lidx);
   return h.toString(16);
 }
-function header(magic, graphObj, net, m, simMs, curriculum, kind){
+function header(magic, graphObj, net, m, simMs, curriculum, kind, ref){
   const enc = new TextEncoder();
   const graph = enc.encode(JSON.stringify(graphObj));
   const meta = enc.encode(JSON.stringify({
     app:'linen', simMs: simMs || 0, kind,
     savedAt: new Date().toISOString(),
     neurons: net.count, synapses: m, curriculum: curriculum || null,
-    order: cellOrder(net) }));
+    order: cellOrder(net), ...(ref ? { ref:true } : {}) }));
   return { graph, meta, head: 8 + 4 + graph.length + 4 + meta.length };
 }
 
-export function buildBrainFile(graphObj, net, w, simMs, curriculum){
+// The reference section, after the weights: the count, then the values.
+const refBytes = n => 4 + n*4;
+function putRef(buf, o, ref){
+  new DataView(buf).setUint32(o, ref.length, true);
+  new Float32Array(buf, o + 4, ref.length).set(ref);
+}
+function getRef(buf, o, n){
+  if(o + 4 > buf.byteLength) return null;
+  const c = new DataView(buf).getUint32(o, true);
+  if(c !== n || o + 4 + c*4 > buf.byteLength) return null;
+  return new Float32Array(buf, o + 4, c);
+}
+
+export function buildBrainFile(graphObj, net, w, simMs, curriculum, ref){
   const m = net.synCount;
   // Fail with the reason rather than a bare RangeError from the allocator.
   if(pairFileBytes(m) > MAX_BUFFER) throw new Error(
     `pair-keyed brain file needs ${(pairFileBytes(m)/1e9).toFixed(2)} GB in one buffer ` +
     `for ${m.toLocaleString()} synapses, over the ${(MAX_BUFFER/1e9).toFixed(2)} GB limit: ` +
     `use buildWeightsFile (weights-only) for a network this size`);
-  const { graph, meta, head } = header(BRAIN_MAGIC, graphObj, net, m, simMs, curriculum, 'pairs');
+  const R = ref && ref.length >= m ? ref.subarray(0, m) : null;
+  const { graph, meta, head } = header(BRAIN_MAGIC, graphObj, net, m, simMs, curriculum, 'pairs', R);
   const keyOff = (head + 3) & ~3;
-  const buf = new ArrayBuffer(keyOff + 4 + m*20);
+  const buf = new ArrayBuffer(keyOff + 4 + m*20 + (R ? refBytes(m) : 0));
   const dv = new DataView(buf);
   let o = 0;
   dv.setUint32(o, BRAIN_MAGIC, true); o += 4;
@@ -100,6 +118,7 @@ export function buildBrainFile(graphObj, net, w, simMs, curriculum){
   const srcB = new Int32Array(buf, o, m); o += m*4;
   const lidxB = new Uint32Array(buf, o, m); o += m*4;
   new Float32Array(buf, o, m).set(w.subarray ? w.subarray(0, m) : w);
+  if(R) putRef(buf, o + m*4, R);
   const { preStart, post, src, lidx } = net;
   for(let i=0;i<net.count;i++)
     for(let s=preStart[i];s<preStart[i+1];s++){
@@ -111,7 +130,7 @@ export function buildBrainFile(graphObj, net, w, simMs, curriculum){
 }
 
 // Refuses the ungated case: with no pmask every synapse is plastic and this would be NPB2 with an extra field.
-export function buildPlasticFile(graphObj, net, w, simMs, curriculum){
+export function buildPlasticFile(graphObj, net, w, simMs, curriculum, ref){
   const m = net.synCount, pm = net.pmask;
   if(!pm) throw new Error('plastic-only file needs a plasticity mask; use buildWeightsFile');
   if(pm.length !== m)
@@ -125,10 +144,11 @@ export function buildPlasticFile(graphObj, net, w, simMs, curriculum){
   if(k === 0 && m > 0)
     throw new Error('plastic-only file would hold 0 of ' + m + ' weights; ' +
       'nothing is marked plastic, so use buildWeightsFile');
+  const R = ref && ref.length >= m ? ref : null;
   const { graph, meta, head } = header(PLASTIC_MAGIC, graphObj, net, m, simMs,
-    curriculum, 'plastic');
+    curriculum, 'plastic', R);
   const wOff = (head + 3) & ~3;
-  const buf = new ArrayBuffer(wOff + 8 + k*4);
+  const buf = new ArrayBuffer(wOff + 8 + k*4 + (R ? refBytes(k) : 0));
   const dv = new DataView(buf);
   let o = 0;
   dv.setUint32(o, PLASTIC_MAGIC, true); o += 4;
@@ -143,17 +163,24 @@ export function buildPlasticFile(graphObj, net, w, simMs, curriculum){
   const out = new Float32Array(buf, o, k);
   let j = 0;
   for(let s=0;s<m;s++) if(pm[s] & 31) out[j++] = w[s];
+  if(R){
+    const r = new Float32Array(k);
+    j = 0;
+    for(let s=0;s<m;s++) if(pm[s] & 31) r[j++] = R[s];
+    putRef(buf, o + k*4, r);
+  }
   return buf;
 }
 
-export function buildWeightsFile(graphObj, net, w, simMs, curriculum){
+export function buildWeightsFile(graphObj, net, w, simMs, curriculum, ref){
   const m = net.synCount;
   if(weightFileBytes(m) > MAX_BUFFER) throw new Error(
     `weights file needs ${(weightFileBytes(m)/1e9).toFixed(2)} GB in one buffer ` +
     `for ${m.toLocaleString()} synapses, over the ${(MAX_BUFFER/1e9).toFixed(2)} GB limit`);
-  const { graph, meta, head } = header(WEIGHT_MAGIC, graphObj, net, m, simMs, curriculum, 'weights');
+  const R = ref && ref.length >= m ? ref.subarray(0, m) : null;
+  const { graph, meta, head } = header(WEIGHT_MAGIC, graphObj, net, m, simMs, curriculum, 'weights', R);
   const wOff = (head + 3) & ~3;
-  const buf = new ArrayBuffer(wOff + 4 + m*4);
+  const buf = new ArrayBuffer(wOff + 4 + m*4 + (R ? refBytes(m) : 0));
   const dv = new DataView(buf);
   let o = 0;
   dv.setUint32(o, WEIGHT_MAGIC, true); o += 4;
@@ -165,6 +192,7 @@ export function buildWeightsFile(graphObj, net, w, simMs, curriculum){
   o = wOff;
   dv.setUint32(o, m, true); o += 4;
   new Float32Array(buf, o, m).set(w.subarray ? w.subarray(0, m) : w);
+  if(R) putRef(buf, o + m*4, R);
   return buf;
 }
 
@@ -183,17 +211,17 @@ export function parseBrainFile(buf){
   o = (o + 3) & ~3;
   const m = dv.getUint32(o, true); o += 4;
   if(magic === WEIGHT_MAGIC)
-    return { kind:'weights', graph, meta, m, w:new Float32Array(buf, o, m) };
+    return { kind:'weights', graph, meta, m, w:new Float32Array(buf, o, m), ref:getRef(buf, o + m*4, m) };
   if(magic === PLASTIC_MAGIC){
     const k = dv.getUint32(o, true); o += 4;
-    return { kind:'plastic', graph, meta, m, k, w:new Float32Array(buf, o, k) };
+    return { kind:'plastic', graph, meta, m, k, w:new Float32Array(buf, o, k), ref:getRef(buf, o + k*4, k) };
   }
   const srcA = new Int32Array(buf, o, m); o += m*4;
   const lidxA = new Uint32Array(buf, o, m); o += m*4;
   const srcB = new Int32Array(buf, o, m); o += m*4;
   const lidxB = new Uint32Array(buf, o, m); o += m*4;
   const w = new Float32Array(buf, o, m);
-  return { kind:'pairs', graph, meta, m, srcA, lidxA, srcB, lidxB, w };
+  return { kind:'pairs', graph, meta, m, srcA, lidxA, srcB, lidxB, w, ref:getRef(buf, o + m*4, m) };
 }
 
 // Same synapse count, different cell order: the same tissue with every index moved.
@@ -208,6 +236,8 @@ function orderCheck(net, brain, what){
 }
 // Apply saved weights onto a (re)wired network: matching pairs restore, everything else keeps its wired baseline.
 // Returns a new net object with a private weight array (never mutates the input; its arrays may be shared with the connect memo cache).
+// A saved consolidation reference comes back as net.wRef0, one per wired synapse, for the caller to send with setRef after init.
+// A pair-keyed file restores it only when every wired synapse matched, since a new synapse has no saved reference and its reference is the engine's to start.
 // Older files carry a membrane form in their header (0 the 2003 form, 1 this one).
 // It is not checked: a 2003 brain's weights are the same currents on the classic rows that replaced that form, and the cell-order hash above already refuses a file from another tissue.
 export function applyBrainWeights(net, brain){
@@ -219,7 +249,7 @@ export function applyBrainWeights(net, brain){
       `${net.synCount.toLocaleString()}: weights-only files restore by index and need ` +
       `the graph, seeds, and resolution they were saved from`);
     orderCheck(net, brain, 'weights-only');
-    return { net:{ ...net, w:brain.w.slice() }, matched:brain.m,
+    return { net:{ ...net, w:brain.w.slice(), wRef0:brain.ref ? brain.ref.slice() : null }, matched:brain.m,
       saved:brain.m, wired:net.synCount };
   }
   // Plastic-only: the frozen weights come from the wiring, which produced them deterministically, and the file supplies the rest in the same order the gate walks.
@@ -233,28 +263,31 @@ export function applyBrainWeights(net, brain){
       'plastic-only file needs the plasticity gate it was saved with; this wiring has none');
     orderCheck(net, brain, 'plastic-only');
     const wp = net.w.slice();
+    // a frozen synapse's reference is never read, so the weight stands in for it
+    const rp = brain.ref ? net.w.slice() : null;
     let j = 0;
     for(let s=0;s<net.synCount;s++) if(net.pmask[s] & 31){
       if(j >= brain.k) break;
+      if(rp) rp[s] = brain.ref[j];
       wp[s] = brain.w[j++];
     }
     if(j !== brain.k) throw new Error(
       `plastic-only file holds ${brain.k.toLocaleString()} weights but this wiring gates ` +
       `${j.toLocaleString()}: the plasticity gate moved since the save`);
-    return { net:{ ...net, w:wp }, matched:j, saved:brain.k, wired:net.synCount };
+    return { net:{ ...net, w:wp, wRef0:rp }, matched:j, saved:brain.k, wired:net.synCount };
   }
   const w = net.w.slice();
+  const r = brain.ref ? new Float32Array(net.synCount) : null;
   const map = new Map();
   for(let s=0;s<brain.m;s++)
-    map.set(brain.srcA[s]+':'+brain.lidxA[s]+':'+brain.srcB[s]+':'+brain.lidxB[s],
-      brain.w[s]);
+    map.set(brain.srcA[s]+':'+brain.lidxA[s]+':'+brain.srcB[s]+':'+brain.lidxB[s], s);
   let matched = 0;
   const { preStart, post, src, lidx } = net;
   for(let i=0;i<net.count;i++)
     for(let s=preStart[i];s<preStart[i+1];s++){
       const j = post[s];
-      const v = map.get(src[i]+':'+lidx[i]+':'+src[j]+':'+lidx[j]);
-      if(v !== undefined){ w[s] = v; matched++; }
+      const k = map.get(src[i]+':'+lidx[i]+':'+src[j]+':'+lidx[j]);
+      if(k !== undefined){ w[s] = brain.w[k]; if(r) r[s] = brain.ref[k]; matched++; }
     }
-  return { net:{ ...net, w }, matched, saved:brain.m, wired:net.synCount };
+  return { net:{ ...net, w, wRef0:r && matched === net.synCount ? r : null }, matched, saved:brain.m, wired:net.synCount };
 }
